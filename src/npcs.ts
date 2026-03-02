@@ -12,6 +12,7 @@ export function createNpc(partial: {
   personalityTraits: string[];
   coreDesires: string[];
   emotionalState?: Partial<EmotionalState>;
+  secrets?: string[];
 }): NPC {
   return {
     ...partial,
@@ -23,6 +24,8 @@ export function createNpc(partial: {
     shortTermMemory: [],
     longTermMemory: [],
     currentGoal: null,
+    secrets: partial.secrets ?? [],
+    knownSecrets: {},
   };
 }
 
@@ -38,6 +41,7 @@ export const initialNpcs: NPC[] = [
       "share knowledge",
       "build friendships",
     ],
+    secrets: ["I once sabotaged a colleague's experiment because I was jealous of their results"],
   }),
   createNpc({
     id: "bob",
@@ -50,6 +54,7 @@ export const initialNpcs: NPC[] = [
       "quiet companionship",
       "intellectual stimulation",
     ],
+    secrets: ["I wrote a bestselling novel under a pseudonym and never told anyone"],
   }),
   createNpc({
     id: "victor",
@@ -69,6 +74,10 @@ export const initialNpcs: NPC[] = [
       "win every argument",
     ],
     emotionalState: { anger: 0.6, trust: 0.2, joy: 0.3 },
+    secrets: [
+      "I secretly admire Alice's intellect but would never admit it",
+      "I was rejected from my dream university",
+    ],
   }),
   createNpc({
     id: "mara",
@@ -88,6 +97,10 @@ export const initialNpcs: NPC[] = [
       "subtly turn people against each other",
     ],
     emotionalState: { anger: 0.1, trust: 0.3, fear: 0.2, joy: 0.6 },
+    secrets: [
+      "I keep a journal of everyone's weaknesses",
+      "My charming personality is entirely constructed — I feel empty inside",
+    ],
   }),
   createNpc({
     id: "ellis",
@@ -107,5 +120,6 @@ export const initialNpcs: NPC[] = [
       "find someone trustworthy (but doubt everyone)",
     ],
     emotionalState: { anger: 0.2, trust: 0.15, fear: 0.7, joy: 0.1 },
+    secrets: ["I once saw something I wasn't supposed to and I'm terrified someone will find out"],
   }),
 ];

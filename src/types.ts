@@ -7,6 +7,16 @@ export interface EmotionalState {
 }
 
 // ── Memory ─────────────────────────────────────
+export type MemoryType =
+  | "conversation"
+  | "observation"
+  | "gossip"
+  | "secret_learned"
+  | "promise_made"
+  | "promise_broken"
+  | "inner_thought"
+  | "eavesdrop";
+
 export interface MemoryEntry {
   text: string;
   importance: number; // 0 to 1
@@ -14,6 +24,9 @@ export interface MemoryEntry {
   emotionalWeight: number; // 0 to 1
   involvedNpcIds: string[];
   timestamp: number; // Date.now()
+  type?: MemoryType;
+  aboutNpcIds?: string[]; // who this memory is ABOUT (vs who was present)
+  sentiment?: number; // -1 to 1
 }
 
 // ── NPC ────────────────────────────────────────
@@ -29,16 +42,46 @@ export interface NPC {
   shortTermMemory: MemoryEntry[];
   longTermMemory: MemoryEntry[];
   currentGoal: string | null;
+  secrets: string[];
+  knownSecrets: Record<string, string[]>; // npcId -> secrets learned about them
+}
+
+// ── Promises ─────────────────────────────────
+export interface NpcPromise {
+  id: string;
+  promiserId: string;
+  promiseeId: string;
+  text: string;
+  madeAt: number;
+  status: "active" | "kept" | "broken";
 }
 
 // ── LLM Structured Response ───────────────────
+export interface MentionedNpc {
+  npc_id: string;
+  sentiment: number; // -1 to 1
+  what_was_said: string;
+}
+
 export interface LLMResponse {
   speech: string;
   emotion_delta: EmotionalState; // deltas, can be negative
   relationship_delta: number; // -1 to 1
   intent: string;
   conversation_end: boolean;
+  mentioned_npcs?: MentionedNpc[];
+  secret_revealed?: string;
+  promise?: string;
 }
+
+// ── Conversation Types ───────────────────────
+export type ConversationType =
+  | "casual"
+  | "confrontation"
+  | "reconciliation"
+  | "confession"
+  | "alliance_forming"
+  | "gossip_session";
 
 // ── Conversation ──────────────────────────────
 export interface ConversationMessage {
@@ -60,9 +103,13 @@ export interface ConversationSession {
 }
 
 // ── Activity ──────────────────────────────────
+export type ActivityType = "thought" | "gossip" | "eavesdrop" | "dm";
+
 export interface ActivityEvent {
   timestamp: Date;
   text: string;
+  activityType?: ActivityType;
+  npcId?: string; // for styling (e.g., thought color)
 }
 
 // ── World / Spatial ─────────────────────────────
@@ -72,10 +119,19 @@ export interface Position {
   y: number;
 }
 
+export type WaypointMood =
+  | "social"
+  | "reflective"
+  | "intimate"
+  | "gathering"
+  | "mysterious";
+
 export interface Waypoint {
   id: string;
   name: string;
   position: Position;
+  mood?: WaypointMood;
+  description?: string;
 }
 
 export interface NpcSpatialState {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { WorldCanvas } from "./components/WorldCanvas";
 import { SidePanel } from "./components/SidePanel";
 import { NpcCreator } from "./components/NpcCreator";
+import { DmTools } from "./components/DmTools";
 import { NpcStore } from "./npc-store";
 import { initialNpcs } from "./npcs";
 import { ConversationManager } from "./conversation-manager";
@@ -23,6 +24,7 @@ function App() {
   >(null);
   const [status, setStatus] = useState<"idle" | "running" | "paused">("idle");
   const [creatorOpen, setCreatorOpen] = useState(false);
+  const [dmToolsOpen, setDmToolsOpen] = useState(false);
 
   // New state for side panel
   const [activeTab, setActiveTab] = useState<TabId>("feed");
@@ -55,6 +57,7 @@ function App() {
       onProximity: (aId, bId) => {
         managerRef.current?.triggerConversation(aId, bId);
       },
+      npcStore: storeRef.current,
     });
 
     // Register NPCs at different starting positions (spread across waypoints)
@@ -121,6 +124,7 @@ function App() {
     });
 
     managerRef.current = manager;
+    manager.setWorldSimulation(world);
     setStatus("running");
     manager.start();
     world.start();
@@ -164,6 +168,101 @@ function App() {
       worldRef.current.addNpc(npc.id);
     }
   }, []);
+
+  const handleWhisper = useCallback((npcId: string, message: string) => {
+    storeRef.current.addMemory(
+      npcId,
+      {
+        text: `A mysterious voice whispered to me: "${message}"`,
+        importance: 0.8,
+        recency: 1,
+        emotionalWeight: 0.6,
+        involvedNpcIds: [],
+        type: "observation",
+        timestamp: Date.now(),
+      },
+      "shortTermMemory"
+    );
+    const name = storeRef.current.get(npcId)?.name ?? npcId;
+    setFeed((prev) => [
+      ...prev,
+      {
+        type: "activity",
+        event: {
+          timestamp: new Date(),
+          text: `[DM] Whispered to ${name}: "${message}"`,
+          activityType: "dm",
+        },
+      },
+    ]);
+  }, []);
+
+  const handleWorldEvent = useCallback((text: string) => {
+    for (const npc of storeRef.current.getAll()) {
+      storeRef.current.addMemory(
+        npc.id,
+        {
+          text: `Something happened: ${text}`,
+          importance: 0.7,
+          recency: 1,
+          emotionalWeight: 0.5,
+          involvedNpcIds: [],
+          type: "observation",
+          timestamp: Date.now(),
+        },
+        "shortTermMemory"
+      );
+    }
+    setFeed((prev) => [
+      ...prev,
+      {
+        type: "activity",
+        event: {
+          timestamp: new Date(),
+          text: `[DM] World Event: ${text}`,
+          activityType: "dm",
+        },
+      },
+    ]);
+  }, []);
+
+  const handleForceEncounter = useCallback((aId: string, bId: string) => {
+    managerRef.current?.forceConversation(aId, bId);
+  }, []);
+
+  const handlePlantRumor = useCallback(
+    (npcId: string, aboutNpcId: string, rumor: string) => {
+      const aboutName = storeRef.current.get(aboutNpcId)?.name ?? aboutNpcId;
+      const recipientName = storeRef.current.get(npcId)?.name ?? npcId;
+      storeRef.current.addMemory(
+        npcId,
+        {
+          text: `I heard a rumor about ${aboutName}: ${rumor}`,
+          importance: 0.6,
+          recency: 1,
+          emotionalWeight: 0.4,
+          involvedNpcIds: [],
+          aboutNpcIds: [aboutNpcId],
+          type: "gossip",
+          sentiment: 0,
+          timestamp: Date.now(),
+        },
+        "shortTermMemory"
+      );
+      setFeed((prev) => [
+        ...prev,
+        {
+          type: "activity",
+          event: {
+            timestamp: new Date(),
+            text: `[DM] Planted rumor about ${aboutName} with ${recipientName}`,
+            activityType: "dm",
+          },
+        },
+      ]);
+    },
+    []
+  );
 
   return (
     <div className="app">
@@ -209,6 +308,12 @@ function App() {
             <button onClick={handleTrigger} className="btn btn-trigger">
               Trigger Conversation
             </button>
+            <button
+              onClick={() => setDmToolsOpen(true)}
+              className="btn btn-dm"
+            >
+              DM Tools
+            </button>
           </>
         )}
         <button
@@ -223,6 +328,16 @@ function App() {
           onClose={() => setCreatorOpen(false)}
           onCreateNpc={handleSpawnNpc}
           existingIds={npcs.map((n) => n.id)}
+        />
+      )}
+      {dmToolsOpen && (
+        <DmTools
+          npcs={npcs}
+          onWhisper={handleWhisper}
+          onWorldEvent={handleWorldEvent}
+          onForceEncounter={handleForceEncounter}
+          onPlantRumor={handlePlantRumor}
+          onClose={() => setDmToolsOpen(false)}
         />
       )}
     </div>

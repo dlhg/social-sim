@@ -1,4 +1,4 @@
-import type { LLMResponse } from "./types";
+import type { LLMResponse, MentionedNpc } from "./types";
 
 export function parseLLMResponse(raw: string): LLMResponse {
   const cleaned = extractJson(raw);
@@ -6,7 +6,7 @@ export function parseLLMResponse(raw: string): LLMResponse {
   return validate(parsed);
 }
 
-function extractJson(raw: string): string {
+export function extractJson(raw: string): string {
   let s = raw.trim();
 
   // Strip markdown code fences
@@ -53,12 +53,41 @@ function validate(obj: unknown): LLMResponse {
   const conversationEnd =
     typeof o.conversation_end === "boolean" ? o.conversation_end : false;
 
+  let mentionedNpcs: MentionedNpc[] | undefined;
+  if (Array.isArray(o.mentioned_npcs)) {
+    mentionedNpcs = (o.mentioned_npcs as Record<string, unknown>[])
+      .filter(
+        (m) =>
+          typeof m.npc_id === "string" &&
+          typeof m.what_was_said === "string"
+      )
+      .map((m) => ({
+        npc_id: m.npc_id as string,
+        sentiment: Math.max(-1, Math.min(1, toNumber(m.sentiment, 0))),
+        what_was_said: String(m.what_was_said),
+      }));
+    if (mentionedNpcs.length === 0) mentionedNpcs = undefined;
+  }
+
+  const secretRevealed =
+    typeof o.secret_revealed === "string" && o.secret_revealed.length > 0
+      ? o.secret_revealed
+      : undefined;
+
+  const promise =
+    typeof o.promise === "string" && o.promise.length > 0
+      ? o.promise
+      : undefined;
+
   return {
     speech: o.speech as string,
     emotion_delta: emotionDelta,
     relationship_delta: rd,
     intent,
     conversation_end: conversationEnd,
+    mentioned_npcs: mentionedNpcs,
+    secret_revealed: secretRevealed,
+    promise,
   };
 }
 

@@ -50,6 +50,7 @@ export function NpcCreator({
   const [color, setColor] = useState("#4dd0e1");
   const [traits, setTraits] = useState("");
   const [desires, setDesires] = useState("");
+  const [secrets, setSecrets] = useState("");
   const [error, setError] = useState("");
 
   const derivedId = name.trim().toLowerCase().replace(/\s+/g, "-");
@@ -84,6 +85,11 @@ export function NpcCreator({
       return;
     }
 
+    const parsedSecrets = secrets
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     const npc = createNpc({
       id: derivedId,
       name: trimmed,
@@ -91,6 +97,7 @@ export function NpcCreator({
       color,
       personalityTraits: parsedTraits,
       coreDesires: parsedDesires,
+      secrets: parsedSecrets,
     });
 
     onCreateNpc(npc);
@@ -162,6 +169,15 @@ export function NpcCreator({
             setError("");
           }}
           placeholder="e.g. uncover the truth, be left alone"
+        />
+
+        <label>Secrets (one per line, optional)</label>
+        <textarea
+          value={secrets}
+          onChange={(e) => setSecrets(e.target.value)}
+          placeholder={"I once did something terrible...\nI secretly admire..."}
+          rows={3}
+          className="secrets-textarea"
         />
 
         {error && <div className="form-error">{error}</div>}

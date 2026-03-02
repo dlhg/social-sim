@@ -87,8 +87,11 @@ export function SidePanel({
                   </div>
                 );
               }
+              const activityClass = item.event.activityType
+                ? `activity-entry activity-${item.event.activityType}`
+                : "activity-entry";
               return (
-                <div key={i} className="activity-entry">
+                <div key={i} className={activityClass}>
                   <span className="activity-time">
                     {formatTime(item.event.timestamp)}
                   </span>{" "}

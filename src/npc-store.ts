@@ -1,4 +1,4 @@
-import type { NPC, EmotionalState, MemoryEntry } from "./types";
+import type { NPC, EmotionalState, MemoryEntry, NpcPromise } from "./types";
 
 type Listener = () => void;
 
@@ -6,9 +6,15 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+export interface RelationshipVelocity {
+  trend: "improving" | "declining" | "stable";
+  values: number[];
+}
+
 export class NpcStore {
   private npcs: Map<string, NPC>;
   private listeners: Set<Listener> = new Set();
+  private relationshipHistory: Map<string, number[]> = new Map();
 
   constructor(initialNpcs: NPC[]) {
     this.npcs = new Map(
@@ -78,6 +84,71 @@ export class NpcStore {
     if (this.npcs.has(npc.id)) return;
     this.npcs.set(npc.id, structuredClone(npc));
     this.notify();
+  }
+
+  // ── Secrets & Promises ─────────────────────
+
+  addKnownSecret(
+    knowerNpcId: string,
+    aboutNpcId: string,
+    secret: string
+  ): void {
+    const npc = this.npcs.get(knowerNpcId);
+    if (!npc) return;
+    if (!npc.knownSecrets[aboutNpcId]) {
+      npc.knownSecrets[aboutNpcId] = [];
+    }
+    if (!npc.knownSecrets[aboutNpcId].includes(secret)) {
+      npc.knownSecrets[aboutNpcId].push(secret);
+    }
+    this.notify();
+  }
+
+  private promises: NpcPromise[] = [];
+
+  addPromise(promise: NpcPromise): void {
+    this.promises.push(promise);
+    this.notify();
+  }
+
+  getPromises(): NpcPromise[] {
+    return this.promises;
+  }
+
+  getPromisesFor(npcId: string): NpcPromise[] {
+    return this.promises.filter(
+      (p) => p.promiserId === npcId || p.promiseeId === npcId
+    );
+  }
+
+  // ── Relationship History ────────────────────
+
+  recordRelationshipSnapshot(npcAId: string, npcBId: string): void {
+    const key = [npcAId, npcBId].sort().join(":");
+    const npcA = this.npcs.get(npcAId);
+    if (!npcA) return;
+    const value = npcA.relationships[npcBId] ?? 0;
+    if (!this.relationshipHistory.has(key)) {
+      this.relationshipHistory.set(key, []);
+    }
+    const history = this.relationshipHistory.get(key)!;
+    history.push(value);
+    if (history.length > 10) history.shift();
+  }
+
+  getRelationshipVelocity(
+    npcAId: string,
+    npcBId: string
+  ): RelationshipVelocity {
+    const key = [npcAId, npcBId].sort().join(":");
+    const history = this.relationshipHistory.get(key) ?? [];
+    if (history.length < 2) return { trend: "stable", values: history };
+    const recent = history.slice(-3);
+    const avgDelta =
+      (recent[recent.length - 1] - recent[0]) / (recent.length - 1);
+    if (avgDelta > 0.03) return { trend: "improving", values: history };
+    if (avgDelta < -0.03) return { trend: "declining", values: history };
+    return { trend: "stable", values: history };
   }
 
   // ── Subscription ─────────────────────────────

@@ -12,11 +12,18 @@ const CONFLICT_PREAMBLE = `IMPORTANT BEHAVIORAL RULES:
 
 // ── System prompt builder ───────────────────────
 
+export interface PromptContext {
+  allNpcs?: Array<{ id: string; name: string }>;
+  trajectoryContext?: string;
+  locationContext?: string;
+}
+
 export function buildSystemPrompt(
   speaker: NPC,
   listener: NPC,
   turnNumber: number,
-  maxTurns: number
+  maxTurns: number,
+  ctx: PromptContext = {}
 ): string {
   const relationship = speaker.relationships[listener.id] ?? 0;
   const relLabel = relationshipLabel(relationship);
@@ -36,9 +43,60 @@ export function buildSystemPrompt(
     .map((m) => `- ${m.text}`)
     .join("\n");
 
+  // Gossip memories (things heard about others)
+  const gossipMemories = speaker.shortTermMemory
+    .filter((m) => m.type === "gossip")
+    .sort((a, b) => b.recency * b.importance - a.recency * a.importance)
+    .slice(0, 3)
+    .map((m) => `- ${m.text}`)
+    .join("\n");
+
+  // Things this NPC has heard about the listener specifically
+  const aboutListenerMemories = speaker.shortTermMemory
+    .filter((m) => m.aboutNpcIds?.includes(listener.id) && m.type === "gossip")
+    .slice(0, 2)
+    .map((m) => `- ${m.text}`)
+    .join("\n");
+
   const behavioralBlock =
     allGuidance.length > 0
       ? `\nBEHAVIORAL GUIDANCE (follow these closely):\n${allGuidance.map((g) => `- ${g}`).join("\n")}`
+      : "";
+
+  // Other NPCs the speaker knows about
+  const otherNpcs = (ctx.allNpcs ?? []).filter(
+    (n) => n.id !== speaker.id && n.id !== listener.id
+  );
+  const otherNpcsBlock =
+    otherNpcs.length > 0
+      ? `\nOTHER PEOPLE YOU KNOW:\n${otherNpcs.map((n) => `- ${n.name} (id: "${n.id}")`).join("\n")}`
+      : "";
+
+  const gossipBlock =
+    gossipMemories
+      ? `\nGOSSIP YOU'VE HEARD:\n${gossipMemories}`
+      : "";
+
+  const aboutListenerBlock =
+    aboutListenerMemories
+      ? `\nTHINGS YOU'VE HEARD ABOUT ${listener.name.toUpperCase()}:\n${aboutListenerMemories}`
+      : "";
+
+  const trajectoryBlock = ctx.trajectoryContext
+    ? `\nRELATIONSHIP TRAJECTORY: ${ctx.trajectoryContext}`
+    : "";
+
+  const locationBlock = ctx.locationContext
+    ? `\nLOCATION: You are at ${ctx.locationContext}`
+    : "";
+
+  const secretsBlock =
+    speaker.secrets.length > 0
+      ? `\nYOUR SECRETS (only you know these — reveal ONLY if you deeply trust someone):\n${speaker.secrets.map((s) => `- ${s}`).join("\n")}\n${
+          speaker.emotionalState.trust >= 0.7
+            ? `Your trust is high. You MAY choose to reveal a secret to ${listener.name} by setting "secret_revealed" to the exact secret text. This is significant — don't do it casually.`
+            : "Your trust is not high enough to reveal secrets right now."
+        }`
       : "";
 
   return `You are ${speaker.name}.
@@ -47,12 +105,18 @@ PERSONALITY: ${speaker.personalityTraits.join(", ")}
 CORE DESIRES: ${speaker.coreDesires.join(", ")}
 CURRENT EMOTIONAL STATE: ${emotionSummary}
 CURRENT GOAL: ${speaker.currentGoal ?? "none"}
+${secretsBlock}
 
 You are talking to ${listener.name}.
 YOUR RELATIONSHIP WITH ${listener.name}: ${relLabel} (${relationship.toFixed(2)})
+${trajectoryBlock}
+${locationBlock}
 
 RECENT MEMORIES OF ${listener.name}:
 ${relevantMemories || "(none)"}
+${aboutListenerBlock}
+${gossipBlock}
+${otherNpcsBlock}
 
 ${CONFLICT_PREAMBLE}
 ${behavioralBlock}
@@ -65,19 +129,27 @@ RESPONSE FORMAT:
 - NEVER repeat or paraphrase what was already said. Always move the conversation forward.
 - React to what ${listener.name} actually said. Ask follow-up questions, share new thoughts, change the subject, disagree, joke — anything but echo.
 - If the conversation is going in circles, take it in a completely new direction.
+- You can talk about other people you know. If you mention someone not in this conversation, include them in mentioned_npcs.
+- You can make promises to ${listener.name}. If you commit to something, set "promise" to what you promise.
 - Your response MUST be a single JSON object with exactly these fields:
 {
   "speech": "what you say out loud",
   "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0 },
   "relationship_delta": 0,
   "intent": "brief description of your goal in saying this",
-  "conversation_end": false
+  "conversation_end": false,
+  "mentioned_npcs": [],
+  "secret_revealed": null,
+  "promise": null
 }
 
 RULES FOR DELTAS:
 - emotion_delta values range from -0.2 to +0.2 (small shifts per turn)
 - relationship_delta ranges from -0.1 to +0.1
 - Set conversation_end to true only if you want to end the conversation
+- mentioned_npcs is optional. Only include if you talk about someone not in this conversation. Format: [{"npc_id": "id", "sentiment": 0.3, "what_was_said": "brief summary"}]
+- secret_revealed: set to the exact text of a secret you're revealing, or null
+- promise: set to what you promise, or null. Promises are remembered and breaking them has consequences
 - Output ONLY the JSON object. No markdown, no code fences, no extra text.`;
 }
 
@@ -86,7 +158,8 @@ RULES FOR DELTAS:
 export function buildConversationMessages(
   speaker: NPC,
   listener: NPC,
-  session: ConversationSession
+  session: ConversationSession,
+  ctx: PromptContext = {}
 ): ChatMessage[] {
   const msgs: ChatMessage[] = [
     {
@@ -95,7 +168,8 @@ export function buildConversationMessages(
         speaker,
         listener,
         session.turnCount,
-        session.maxTurns
+        session.maxTurns,
+        ctx
       ),
     },
   ];
@@ -128,6 +202,38 @@ export function buildConversationMessages(
   }
 
   return msgs;
+}
+
+// ── Reflection prompt (inner monologue) ─────────
+
+export function buildReflectionMessages(
+  npc: NPC,
+  otherNpcName: string,
+  conversationSummary: string
+): ChatMessage[] {
+  const emotionSummary = describeEmotions(npc.emotionalState);
+  return [
+    {
+      role: "system",
+      content: `You are ${npc.name}. You just finished a conversation with ${otherNpcName}.
+
+PERSONALITY: ${npc.personalityTraits.join(", ")}
+CORE DESIRES: ${npc.coreDesires.join(", ")}
+CURRENT EMOTIONAL STATE: ${emotionSummary}
+
+Here's what happened in the conversation:
+${conversationSummary}
+
+Now reflect privately. What are you really thinking? What did you learn? How do you feel? Are you suspicious, hopeful, worried, amused? Be honest — no one can hear this.
+
+Respond with ONLY a single JSON object:
+{
+  "thought": "your private inner thought, 1-2 sentences"
+}
+
+Output ONLY the JSON object. No markdown, no code fences, no extra text.`,
+    },
+  ];
 }
 
 // ── Emotion description (fine-grained) ──────────

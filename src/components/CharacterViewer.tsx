@@ -207,6 +207,31 @@ export function CharacterViewer({
             </div>
           </div>
 
+          {selected.secrets.length > 0 && (
+            <div className="npc-section">
+              <div className="section-label">Secrets</div>
+              <div className="secrets-list">
+                {selected.secrets.map((secret, i) => {
+                  const knownBy = npcs.filter(
+                    (n) =>
+                      n.id !== selected.id &&
+                      n.knownSecrets[selected.id]?.includes(secret)
+                  );
+                  return (
+                    <div key={i} className="secret-entry">
+                      <span className="secret-text">{secret}</span>
+                      {knownBy.length > 0 && (
+                        <span className="secret-known-by">
+                          Known by: {knownBy.map((n) => n.name).join(", ")}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="npc-section">
             <div className="section-label">Recent Memories</div>
             <div className="memory-list">
@@ -218,6 +243,11 @@ export function CharacterViewer({
                 .reverse()
                 .map((mem, i) => (
                   <div key={i} className="memory-entry">
+                    {mem.type && (
+                      <span className={`memory-type-badge memory-type-${mem.type}`}>
+                        {mem.type}
+                      </span>
+                    )}
                     <span className="memory-time">
                       {new Date(mem.timestamp).toLocaleTimeString([], {
                         hour: "2-digit",
