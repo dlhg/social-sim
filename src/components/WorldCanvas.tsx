@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { NPC } from "../types";
 import type { WorldSnapshot, NpcSpatialState } from "../types";
+import { SpriteSystem } from "../sprite-system";
 
 interface WorldCanvasProps {
   getSnapshot: () => WorldSnapshot;
@@ -57,6 +58,7 @@ export function WorldCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
+  const spritesRef = useRef(new SpriteSystem());
 
   // Store props in refs so the rAF loop always reads fresh values
   const getSnapshotRef = useRef(getSnapshot);
@@ -70,6 +72,8 @@ export function WorldCanvas({
   pairRef.current = activeConversationPair;
 
   useEffect(() => {
+    spritesRef.current.load(); // fire-and-forget; draw loop checks .ready
+
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
     const container = containerRef.current!;
@@ -206,50 +210,67 @@ export function WorldCanvas({
           offsetY +
           (lerpY(spatial, now, snap.tickIntervalMs) + 0.5) * tileSize;
 
-        const radius = tileSize * 0.38;
         const isSpeaking = speaker === spatial.npcId;
         const isFrozen = spatial.frozen;
+
+        // Movement detection for sprite animation
+        const moveDx = spatial.position.x - spatial.previousPosition.x;
+        const moveDy = spatial.position.y - spatial.previousPosition.y;
+        const t = lerpFactor(spatial, now, snap.tickIntervalMs);
+        const isMoving = (moveDx !== 0 || moveDy !== 0) && !isFrozen && t < 1.0;
+
+        // Sprite dimensions (1 tile wide, 2 tiles tall, 1:2 aspect)
+        const sprW = tileSize * 1.0;
+        const sprH = tileSize * 2.0;
+        const feetY = py + tileSize * 0.35;
 
         // Glow when in conversation
         if (isFrozen) {
           ctx.beginPath();
-          ctx.arc(px, py, radius + 6, 0, Math.PI * 2);
-          const pulse = 0.15 + 0.1 * Math.sin(now / 400);
+          ctx.arc(px, feetY - sprH * 0.4, sprH * 0.3, 0, Math.PI * 2);
+          const pulse = 0.12 + 0.08 * Math.sin(now / 400);
           ctx.fillStyle = npc.color + Math.round(pulse * 255).toString(16).padStart(2, "0");
           ctx.fill();
         }
 
-        // Shadow
+        // Shadow at feet
         ctx.beginPath();
-        ctx.ellipse(px, py + radius + 4, radius * 0.7, radius * 0.2, 0, 0, Math.PI * 2);
+        ctx.ellipse(px, feetY, sprW * 0.35, sprW * 0.1, 0, 0, Math.PI * 2);
         ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
         ctx.fill();
 
-        // Body circle
-        ctx.beginPath();
-        ctx.arc(px, py, radius, 0, Math.PI * 2);
-        ctx.fillStyle = "#1a1a2e";
-        ctx.fill();
-        ctx.strokeStyle = npc.color;
-        ctx.lineWidth = isSpeaking ? 3 : 2;
-        ctx.stroke();
+        // Try sprite, fall back to circle + emoji
+        const drew = spritesRef.current.draw(
+          ctx, spatial.npcId, px, feetY, sprW, sprH,
+          moveDx, moveDy, isMoving, now,
+        );
 
-        // Emoji avatar
-        ctx.font = `${tileSize * 0.45}px serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(npc.avatar, px, py);
+        if (!drew) {
+          const radius = tileSize * 0.38;
+          ctx.beginPath();
+          ctx.arc(px, py, radius, 0, Math.PI * 2);
+          ctx.fillStyle = "#1a1a2e";
+          ctx.fill();
+          ctx.strokeStyle = npc.color;
+          ctx.lineWidth = isSpeaking ? 3 : 2;
+          ctx.stroke();
+
+          ctx.font = `${tileSize * 0.45}px serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(npc.avatar, px, py);
+        }
 
         // Name label
         ctx.fillStyle = npc.color;
         ctx.font = `bold ${Math.max(10, tileSize * 0.3)}px "SF Mono", "Fira Code", monospace`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        ctx.fillText(npc.name, px, py + radius + 8);
+        ctx.fillText(npc.name, px, feetY + 4);
 
         // Thinking dots when speaking
         if (isSpeaking) {
-          const dotY = py - radius - 14;
+          const dotY = feetY - sprH - 4;
           const dotSpacing = 6;
           for (let d = 0; d < 3; d++) {
             const dotX = px + (d - 1) * dotSpacing;
@@ -263,12 +284,12 @@ export function WorldCanvas({
           }
         }
 
-        // Destination indicator (subtle line to where they're heading)
+        // Destination indicator
         if (spatial.destination && !isFrozen) {
-          const dx =
+          const destX =
             offsetX +
             (spatial.destination.position.x + 0.5) * tileSize;
-          const dy =
+          const destY =
             offsetY +
             (spatial.destination.position.y + 0.5) * tileSize;
 
@@ -277,7 +298,7 @@ export function WorldCanvas({
           ctx.setLineDash([2, 6]);
           ctx.beginPath();
           ctx.moveTo(px, py);
-          ctx.lineTo(dx, dy);
+          ctx.lineTo(destX, destY);
           ctx.stroke();
           ctx.setLineDash([]);
         }
