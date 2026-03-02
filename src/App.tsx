@@ -6,15 +6,14 @@ import { NpcStore } from "./npc-store";
 import { initialNpcs } from "./npcs";
 import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
-import type { NPC, ConversationMessage, ActivityEvent } from "./types";
-import type { TabId, NpcSnapshot } from "./components/SidePanel";
+import type { NPC } from "./types";
+import type { TabId, NpcSnapshot, FeedItem } from "./components/SidePanel";
 import "./App.css";
 
 function App() {
   const storeRef = useRef(new NpcStore(initialNpcs));
   const [npcs, setNpcs] = useState<NPC[]>(() => storeRef.current.getAll());
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
-  const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [feed, setFeed] = useState<FeedItem[]>([]);
   const [streamingText, setStreamingText] = useState<Record<string, string>>(
     {}
   );
@@ -26,7 +25,7 @@ function App() {
   const [creatorOpen, setCreatorOpen] = useState(false);
 
   // New state for side panel
-  const [activeTab, setActiveTab] = useState<TabId>("chat");
+  const [activeTab, setActiveTab] = useState<TabId>("feed");
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
   const [npcHistory, setNpcHistory] = useState<Record<string, NpcSnapshot[]>>(
     {}
@@ -42,8 +41,7 @@ function App() {
   }, []);
 
   const handleStart = useCallback(() => {
-    setMessages([]);
-    setEvents([]);
+    setFeed([]);
     setStreamingText({});
     setCurrentSpeaker(null);
     setActiveConversationPair(null);
@@ -82,7 +80,7 @@ function App() {
         setStreamingText((prev) => ({ ...prev, [npcId]: fullText }));
       },
       onTurnComplete: (msg) => {
-        setMessages((prev) => [...prev, msg]);
+        setFeed((prev) => [...prev, { type: "chat", msg, timestamp: Date.now() }]);
         setStreamingText((prev) => ({ ...prev, [msg.npcId]: "" }));
 
         // Snapshot the speaker's emotional state and relationships
@@ -112,7 +110,7 @@ function App() {
         setActiveConversationPair(null);
       },
       onActivity: (event) => {
-        setEvents((prev) => [...prev, event]);
+        setFeed((prev) => [...prev, { type: "activity", event }]);
       },
       onSpeakerChange: (npcId) => {
         setCurrentSpeaker(npcId);
@@ -188,9 +186,8 @@ function App() {
           activeTab={activeTab}
           onTabChange={setActiveTab}
           npcs={npcs}
-          messages={messages}
+          feed={feed}
           currentSpeaker={currentSpeaker}
-          events={events}
           selectedNpcId={selectedNpcId}
           onSelectNpc={setSelectedNpcId}
           npcHistory={npcHistory}

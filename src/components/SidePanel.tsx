@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { CharacterViewer } from "./CharacterViewer";
 import type { NPC, ConversationMessage, ActivityEvent, EmotionalState } from "../types";
 
-export type TabId = "chat" | "activity" | "characters";
+export type TabId = "feed" | "characters";
 
 export interface NpcSnapshot {
   timestamp: number;
@@ -10,21 +10,23 @@ export interface NpcSnapshot {
   relationships: Record<string, number>;
 }
 
+export type FeedItem =
+  | { type: "chat"; msg: ConversationMessage; timestamp: number }
+  | { type: "activity"; event: ActivityEvent };
+
 interface SidePanelProps {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
   npcs: NPC[];
-  messages: ConversationMessage[];
+  feed: FeedItem[];
   currentSpeaker: string | null;
-  events: ActivityEvent[];
   selectedNpcId: string | null;
   onSelectNpc: (id: string | null) => void;
   npcHistory: Record<string, NpcSnapshot[]>;
 }
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: "chat", label: "Chat" },
-  { id: "activity", label: "Activity" },
+  { id: "feed", label: "Feed" },
   { id: "characters", label: "NPCs" },
 ];
 
@@ -40,27 +42,19 @@ export function SidePanel({
   activeTab,
   onTabChange,
   npcs,
-  messages,
+  feed,
   currentSpeaker,
-  events,
   selectedNpcId,
   onSelectNpc,
   npcHistory,
 }: SidePanelProps) {
-  const chatBottomRef = useRef<HTMLDivElement>(null);
-  const activityBottomRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (activeTab === "chat") {
-      chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (activeTab === "feed") {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, currentSpeaker, activeTab]);
-
-  useEffect(() => {
-    if (activeTab === "activity") {
-      activityBottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [events, activeTab]);
+  }, [feed, currentSpeaker, activeTab]);
 
   const npcMap = Object.fromEntries(npcs.map((n) => [n.id, n]));
 
@@ -79,16 +73,26 @@ export function SidePanel({
       </div>
 
       <div className="tab-content">
-        {activeTab === "chat" && (
+        {activeTab === "feed" && (
           <>
-            {messages.map((msg, i) => {
-              const npc = npcMap[msg.npcId];
+            {feed.map((item, i) => {
+              if (item.type === "chat") {
+                const npc = npcMap[item.msg.npcId];
+                return (
+                  <div key={i} className="chat-entry">
+                    <span className="chat-name" style={{ color: npc?.color }}>
+                      {item.msg.npcName}:
+                    </span>{" "}
+                    <span className="chat-text">{item.msg.text}</span>
+                  </div>
+                );
+              }
               return (
-                <div key={i} className="chat-entry">
-                  <span className="chat-name" style={{ color: npc?.color }}>
-                    {msg.npcName}:
+                <div key={i} className="activity-entry">
+                  <span className="activity-time">
+                    {formatTime(item.event.timestamp)}
                   </span>{" "}
-                  <span className="chat-text">{msg.text}</span>
+                  <span className="activity-text">{item.event.text}</span>
                 </div>
               );
             })}
@@ -104,19 +108,7 @@ export function SidePanel({
                 <span className="cursor-blink">|</span>
               </div>
             )}
-            <div ref={chatBottomRef} />
-          </>
-        )}
-
-        {activeTab === "activity" && (
-          <>
-            {events.map((evt, i) => (
-              <div key={i} className="activity-entry">
-                <span className="activity-time">{formatTime(evt.timestamp)}</span>{" "}
-                <span className="activity-text">{evt.text}</span>
-              </div>
-            ))}
-            <div ref={activityBottomRef} />
+            <div ref={bottomRef} />
           </>
         )}
 
