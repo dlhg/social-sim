@@ -83,6 +83,15 @@
   background: #2196f320;
 }
 
+.btn-create {
+  border-color: #ce93d8;
+  color: #ce93d8;
+}
+
+.btn-create:hover {
+  background: #ce93d820;
+}
+
 /* ── HUD ────────────────────────────────────── */
 
 .hud {
@@ -169,4 +178,136 @@
 .hud-content::-webkit-scrollbar-thumb {
   background: #333;
   border-radius: 3px;
+}
+
+/* ── NPC Creator Modal ────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-content {
+  background: #1a1a2e;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 24px;
+  width: 380px;
+  max-height: 80vh;
+  overflow-y: auto;
+  font-family: inherit;
+}
+
+.modal-content h3 {
+  margin: 0 0 16px;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #888;
+}
+
+.modal-content label {
+  display: block;
+  margin: 12px 0 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #666;
+}
+
+.modal-content input[type="text"] {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #0a0a12;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.modal-content input[type="text"]:focus {
+  outline: none;
+  border-color: #666;
+}
+
+.swatch-grid {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  padding: 0;
+}
+
+.swatch.selected {
+  border-color: #fff;
+}
+
+.avatar-grid {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.avatar-option {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  background: none;
+  transition: all 0.15s;
+}
+
+.avatar-option:hover {
+  background: #2a2a42;
+}
+
+.avatar-option.selected {
+  border-color: #fff;
+  background: #2a2a42;
+}
+
+.btn-spawn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px;
+  border: 1px solid #4caf50;
+  border-radius: 6px;
+  background: #4caf5020;
+  color: #4caf50;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-spawn:hover {
+  background: #4caf5040;
+}
+
+.form-error {
+  color: #e53935;
+  font-size: 11px;
+  margin-top: 4px;
 }

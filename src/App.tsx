@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { WorldCanvas } from "./components/WorldCanvas";
 import { ChatLog } from "./components/ChatLog";
 import { ActivityLog } from "./components/ActivityLog";
+import { NpcCreator } from "./components/NpcCreator";
 import { NpcStore } from "./npc-store";
 import { initialNpcs } from "./npcs";
 import { ConversationManager } from "./conversation-manager";
@@ -22,6 +23,7 @@ function App() {
     [string, string] | null
   >(null);
   const [status, setStatus] = useState<"idle" | "running" | "paused">("idle");
+  const [creatorOpen, setCreatorOpen] = useState(false);
 
   const managerRef = useRef<ConversationManager | null>(null);
   const worldRef = useRef<WorldSimulation | null>(null);
@@ -49,11 +51,16 @@ function App() {
       },
     });
 
-    // Register NPCs at different starting positions
+    // Register NPCs at different starting positions (spread across waypoints)
     const allNpcs = storeRef.current.getAll();
     const startPositions = [
       { x: 12, y: 8 }, // Fountain
-      { x: 6, y: 12 }, // near Park Bench
+      { x: 4, y: 12 }, // Park Bench
+      { x: 20, y: 4 }, // Old Tree
+      { x: 7, y: 3 }, // Garden
+      { x: 18, y: 13 }, // Market
+      { x: 3, y: 7 }, // Well
+      { x: 15, y: 10 }, // Bridge
     ];
     allNpcs.forEach((npc, i) => {
       world.addNpc(npc.id, startPositions[i % startPositions.length]);
@@ -131,6 +138,13 @@ function App() {
     }
   }, []);
 
+  const handleSpawnNpc = useCallback((npc: NPC) => {
+    storeRef.current.addNpc(npc);
+    if (worldRef.current) {
+      worldRef.current.addNpc(npc.id);
+    }
+  }, []);
+
   return (
     <div className="app">
       <WorldCanvas
@@ -163,6 +177,12 @@ function App() {
             </button>
           </>
         )}
+        <button
+          onClick={() => setCreatorOpen(true)}
+          className="btn btn-create"
+        >
+          + NPC
+        </button>
       </div>
       <div className="hud">
         <ChatLog
@@ -172,6 +192,13 @@ function App() {
         />
         <ActivityLog events={events} />
       </div>
+      {creatorOpen && (
+        <NpcCreator
+          onClose={() => setCreatorOpen(false)}
+          onCreateNpc={handleSpawnNpc}
+          existingIds={npcs.map((n) => n.id)}
+        />
+      )}
     </div>
   );
 }

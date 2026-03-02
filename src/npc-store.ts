@@ -74,6 +74,12 @@ export class NpcStore {
     this.notify();
   }
 
+  addNpc(npc: NPC): void {
+    if (this.npcs.has(npc.id)) return;
+    this.npcs.set(npc.id, structuredClone(npc));
+    this.notify();
+  }
+
   // ── Subscription ─────────────────────────────
 
   subscribe(listener: Listener): () => void {
