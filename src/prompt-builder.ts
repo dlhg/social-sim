@@ -1,4 +1,4 @@
-import type { NPC, EmotionalState, ConversationSession } from "./types";
+import type { NPC, EmotionalState, MemoryEntry, ConversationSession } from "./types";
 import type { ChatMessage } from "./ollama";
 
 // ── Anti-agreeableness preamble ─────────────────
@@ -10,12 +10,34 @@ const CONFLICT_PREAMBLE = `IMPORTANT BEHAVIORAL RULES:
 - Your personality traits are not decorative. If you are "blunt" — be blunt. If you are "suspicious" — be suspicious. If you are "competitive" — try to one-up the other person.
 - Emotional reactions should be proportional to your emotional state, not suppressed for politeness.`;
 
+const RESPONSE_JSON_SCHEMA = `- Your response MUST be a single JSON object with exactly these fields:
+{
+  "speech": "what you say out loud",
+  "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0 },
+  "relationship_delta": 0,
+  "intent": "brief description of your goal in saying this",
+  "conversation_end": false,
+  "mentioned_npcs": [],
+  "secret_revealed": null,
+  "promise": null
+}
+
+RULES FOR DELTAS:
+- emotion_delta values range from -0.2 to +0.2 (small shifts per turn)
+- relationship_delta ranges from -0.1 to +0.1
+- Set conversation_end to true only if you want to end the conversation
+- mentioned_npcs is optional. Only include if you talk about someone not in this conversation. Format: [{"npc_id": "id", "sentiment": 0.3, "what_was_said": "brief summary"}]
+- secret_revealed: set to the exact text of a secret you're revealing, or null
+- promise: set to what you promise, or null. Promises are remembered and breaking them has consequences
+- Output ONLY the JSON object. No markdown, no code fences, no extra text.`;
+
 // ── System prompt builder ───────────────────────
 
 export interface PromptContext {
   allNpcs?: Array<{ id: string; name: string }>;
   trajectoryContext?: string;
   locationContext?: string;
+  preSortedMemories?: MemoryEntry[];
 }
 
 export function buildSystemPrompt(
@@ -36,18 +58,20 @@ export function buildSystemPrompt(
   );
   const allGuidance = [...emotionGuidance, ...relGuidance];
 
-  const relevantMemories = speaker.shortTermMemory
+  // Use pre-sorted memories if available, otherwise sort inline
+  const sortedMemories = ctx.preSortedMemories ?? [...speaker.shortTermMemory]
+    .sort((a, b) => b.recency * b.importance - a.recency * a.importance);
+
+  const relevantMemories = sortedMemories
     .filter((m) => m.involvedNpcIds.includes(listener.id))
-    .sort((a, b) => b.recency * b.importance - a.recency * a.importance)
     .slice(0, 5)
     .map((m) => `- ${m.text}`)
     .join("\n");
 
   // Gossip memories (things heard about others — exclude gossip about current conversation partner)
   const seenGossipSubjects = new Set<string>();
-  const gossipMemories = speaker.shortTermMemory
+  const gossipMemories = sortedMemories
     .filter((m) => m.type === "gossip" && !m.aboutNpcIds?.includes(listener.id))
-    .sort((a, b) => b.recency * b.importance - a.recency * a.importance)
     .filter((m) => {
       // Deduplicate: max 1 gossip per subject NPC
       const subjectKey = m.aboutNpcIds?.join(",") ?? m.text;
@@ -60,9 +84,8 @@ export function buildSystemPrompt(
     .join("\n");
 
   // Things this NPC has heard about the listener specifically (limit 1)
-  const aboutListenerMemories = speaker.shortTermMemory
+  const aboutListenerMemories = sortedMemories
     .filter((m) => m.aboutNpcIds?.includes(listener.id) && m.type === "gossip")
-    .sort((a, b) => b.recency * b.importance - a.recency * a.importance)
     .slice(0, 1)
     .map((m) => `- ${m.text}`)
     .join("\n");
@@ -140,26 +163,7 @@ RESPONSE FORMAT:
 - If the conversation is going in circles, take it in a completely new direction.
 - You can talk about other people you know. If you mention someone not in this conversation, include them in mentioned_npcs.
 - You can make promises to ${listener.name}. If you commit to something, set "promise" to what you promise.
-- Your response MUST be a single JSON object with exactly these fields:
-{
-  "speech": "what you say out loud",
-  "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0 },
-  "relationship_delta": 0,
-  "intent": "brief description of your goal in saying this",
-  "conversation_end": false,
-  "mentioned_npcs": [],
-  "secret_revealed": null,
-  "promise": null
-}
-
-RULES FOR DELTAS:
-- emotion_delta values range from -0.2 to +0.2 (small shifts per turn)
-- relationship_delta ranges from -0.1 to +0.1
-- Set conversation_end to true only if you want to end the conversation
-- mentioned_npcs is optional. Only include if you talk about someone not in this conversation. Format: [{"npc_id": "id", "sentiment": 0.3, "what_was_said": "brief summary"}]
-- secret_revealed: set to the exact text of a secret you're revealing, or null
-- promise: set to what you promise, or null. Promises are remembered and breaking them has consequences
-- Output ONLY the JSON object. No markdown, no code fences, no extra text.`;
+${RESPONSE_JSON_SCHEMA}`;
 }
 
 // ── Conversation message builder ────────────────
@@ -294,7 +298,24 @@ function describeEmotions(state: EmotionalState): string {
 
 // ── Emotion → behavioral guidance ───────────────
 
+const emotionGuidanceCache = new Map<string, string[]>();
+const relationshipGuidanceCache = new Map<string, string[]>();
+
+function bucketEmotion(v: number): string {
+  if (v >= 0.8) return "8";
+  if (v >= 0.7) return "7";
+  if (v >= 0.4) return "4";
+  if (v >= 0.3) return "3";
+  if (v >= 0.25) return "25";
+  if (v >= 0.15) return "15";
+  return "0";
+}
+
 function emotionBehavioralGuidance(state: EmotionalState): string[] {
+  const key = `${bucketEmotion(state.anger)}_${bucketEmotion(state.trust)}_${bucketEmotion(state.fear)}_${bucketEmotion(state.joy)}`;
+  const cached = emotionGuidanceCache.get(key);
+  if (cached) return cached;
+
   const guidance: string[] = [];
 
   // Anger
@@ -381,6 +402,7 @@ function emotionBehavioralGuidance(state: EmotionalState): string[] {
     );
   }
 
+  emotionGuidanceCache.set(key, guidance);
   return guidance;
 }
 
@@ -390,6 +412,16 @@ function relationshipBehavioralGuidance(
   relationship: number,
   listenerName: string
 ): string[] {
+  const relBucket =
+    relationship <= -0.6 ? "-6" :
+    relationship <= -0.3 ? "-3" :
+    relationship <= -0.1 ? "-1" :
+    relationship >= 0.6 ? "6" :
+    relationship >= 0.3 ? "3" : "0";
+  const cacheKey = `${relBucket}_${listenerName}`;
+  const cached = relationshipGuidanceCache.get(cacheKey);
+  if (cached) return cached;
+
   const guidance: string[] = [];
 
   if (relationship <= -0.6) {
@@ -418,6 +450,7 @@ function relationshipBehavioralGuidance(
     );
   }
 
+  relationshipGuidanceCache.set(cacheKey, guidance);
   return guidance;
 }
 

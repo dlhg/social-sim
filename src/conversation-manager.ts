@@ -32,7 +32,7 @@ export class ConversationManager {
   private readonly MAX_TURNS = 6;
   private readonly COOLDOWN_MS = 30_000;
   private readonly GLOBAL_COOLDOWN_MS = 5_000;
-  private readonly TURN_PAUSE_MS = 1_000;
+  private readonly MIN_TURN_DURATION_MS = 1_500;
 
   private worldSim: WorldSimulation | null = null;
   private conversationEavesdroppers: Set<string> = new Set();
@@ -152,6 +152,7 @@ export class ConversationManager {
       const speaker = speakers[speakerIndex % 2];
       const listener = speakers[(speakerIndex + 1) % 2];
 
+      const turnStart = Date.now();
       const msg = await this.executeTurn(speaker, listener, session);
 
       if (!msg) {
@@ -175,7 +176,11 @@ export class ConversationManager {
       }
 
       if (turnsCompleted < this.MAX_TURNS) {
-        await this.sleep(this.TURN_PAUSE_MS);
+        const elapsed = Date.now() - turnStart;
+        const remaining = this.MIN_TURN_DURATION_MS - elapsed;
+        if (remaining > 0) {
+          await this.sleep(remaining);
+        }
       }
     }
 
@@ -191,11 +196,11 @@ export class ConversationManager {
     );
 
     // Decay emotions toward baseline for both participants
-    this.store.decayEmotions(npcAId);
-    this.store.decayEmotions(npcBId);
-
-    // Decay memory recency for all NPCs
-    this.store.decayAllMemoryRecency();
+    this.store.batch(() => {
+      this.store.decayEmotions(npcAId);
+      this.store.decayEmotions(npcBId);
+      this.store.decayAllMemoryRecency();
+    });
 
     // Log post-conversation summary
     this.logConversationSummary(npcAId, npcBId);
@@ -245,11 +250,13 @@ export class ConversationManager {
     const nearWp = this.worldSim?.getNearestWaypoint(speaker.id);
     const locationContext = nearWp?.description;
 
+    const preSortedMemories = this.store.getSortedShortTermMemory(speaker.id);
+
     const messages = buildConversationMessages(
       currentSpeaker,
       currentListener,
       session,
-      { allNpcs, trajectoryContext, locationContext }
+      { allNpcs, trajectoryContext, locationContext, preSortedMemories }
     );
 
     let raw: string;
@@ -294,8 +301,10 @@ export class ConversationManager {
       }
     }
 
-    // Apply side effects and log social dynamics
-    this.applyTurnEffects(currentSpeaker, currentListener, response);
+    // Apply side effects and log social dynamics (batched to single re-render)
+    this.store.batch(() => {
+      this.applyTurnEffects(currentSpeaker, currentListener, response);
+    });
 
     const msg: ConversationMessage = {
       npcId: speaker.id,

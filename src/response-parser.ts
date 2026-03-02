@@ -2,8 +2,13 @@ import type { LLMResponse, MentionedNpc } from "./types";
 
 export function parseLLMResponse(raw: string): LLMResponse {
   const cleaned = extractJson(raw);
-  const parsed = JSON.parse(cleaned);
-  return validate(parsed);
+  try {
+    return validate(JSON.parse(cleaned));
+  } catch {
+    // Attempt repair before giving up
+    const repaired = repairJson(cleaned);
+    return validate(JSON.parse(repaired));
+  }
 }
 
 export function extractJson(raw: string): string {
@@ -23,6 +28,43 @@ export function extractJson(raw: string): string {
   }
 
   return s;
+}
+
+export function repairJson(s: string): string {
+  let r = s;
+
+  // Remove trailing commas before } or ]
+  r = r.replace(/,\s*([}\]])/g, "$1");
+
+  // Fix unquoted keys: {speech: "hello"} -> {"speech": "hello"}
+  r = r.replace(/([{,])\s*([a-zA-Z_]\w*)\s*:/g, '$1"$2":');
+
+  // Fix single-quoted strings to double-quoted
+  r = r.replace(/'([^']*?)'/g, '"$1"');
+
+  // Replace undefined with null
+  r = r.replace(/:\s*undefined\b/g, ": null");
+
+  // Close truncated JSON — count unmatched braces/brackets
+  let openBraces = 0;
+  let openBrackets = 0;
+  let inString = false;
+  let escape = false;
+  for (const ch of r) {
+    if (escape) { escape = false; continue; }
+    if (ch === "\\") { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") openBraces++;
+    if (ch === "}") openBraces--;
+    if (ch === "[") openBrackets++;
+    if (ch === "]") openBrackets--;
+  }
+  if (inString) r += '"';
+  while (openBrackets > 0) { r += "]"; openBrackets--; }
+  while (openBraces > 0) { r += "}"; openBraces--; }
+
+  return r;
 }
 
 function validate(obj: unknown): LLMResponse {

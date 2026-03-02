@@ -15,6 +15,9 @@ export class NpcStore {
   private npcs: Map<string, NPC>;
   private listeners: Set<Listener> = new Set();
   private relationshipHistory: Map<string, number[]> = new Map();
+  private _batchDepth = 0;
+  private _memoryVersion = 0;
+  private _sortedMemoryCache = new Map<string, { version: number; sorted: MemoryEntry[] }>();
 
   constructor(initialNpcs: NPC[]) {
     this.npcs = new Map(
@@ -30,6 +33,20 @@ export class NpcStore {
 
   getAll(): NPC[] {
     return Array.from(this.npcs.values());
+  }
+
+  /** Returns short-term memories sorted by recency*importance, cached until memories change. */
+  getSortedShortTermMemory(npcId: string): MemoryEntry[] {
+    const cached = this._sortedMemoryCache.get(npcId);
+    if (cached && cached.version === this._memoryVersion) {
+      return cached.sorted;
+    }
+    const npc = this.npcs.get(npcId);
+    if (!npc) return [];
+    const sorted = [...npc.shortTermMemory]
+      .sort((a, b) => b.recency * b.importance - a.recency * a.importance);
+    this._sortedMemoryCache.set(npcId, { version: this._memoryVersion, sorted });
+    return sorted;
   }
 
   // ── Mutations ────────────────────────────────
@@ -70,6 +87,7 @@ export class NpcStore {
     if (slot === "shortTermMemory" && npc.shortTermMemory.length > 20) {
       npc.shortTermMemory.shift();
     }
+    this._memoryVersion++;
     this.notify();
   }
 
@@ -144,6 +162,7 @@ export class NpcStore {
         mem.recency *= rate;
       }
     }
+    this._memoryVersion++; // Invalidate sorted cache (recency affects sort order)
     // No notify needed — this is gradual background decay
   }
 
@@ -177,6 +196,21 @@ export class NpcStore {
     return { trend: "stable", values: history };
   }
 
+  // ── Batching ────────────────────────────────
+
+  /** Suppress notify() during fn, then fire a single notify when done. */
+  batch(fn: () => void): void {
+    this._batchDepth++;
+    try {
+      fn();
+    } finally {
+      this._batchDepth--;
+      if (this._batchDepth === 0) {
+        this.notify();
+      }
+    }
+  }
+
   // ── Subscription ─────────────────────────────
 
   subscribe(listener: Listener): () => void {
@@ -185,6 +219,7 @@ export class NpcStore {
   }
 
   private notify(): void {
+    if (this._batchDepth > 0) return;
     for (const listener of this.listeners) {
       listener();
     }
