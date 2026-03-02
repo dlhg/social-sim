@@ -138,7 +138,9 @@ export class ConversationManager {
     const speakers = [npcA, npcB];
     let consecutiveFailures = 0;
 
-    for (let turn = 0; turn < this.MAX_TURNS; turn++) {
+    let speakerIndex = 0;
+    let turnsCompleted = 0;
+    while (turnsCompleted < this.MAX_TURNS) {
       if (!this.running || session.status !== "active") break;
 
       // Wait while paused
@@ -147,8 +149,8 @@ export class ConversationManager {
       }
       if (!this.running) break;
 
-      const speaker = speakers[turn % 2];
-      const listener = speakers[(turn + 1) % 2];
+      const speaker = speakers[speakerIndex % 2];
+      const listener = speakers[(speakerIndex + 1) % 2];
 
       const msg = await this.executeTurn(speaker, listener, session);
 
@@ -158,17 +160,21 @@ export class ConversationManager {
           this.log("Two consecutive failures, ending conversation");
           break;
         }
+        // Don't advance speaker — let the other NPC try next
+        speakerIndex++;
         continue;
       }
 
       consecutiveFailures = 0;
+      speakerIndex++;
+      turnsCompleted++;
 
       if (msg.rawResponse?.conversation_end) {
         this.log(`${speaker.name} ended the conversation`);
         break;
       }
 
-      if (turn < this.MAX_TURNS - 1) {
+      if (turnsCompleted < this.MAX_TURNS) {
         await this.sleep(this.TURN_PAUSE_MS);
       }
     }
@@ -183,6 +189,13 @@ export class ConversationManager {
     this.log(
       `Conversation ended between ${npcA.name} and ${npcB.name} (${session.turnCount} turns)`
     );
+
+    // Decay emotions toward baseline for both participants
+    this.store.decayEmotions(npcAId);
+    this.store.decayEmotions(npcBId);
+
+    // Decay memory recency for all NPCs
+    this.store.decayAllMemoryRecency();
 
     // Log post-conversation summary
     this.logConversationSummary(npcAId, npcBId);
@@ -475,29 +488,13 @@ export class ConversationManager {
       );
     }
 
-    // Gossip: create memories when NPCs mention third parties
+    // Gossip: only create a memory for the LISTENER (the speaker already knows what they said)
     if (response.mentioned_npcs?.length) {
       for (const mention of response.mentioned_npcs) {
         // Validate the mentioned NPC exists
         if (!this.store.get(mention.npc_id)) continue;
 
         const mentionedName = this.npcName(mention.npc_id);
-
-        this.store.addMemory(
-          speaker.id,
-          {
-            text: `I told ${listener.name} about ${mentionedName}: "${mention.what_was_said}"`,
-            importance: 0.5,
-            recency: 1,
-            emotionalWeight: Math.abs(mention.sentiment) * 0.5,
-            involvedNpcIds: [listener.id],
-            aboutNpcIds: [mention.npc_id],
-            type: "gossip",
-            sentiment: mention.sentiment,
-            timestamp: Date.now(),
-          },
-          "shortTermMemory"
-        );
 
         this.store.addMemory(
           listener.id,

@@ -121,6 +121,32 @@ export class NpcStore {
     );
   }
 
+  // ── Decay ───────────────────────────────────
+
+  /** Pull all emotions toward a baseline (0.3) by the given rate. Call after each conversation. */
+  decayEmotions(npcId: string, rate = 0.15): void {
+    const npc = this.npcs.get(npcId);
+    if (!npc) return;
+    const baseline = 0.3;
+    for (const key of ["anger", "trust", "fear", "joy"] as const) {
+      npc.emotionalState[key] += (baseline - npc.emotionalState[key]) * rate;
+    }
+    this.notify();
+  }
+
+  /** Decay memory recency for all NPCs. Call after each conversation. */
+  decayAllMemoryRecency(rate = 0.85): void {
+    for (const npc of this.npcs.values()) {
+      for (const mem of npc.shortTermMemory) {
+        mem.recency *= rate;
+      }
+      for (const mem of npc.longTermMemory) {
+        mem.recency *= rate;
+      }
+    }
+    // No notify needed — this is gradual background decay
+  }
+
   // ── Relationship History ────────────────────
 
   recordRelationshipSnapshot(npcAId: string, npcBId: string): void {

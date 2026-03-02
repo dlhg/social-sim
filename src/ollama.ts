@@ -18,12 +18,14 @@ export async function accumulateChat(
       model: MODEL,
       messages,
       stream: true,
+      format: "json",
     }),
     signal,
   });
 
   if (!res.ok) {
-    throw new Error(`Ollama error: ${res.status} ${res.statusText}`);
+    const body = await res.text().catch(() => "");
+    throw new Error(`Ollama error: ${res.status} ${res.statusText}${body ? ` — ${body}` : ""}`);
   }
 
   const reader = res.body!.getReader();

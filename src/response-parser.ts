@@ -9,8 +9,8 @@ export function parseLLMResponse(raw: string): LLMResponse {
 export function extractJson(raw: string): string {
   let s = raw.trim();
 
-  // Strip markdown code fences
-  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+  // Strip markdown code fences (handle preamble text before fences)
+  s = s.replace(/.*```(?:json)?\s*/is, "").replace(/\s*```\s*$/s, "");
   s = s.trim();
 
   // Find JSON object boundaries if needed
@@ -37,10 +37,7 @@ function validate(obj: unknown): LLMResponse {
   }
 
   const ed = o.emotion_delta;
-  if (typeof ed !== "object" || ed === null) {
-    throw new Error('Missing "emotion_delta" field');
-  }
-  const emotions = ed as Record<string, unknown>;
+  const emotions = (typeof ed === "object" && ed !== null ? ed : {}) as Record<string, unknown>;
   const emotionDelta = {
     anger: clampDelta(toNumber(emotions.anger, 0)),
     trust: clampDelta(toNumber(emotions.trust, 0)),

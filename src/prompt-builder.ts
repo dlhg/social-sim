@@ -43,18 +43,27 @@ export function buildSystemPrompt(
     .map((m) => `- ${m.text}`)
     .join("\n");
 
-  // Gossip memories (things heard about others)
+  // Gossip memories (things heard about others — exclude gossip about current conversation partner)
+  const seenGossipSubjects = new Set<string>();
   const gossipMemories = speaker.shortTermMemory
-    .filter((m) => m.type === "gossip")
+    .filter((m) => m.type === "gossip" && !m.aboutNpcIds?.includes(listener.id))
     .sort((a, b) => b.recency * b.importance - a.recency * a.importance)
-    .slice(0, 3)
+    .filter((m) => {
+      // Deduplicate: max 1 gossip per subject NPC
+      const subjectKey = m.aboutNpcIds?.join(",") ?? m.text;
+      if (seenGossipSubjects.has(subjectKey)) return false;
+      seenGossipSubjects.add(subjectKey);
+      return true;
+    })
+    .slice(0, 2)
     .map((m) => `- ${m.text}`)
     .join("\n");
 
-  // Things this NPC has heard about the listener specifically
+  // Things this NPC has heard about the listener specifically (limit 1)
   const aboutListenerMemories = speaker.shortTermMemory
     .filter((m) => m.aboutNpcIds?.includes(listener.id) && m.type === "gossip")
-    .slice(0, 2)
+    .sort((a, b) => b.recency * b.importance - a.recency * a.importance)
+    .slice(0, 1)
     .map((m) => `- ${m.text}`)
     .join("\n");
 
@@ -174,18 +183,19 @@ export function buildConversationMessages(
     },
   ];
 
+  // Only include speech text in history (not full JSON) to keep context small
   for (const msg of session.messages) {
     if (msg.npcId === speaker.id) {
-      const content = msg.rawResponse
-        ? JSON.stringify(msg.rawResponse)
-        : JSON.stringify({
-            speech: msg.text,
-            emotion_delta: { anger: 0, trust: 0, fear: 0, joy: 0 },
-            relationship_delta: 0,
-            intent: msg.intent || "unknown",
-            conversation_end: false,
-          });
-      msgs.push({ role: "assistant", content });
+      msgs.push({
+        role: "assistant",
+        content: JSON.stringify({
+          speech: msg.text,
+          emotion_delta: { anger: 0, trust: 0, fear: 0, joy: 0 },
+          relationship_delta: 0,
+          intent: msg.intent || "",
+          conversation_end: false,
+        }),
+      });
     } else {
       msgs.push({
         role: "user",
