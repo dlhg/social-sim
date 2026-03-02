@@ -24,15 +24,12 @@ export class ConversationManager {
   private paused = false;
   private activeSession: ConversationSession | null = null;
   private abortController: AbortController | null = null;
-  private tickTimer: ReturnType<typeof setInterval> | null = null;
   private cooldowns: Map<string, number> = new Map();
   private lastConversationEnd = 0;
 
   private readonly MAX_TURNS = 6;
   private readonly COOLDOWN_MS = 30_000;
   private readonly GLOBAL_COOLDOWN_MS = 5_000;
-  private readonly RANDOM_TRIGGER_CHANCE = 0.3;
-  private readonly TICK_INTERVAL_MS = 2_000;
   private readonly TURN_PAUSE_MS = 1_000;
 
   constructor(
@@ -45,8 +42,7 @@ export class ConversationManager {
   start(): void {
     this.running = true;
     this.paused = false;
-    this.log("Simulation started");
-    this.tickTimer = setInterval(() => this.tick(), this.TICK_INTERVAL_MS);
+    this.log("Conversation engine started");
   }
 
   pause(): void {
@@ -62,10 +58,6 @@ export class ConversationManager {
   stop(): void {
     this.running = false;
     this.paused = false;
-    if (this.tickTimer) {
-      clearInterval(this.tickTimer);
-      this.tickTimer = null;
-    }
     if (this.abortController) {
       this.abortController.abort();
       this.abortController = null;
@@ -76,57 +68,24 @@ export class ConversationManager {
       this.activeSession = null;
     }
     this.callbacks.onSpeakerChange(null);
-    this.log("Simulation stopped");
+    this.log("Conversation engine stopped");
   }
 
-  triggerConversation(npcAId?: string, npcBId?: string): void {
-    if (this.activeSession || !this.running) return;
-
-    let pair: [string, string] | null = null;
-    if (npcAId && npcBId) {
-      pair = [npcAId, npcBId];
-    } else {
-      pair = this.selectPair();
-    }
-
-    if (pair) {
-      this.runConversation(pair[0], pair[1]);
-    }
+  isActive(): boolean {
+    return this.activeSession !== null;
   }
 
-  // ── Tick loop ────────────────────────────────
-
-  private tick(): void {
-    if (this.paused || this.activeSession || !this.running) return;
-    if (Date.now() - this.lastConversationEnd < this.GLOBAL_COOLDOWN_MS) return;
-
-    if (Math.random() < this.RANDOM_TRIGGER_CHANCE) {
-      const pair = this.selectPair();
-      if (pair) {
-        this.runConversation(pair[0], pair[1]);
-      }
-    }
-  }
-
-  private selectPair(): [string, string] | null {
-    const npcs = this.store.getAll();
-    if (npcs.length < 2) return null;
+  triggerConversation(npcAId: string, npcBId: string): void {
+    if (this.activeSession || !this.running || this.paused) return;
 
     const now = Date.now();
-    const candidates: [string, string][] = [];
+    if (now - this.lastConversationEnd < this.GLOBAL_COOLDOWN_MS) return;
 
-    for (let i = 0; i < npcs.length; i++) {
-      for (let j = i + 1; j < npcs.length; j++) {
-        const pairKey = this.pairKey(npcs[i].id, npcs[j].id);
-        const lastTime = this.cooldowns.get(pairKey) ?? 0;
-        if (now - lastTime >= this.COOLDOWN_MS) {
-          candidates.push([npcs[i].id, npcs[j].id]);
-        }
-      }
-    }
+    const pKey = this.pairKey(npcAId, npcBId);
+    const lastTime = this.cooldowns.get(pKey) ?? 0;
+    if (now - lastTime < this.COOLDOWN_MS) return;
 
-    if (candidates.length === 0) return null;
-    return candidates[Math.floor(Math.random() * candidates.length)];
+    this.runConversation(npcAId, npcBId);
   }
 
   private pairKey(a: string, b: string): string {

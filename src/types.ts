@@ -64,3 +64,32 @@ export interface ActivityEvent {
   timestamp: Date;
   text: string;
 }
+
+// ── World / Spatial ─────────────────────────────
+
+export interface Position {
+  x: number;
+  y: number;
+}
+
+export interface Waypoint {
+  id: string;
+  name: string;
+  position: Position;
+}
+
+export interface NpcSpatialState {
+  npcId: string;
+  position: Position;
+  previousPosition: Position;
+  lastTickTime: number;
+  destination: Waypoint | null;
+  idleTicksRemaining: number;
+  frozen: boolean;
+}
+
+export interface WorldSnapshot {
+  npcs: ReadonlyArray<Readonly<NpcSpatialState>>;
+  waypoints: ReadonlyArray<Readonly<Waypoint>>;
+  tickIntervalMs: number;
+}

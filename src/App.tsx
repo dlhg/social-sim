@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Scene } from "./components/Scene";
+import { WorldCanvas } from "./components/WorldCanvas";
 import { ChatLog } from "./components/ChatLog";
 import { ActivityLog } from "./components/ActivityLog";
 import { NpcStore } from "./npc-store";
 import { initialNpcs } from "./npcs";
 import { ConversationManager } from "./conversation-manager";
+import { WorldSimulation } from "./world-simulation";
 import type { NPC, ConversationMessage, ActivityEvent } from "./types";
 import "./App.css";
 
@@ -17,12 +18,13 @@ function App() {
     {}
   );
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
-  const [lastMessages, setLastMessages] = useState<
-    Record<string, ConversationMessage>
-  >({});
+  const [activeConversationPair, setActiveConversationPair] = useState<
+    [string, string] | null
+  >(null);
   const [status, setStatus] = useState<"idle" | "running" | "paused">("idle");
 
   const managerRef = useRef<ConversationManager | null>(null);
+  const worldRef = useRef<WorldSimulation | null>(null);
 
   useEffect(() => {
     return storeRef.current.subscribe(() => {
@@ -35,19 +37,51 @@ function App() {
     setEvents([]);
     setStreamingText({});
     setCurrentSpeaker(null);
-    setLastMessages({});
+    setActiveConversationPair(null);
 
+    // Create world simulation
+    const world = new WorldSimulation({
+      gridWidth: 24,
+      gridHeight: 16,
+      tickIntervalMs: 200,
+      onProximity: (aId, bId) => {
+        managerRef.current?.triggerConversation(aId, bId);
+      },
+    });
+
+    // Register NPCs at different starting positions
+    const allNpcs = storeRef.current.getAll();
+    const startPositions = [
+      { x: 12, y: 8 }, // Fountain
+      { x: 6, y: 12 }, // near Park Bench
+    ];
+    allNpcs.forEach((npc, i) => {
+      world.addNpc(npc.id, startPositions[i % startPositions.length]);
+    });
+
+    worldRef.current = world;
+
+    // Create conversation manager
     const manager = new ConversationManager(storeRef.current, {
       onStreamToken: (npcId, fullText) => {
         setStreamingText((prev) => ({ ...prev, [npcId]: fullText }));
       },
       onTurnComplete: (msg) => {
         setMessages((prev) => [...prev, msg]);
-        setLastMessages((prev) => ({ ...prev, [msg.npcId]: msg }));
         setStreamingText((prev) => ({ ...prev, [msg.npcId]: "" }));
       },
-      onConversationStart: () => {},
-      onConversationEnd: () => {},
+      onConversationStart: (session) => {
+        const [a, b] = session.participantIds;
+        worldRef.current?.freezeNpc(a);
+        worldRef.current?.freezeNpc(b);
+        setActiveConversationPair(session.participantIds);
+      },
+      onConversationEnd: (session) => {
+        const [a, b] = session.participantIds;
+        worldRef.current?.unfreezeNpc(a);
+        worldRef.current?.unfreezeNpc(b);
+        setActiveConversationPair(null);
+      },
       onActivity: (event) => {
         setEvents((prev) => [...prev, event]);
       },
@@ -62,16 +96,20 @@ function App() {
     managerRef.current = manager;
     setStatus("running");
     manager.start();
+    world.start();
   }, []);
 
   const handlePause = useCallback(() => {
     const mgr = managerRef.current;
+    const world = worldRef.current;
     if (!mgr) return;
     if (status === "paused") {
       mgr.resume();
+      world?.resume();
       setStatus("running");
     } else {
       mgr.pause();
+      world?.pause();
       setStatus("paused");
     }
   }, [status]);
@@ -79,21 +117,33 @@ function App() {
   const handleStop = useCallback(() => {
     managerRef.current?.stop();
     managerRef.current = null;
+    worldRef.current?.stop();
+    worldRef.current = null;
     setStatus("idle");
     setCurrentSpeaker(null);
+    setActiveConversationPair(null);
   }, []);
 
   const handleTrigger = useCallback(() => {
-    managerRef.current?.triggerConversation();
+    const allNpcs = storeRef.current.getAll();
+    if (allNpcs.length >= 2) {
+      managerRef.current?.triggerConversation(allNpcs[0].id, allNpcs[1].id);
+    }
   }, []);
 
   return (
     <div className="app">
-      <Scene
-        npcs={npcs}
+      <WorldCanvas
+        getSnapshot={() =>
+          worldRef.current?.getSnapshot() ?? {
+            npcs: [],
+            waypoints: [],
+            tickIntervalMs: 200,
+          }
+        }
+        getNpc={(id) => storeRef.current.get(id)}
         currentSpeaker={currentSpeaker}
-        streamingText={streamingText}
-        lastMessages={lastMessages}
+        activeConversationPair={activeConversationPair}
       />
       <div className="controls">
         {status === "idle" ? (
