@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { WorldCanvas } from "./components/WorldCanvas";
-import { ChatLog } from "./components/ChatLog";
-import { ActivityLog } from "./components/ActivityLog";
+import { SidePanel } from "./components/SidePanel";
 import { NpcCreator } from "./components/NpcCreator";
 import { NpcStore } from "./npc-store";
 import { initialNpcs } from "./npcs";
 import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
 import type { NPC, ConversationMessage, ActivityEvent } from "./types";
+import type { TabId, NpcSnapshot } from "./components/SidePanel";
 import "./App.css";
 
 function App() {
@@ -25,6 +25,13 @@ function App() {
   const [status, setStatus] = useState<"idle" | "running" | "paused">("idle");
   const [creatorOpen, setCreatorOpen] = useState(false);
 
+  // New state for side panel
+  const [activeTab, setActiveTab] = useState<TabId>("chat");
+  const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
+  const [npcHistory, setNpcHistory] = useState<Record<string, NpcSnapshot[]>>(
+    {}
+  );
+
   const managerRef = useRef<ConversationManager | null>(null);
   const worldRef = useRef<WorldSimulation | null>(null);
 
@@ -40,6 +47,7 @@ function App() {
     setStreamingText({});
     setCurrentSpeaker(null);
     setActiveConversationPair(null);
+    setNpcHistory({});
 
     // Create world simulation
     const world = new WorldSimulation({
@@ -76,6 +84,20 @@ function App() {
       onTurnComplete: (msg) => {
         setMessages((prev) => [...prev, msg]);
         setStreamingText((prev) => ({ ...prev, [msg.npcId]: "" }));
+
+        // Snapshot the speaker's emotional state and relationships
+        const speaker = storeRef.current.get(msg.npcId);
+        if (speaker) {
+          const snapshot: NpcSnapshot = {
+            timestamp: Date.now(),
+            emotions: { ...speaker.emotionalState },
+            relationships: { ...speaker.relationships },
+          };
+          setNpcHistory((prev) => ({
+            ...prev,
+            [msg.npcId]: [...(prev[msg.npcId] ?? []), snapshot],
+          }));
+        }
       },
       onConversationStart: (session) => {
         const [a, b] = session.participantIds;
@@ -147,18 +169,33 @@ function App() {
 
   return (
     <div className="app">
-      <WorldCanvas
-        getSnapshot={() =>
-          worldRef.current?.getSnapshot() ?? {
-            npcs: [],
-            waypoints: [],
-            tickIntervalMs: 200,
-          }
-        }
-        getNpc={(id) => storeRef.current.get(id)}
-        currentSpeaker={currentSpeaker}
-        activeConversationPair={activeConversationPair}
-      />
+      <div className="main-content">
+        <div className="world-panel">
+          <WorldCanvas
+            getSnapshot={() =>
+              worldRef.current?.getSnapshot() ?? {
+                npcs: [],
+                waypoints: [],
+                tickIntervalMs: 200,
+              }
+            }
+            getNpc={(id) => storeRef.current.get(id)}
+            currentSpeaker={currentSpeaker}
+            activeConversationPair={activeConversationPair}
+          />
+        </div>
+        <SidePanel
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          npcs={npcs}
+          messages={messages}
+          currentSpeaker={currentSpeaker}
+          events={events}
+          selectedNpcId={selectedNpcId}
+          onSelectNpc={setSelectedNpcId}
+          npcHistory={npcHistory}
+        />
+      </div>
       <div className="controls">
         {status === "idle" ? (
           <button onClick={handleStart} className="btn btn-start">
@@ -183,14 +220,6 @@ function App() {
         >
           + NPC
         </button>
-      </div>
-      <div className="hud">
-        <ChatLog
-          npcs={npcs}
-          messages={messages}
-          currentSpeaker={currentSpeaker}
-        />
-        <ActivityLog events={events} />
       </div>
       {creatorOpen && (
         <NpcCreator

@@ -9,14 +9,82 @@
   font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
 }
 
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.world-panel {
+  width: 40%;
+  min-width: 300px;
+  position: relative;
+  overflow: hidden;
+}
+
 /* ── Scene (Canvas Container) ────────────────── */
 
 .scene {
   flex: 1;
   position: relative;
-  min-height: 300px;
+  min-height: 0;
   overflow: hidden;
   background: #0f1923;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Side Panel ──────────────────────────────── */
+
+.side-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #222;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tab-bar {
+  display: flex;
+  background: rgba(15, 15, 25, 0.9);
+  border-bottom: 1px solid #222;
+  flex-shrink: 0;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #666;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab-btn:hover {
+  color: #aaa;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tab-btn.active {
+  color: #e0e0e0;
+  border-bottom-color: #6ec6ff;
+}
+
+.tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  background: rgba(10, 10, 18, 0.95);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 /* ── Controls ───────────────────────────────── */
@@ -28,7 +96,7 @@
   padding: 12px;
   background: rgba(10, 10, 18, 0.9);
   border-top: 1px solid #222;
-  border-bottom: 1px solid #222;
+  flex-shrink: 0;
 }
 
 .btn {
@@ -92,45 +160,6 @@
   background: #ce93d820;
 }
 
-/* ── HUD ────────────────────────────────────── */
-
-.hud {
-  display: flex;
-  height: 220px;
-  border-top: 1px solid #222;
-}
-
-.hud-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.hud-panel + .hud-panel {
-  border-left: 1px solid #222;
-}
-
-.hud-title {
-  padding: 8px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: #888;
-  background: rgba(15, 15, 25, 0.9);
-  border-bottom: 1px solid #222;
-}
-
-.hud-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 12px;
-  background: rgba(10, 10, 18, 0.95);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
 /* ── Chat Log ───────────────────────────────── */
 
 .chat-entry {
@@ -167,17 +196,280 @@
 
 /* ── Scrollbar ──────────────────────────────── */
 
-.hud-content::-webkit-scrollbar {
+.tab-content::-webkit-scrollbar {
   width: 6px;
 }
 
-.hud-content::-webkit-scrollbar-track {
+.tab-content::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.hud-content::-webkit-scrollbar-thumb {
+.tab-content::-webkit-scrollbar-thumb {
   background: #333;
   border-radius: 3px;
+}
+
+/* ── Character Viewer ───────────────────────── */
+
+.character-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.npc-selector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.npc-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 2px solid;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.npc-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.npc-chip.selected {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+}
+
+.npc-chip-avatar {
+  font-size: 16px;
+}
+
+.npc-chip-name {
+  font-weight: 600;
+}
+
+/* ── NPC Detail ─────────────────────────────── */
+
+.npc-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.npc-detail-empty {
+  color: #555;
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 13px;
+}
+
+.npc-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.npc-detail-avatar {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.npc-header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.npc-detail-name {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.npc-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.trait-chip {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 11px;
+  color: #aaa;
+}
+
+/* ── Sections ───────────────────────────────── */
+
+.npc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #666;
+}
+
+.desires-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: #aaa;
+  line-height: 1.5;
+}
+
+.desires-list li {
+  margin-bottom: 2px;
+}
+
+/* ── Emotion Bars ───────────────────────────── */
+
+.emotion-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.emotion-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.emotion-label {
+  width: 40px;
+  font-size: 11px;
+  color: #888;
+  text-transform: capitalize;
+}
+
+.emotion-bar-track {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.emotion-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.emotion-value {
+  width: 32px;
+  font-size: 11px;
+  color: #666;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Relationship Bars ──────────────────────── */
+
+.relationship-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.relationship-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rel-npc {
+  width: 80px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rel-bar-track {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.rel-bar-midline {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.rel-bar-fill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.rel-value {
+  width: 36px;
+  font-size: 11px;
+  color: #666;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rel-label {
+  width: 50px;
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ── Memory List ────────────────────────────── */
+
+.memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.memory-entry {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.memory-time {
+  color: #555;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.memory-text {
+  color: #999;
+}
+
+.empty-state {
+  color: #444;
+  font-size: 11px;
+  font-style: italic;
 }
 
 /* ── NPC Creator Modal ────────────────────────── */
