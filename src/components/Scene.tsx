@@ -1,40 +1,55 @@
-import { characters } from "../characters";
-import type { ConversationMessage } from "../simulation";
+import type { NPC, ConversationMessage } from "../types";
 
 interface SceneProps {
+  npcs: NPC[];
   currentSpeaker: string | null;
   streamingText: Record<string, string>;
   lastMessages: Record<string, ConversationMessage>;
 }
 
-export function Scene({ currentSpeaker, streamingText, lastMessages }: SceneProps) {
+export function Scene({
+  npcs,
+  currentSpeaker,
+  streamingText,
+  lastMessages,
+}: SceneProps) {
   return (
     <div className="scene">
       <div className="scene-bg" />
       <div className="characters">
-        {characters.map((char) => {
-          const isSpeaking = currentSpeaker === char.id;
+        {npcs.map((npc) => {
+          const isSpeaking = currentSpeaker === npc.id;
+          // During accumulation show thinking dots only; after turn complete show speech
           const bubbleText = isSpeaking
-            ? streamingText[char.id] || "..."
-            : lastMessages[char.id]?.text || null;
+            ? null // thinking dots shown below instead
+            : lastMessages[npc.id]?.text || null;
 
           return (
-            <div key={char.id} className={`character ${isSpeaking ? "speaking" : ""}`}>
+            <div
+              key={npc.id}
+              className={`character ${isSpeaking ? "speaking" : ""}`}
+            >
               {bubbleText && (
                 <div
-                  className={`speech-bubble ${isSpeaking ? "active" : "faded"}`}
-                  style={{ borderColor: char.color }}
+                  className="speech-bubble faded"
+                  style={{ borderColor: npc.color }}
                 >
                   {bubbleText}
                 </div>
               )}
-              <div className="avatar" style={{ borderColor: char.color }}>
-                <span className="avatar-emoji">{char.avatar}</span>
+              <div className="avatar" style={{ borderColor: npc.color }}>
+                <span className="avatar-emoji">{npc.avatar}</span>
               </div>
-              <div className="char-name" style={{ color: char.color }}>
-                {char.name}
+              <div className="char-name" style={{ color: npc.color }}>
+                {npc.name}
               </div>
-              {isSpeaking && <div className="thinking-dots"><span /><span /><span /></div>}
+              {isSpeaking && (
+                <div className="thinking-dots">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              )}
             </div>
           );
         })}

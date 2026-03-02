@@ -6,15 +6,20 @@ export interface ChatMessage {
   content: string;
 }
 
-export async function streamChat(
+export async function accumulateChat(
   messages: ChatMessage[],
-  onToken: (token: string) => void,
+  onProgress?: (accumulated: string) => void,
   signal?: AbortSignal
 ): Promise<string> {
   const res = await fetch(OLLAMA_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, messages, stream: true }),
+    body: JSON.stringify({
+      model: MODEL,
+      messages,
+      stream: true,
+      format: "json",
+    }),
     signal,
   });
 
@@ -37,10 +42,10 @@ export async function streamChat(
         const json = JSON.parse(line);
         if (json.message?.content) {
           full += json.message.content;
-          onToken(json.message.content);
+          onProgress?.(full);
         }
       } catch {
-        // skip malformed lines
+        // skip malformed NDJSON lines
       }
     }
   }

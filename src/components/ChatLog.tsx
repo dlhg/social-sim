@@ -1,43 +1,45 @@
 import { useEffect, useRef } from "react";
-import { characters } from "../characters";
-import type { ConversationMessage } from "../simulation";
+import type { NPC, ConversationMessage } from "../types";
 
 interface ChatLogProps {
+  npcs: NPC[];
   messages: ConversationMessage[];
-  streamingText: Record<string, string>;
   currentSpeaker: string | null;
 }
 
-export function ChatLog({ messages, streamingText, currentSpeaker }: ChatLogProps) {
+export function ChatLog({ npcs, messages, currentSpeaker }: ChatLogProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingText]);
+  }, [messages, currentSpeaker]);
 
-  const charMap = Object.fromEntries(characters.map((c) => [c.id, c]));
+  const npcMap = Object.fromEntries(npcs.map((n) => [n.id, n]));
 
   return (
     <div className="hud-panel chat-log">
       <div className="hud-title">Chat Log</div>
       <div className="hud-content">
         {messages.map((msg, i) => {
-          const char = charMap[msg.characterId];
+          const npc = npcMap[msg.npcId];
           return (
             <div key={i} className="chat-entry">
-              <span className="chat-name" style={{ color: char?.color }}>
-                {msg.characterName}:
+              <span className="chat-name" style={{ color: npc?.color }}>
+                {msg.npcName}:
               </span>{" "}
               <span className="chat-text">{msg.text}</span>
             </div>
           );
         })}
-        {currentSpeaker && streamingText[currentSpeaker] && (
+        {currentSpeaker && (
           <div className="chat-entry streaming">
-            <span className="chat-name" style={{ color: charMap[currentSpeaker]?.color }}>
-              {charMap[currentSpeaker]?.name}:
+            <span
+              className="chat-name"
+              style={{ color: npcMap[currentSpeaker]?.color }}
+            >
+              {npcMap[currentSpeaker]?.name}:
             </span>{" "}
-            <span className="chat-text">{streamingText[currentSpeaker]}</span>
+            <span className="chat-text">thinking...</span>
             <span className="cursor-blink">|</span>
           </div>
         )}

@@ -216,6 +216,15 @@
   background: #f4433620;
 }
 
+.btn-trigger {
+  border-color: #2196f3;
+  color: #2196f3;
+}
+
+.btn-trigger:hover {
+  background: #2196f320;
+}
+
 /* ── HUD ────────────────────────────────────── */
 
 .hud {

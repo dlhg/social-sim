@@ -1,19 +1,34 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Scene } from "./components/Scene";
 import { ChatLog } from "./components/ChatLog";
 import { ActivityLog } from "./components/ActivityLog";
-import { Simulation, type ConversationMessage, type ActivityEvent } from "./simulation";
+import { NpcStore } from "./npc-store";
+import { initialNpcs } from "./npcs";
+import { ConversationManager } from "./conversation-manager";
+import type { NPC, ConversationMessage, ActivityEvent } from "./types";
 import "./App.css";
 
 function App() {
+  const storeRef = useRef(new NpcStore(initialNpcs));
+  const [npcs, setNpcs] = useState<NPC[]>(() => storeRef.current.getAll());
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [events, setEvents] = useState<ActivityEvent[]>([]);
-  const [streamingText, setStreamingText] = useState<Record<string, string>>({});
+  const [streamingText, setStreamingText] = useState<Record<string, string>>(
+    {}
+  );
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
-  const [lastMessages, setLastMessages] = useState<Record<string, ConversationMessage>>({});
+  const [lastMessages, setLastMessages] = useState<
+    Record<string, ConversationMessage>
+  >({});
   const [status, setStatus] = useState<"idle" | "running" | "paused">("idle");
 
-  const simRef = useRef<Simulation | null>(null);
+  const managerRef = useRef<ConversationManager | null>(null);
+
+  useEffect(() => {
+    return storeRef.current.subscribe(() => {
+      setNpcs(storeRef.current.getAll());
+    });
+  }, []);
 
   const handleStart = useCallback(() => {
     setMessages([]);
@@ -22,73 +37,87 @@ function App() {
     setCurrentSpeaker(null);
     setLastMessages({});
 
-    const sim = new Simulation({
-      onStreamToken: (characterId, fullText) => {
-        setStreamingText((prev) => ({ ...prev, [characterId]: fullText }));
+    const manager = new ConversationManager(storeRef.current, {
+      onStreamToken: (npcId, fullText) => {
+        setStreamingText((prev) => ({ ...prev, [npcId]: fullText }));
       },
-      onMessageComplete: (msg) => {
+      onTurnComplete: (msg) => {
         setMessages((prev) => [...prev, msg]);
-        setLastMessages((prev) => ({ ...prev, [msg.characterId]: msg }));
-        setStreamingText((prev) => ({ ...prev, [msg.characterId]: "" }));
+        setLastMessages((prev) => ({ ...prev, [msg.npcId]: msg }));
+        setStreamingText((prev) => ({ ...prev, [msg.npcId]: "" }));
       },
+      onConversationStart: () => {},
+      onConversationEnd: () => {},
       onActivity: (event) => {
         setEvents((prev) => [...prev, event]);
       },
-      onSpeakerChange: (characterId) => {
-        setCurrentSpeaker(characterId);
-        if (characterId) {
-          setStreamingText((prev) => ({ ...prev, [characterId]: "" }));
+      onSpeakerChange: (npcId) => {
+        setCurrentSpeaker(npcId);
+        if (npcId) {
+          setStreamingText((prev) => ({ ...prev, [npcId]: "" }));
         }
       },
     });
 
-    simRef.current = sim;
+    managerRef.current = manager;
     setStatus("running");
-    sim.start().then(() => setStatus("idle"));
+    manager.start();
   }, []);
 
   const handlePause = useCallback(() => {
-    const sim = simRef.current;
-    if (!sim) return;
-    if (sim.isPaused) {
-      sim.resume();
+    const mgr = managerRef.current;
+    if (!mgr) return;
+    if (status === "paused") {
+      mgr.resume();
       setStatus("running");
     } else {
-      sim.pause();
+      mgr.pause();
       setStatus("paused");
     }
-  }, []);
+  }, [status]);
 
   const handleStop = useCallback(() => {
-    simRef.current?.stop();
-    simRef.current = null;
+    managerRef.current?.stop();
+    managerRef.current = null;
     setStatus("idle");
     setCurrentSpeaker(null);
+  }, []);
+
+  const handleTrigger = useCallback(() => {
+    managerRef.current?.triggerConversation();
   }, []);
 
   return (
     <div className="app">
       <Scene
+        npcs={npcs}
         currentSpeaker={currentSpeaker}
         streamingText={streamingText}
         lastMessages={lastMessages}
       />
       <div className="controls">
         {status === "idle" ? (
-          <button onClick={handleStart} className="btn btn-start">Start</button>
+          <button onClick={handleStart} className="btn btn-start">
+            Start
+          </button>
         ) : (
           <>
             <button onClick={handlePause} className="btn btn-pause">
               {status === "paused" ? "Resume" : "Pause"}
             </button>
-            <button onClick={handleStop} className="btn btn-stop">Stop</button>
+            <button onClick={handleStop} className="btn btn-stop">
+              Stop
+            </button>
+            <button onClick={handleTrigger} className="btn btn-trigger">
+              Trigger Conversation
+            </button>
           </>
         )}
       </div>
       <div className="hud">
         <ChatLog
+          npcs={npcs}
           messages={messages}
-          streamingText={streamingText}
           currentSpeaker={currentSpeaker}
         />
         <ActivityLog events={events} />
