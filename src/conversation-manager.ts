@@ -206,6 +206,9 @@ export class ConversationManager {
     this.log(
       `Conversation ended between ${npcA.name} and ${npcB.name} (${session.turnCount} turns)`
     );
+
+    // Log post-conversation summary
+    this.logConversationSummary(npcAId, npcBId);
   }
 
   private async executeTurn(
@@ -268,7 +271,7 @@ export class ConversationManager {
       }
     }
 
-    // Apply side effects
+    // Apply side effects and log social dynamics
     this.applyTurnEffects(currentSpeaker, currentListener, response);
 
     const msg: ConversationMessage = {
@@ -284,7 +287,14 @@ export class ConversationManager {
 
     this.callbacks.onTurnComplete(msg);
     this.callbacks.onStreamToken(speaker.id, "");
-    this.log(`${speaker.name} finished speaking`);
+
+    // Log the rich social details
+    if (response.intent) {
+      this.log(`${speaker.name}'s intent: ${response.intent}`);
+    }
+
+    this.logEmotionShifts(speaker.name, response);
+    this.logRelationshipShift(speaker, listener, response);
 
     return msg;
   }
@@ -315,11 +325,14 @@ export class ConversationManager {
       Math.abs(response.emotion_delta.fear) +
       Math.abs(response.emotion_delta.joy);
 
+    const speakerMemory = `I said to ${listener.name}: "${response.speech}"`;
+    const listenerMemory = `${speaker.name} said to me: "${response.speech}"`;
+
     // Speaker memory
     this.store.addMemory(
       speaker.id,
       {
-        text: `I said to ${listener.name}: "${response.speech}"`,
+        text: speakerMemory,
         importance: Math.min(1, Math.abs(response.relationship_delta) * 10),
         recency: 1,
         emotionalWeight: Math.min(1, emotionMagnitude),
@@ -333,7 +346,7 @@ export class ConversationManager {
     this.store.addMemory(
       listener.id,
       {
-        text: `${speaker.name} said to me: "${response.speech}"`,
+        text: listenerMemory,
         importance: Math.min(1, Math.abs(response.relationship_delta) * 10),
         recency: 1,
         emotionalWeight: Math.min(1, emotionMagnitude * 0.5),
@@ -342,6 +355,101 @@ export class ConversationManager {
       },
       "shortTermMemory"
     );
+
+    // Log memory formation
+    const speakerMems = this.store.get(speaker.id)?.shortTermMemory.length ?? 0;
+    const listenerMems = this.store.get(listener.id)?.shortTermMemory.length ?? 0;
+    this.log(`Memory stored for ${speaker.name} (${speakerMems} memories) and ${listener.name} (${listenerMems} memories)`);
+  }
+
+  // ── Rich social logging ──────────────────────
+
+  private logEmotionShifts(name: string, response: LLMResponse): void {
+    const d = response.emotion_delta;
+    const shifts: string[] = [];
+
+    if (Math.abs(d.joy) >= 0.01) {
+      shifts.push(d.joy > 0 ? `+joy` : `-joy`);
+    }
+    if (Math.abs(d.trust) >= 0.01) {
+      shifts.push(d.trust > 0 ? `+trust` : `-trust`);
+    }
+    if (Math.abs(d.anger) >= 0.01) {
+      shifts.push(d.anger > 0 ? `+anger` : `-anger`);
+    }
+    if (Math.abs(d.fear) >= 0.01) {
+      shifts.push(d.fear > 0 ? `+fear` : `-fear`);
+    }
+
+    if (shifts.length > 0) {
+      // Read back the resulting emotional state
+      const npc = this.store.get(
+        // find the NPC by name — we have the store
+        this.store.getAll().find((n) => n.name === name)?.id ?? ""
+      );
+      if (npc) {
+        const mood = this.describeMood(npc);
+        this.log(`${name} feels ${shifts.join(", ")} → now ${mood}`);
+      }
+    }
+  }
+
+  private logRelationshipShift(
+    speaker: NPC,
+    listener: NPC,
+    response: LLMResponse
+  ): void {
+    if (Math.abs(response.relationship_delta) < 0.005) return;
+
+    const arrow = response.relationship_delta > 0 ? "warmed" : "cooled";
+    const updatedSpeaker = this.store.get(speaker.id);
+    const relValue = updatedSpeaker?.relationships[listener.id] ?? 0;
+    const label = this.relationshipLabel(relValue);
+
+    this.log(
+      `${speaker.name} ${arrow} toward ${listener.name} (${relValue >= 0 ? "+" : ""}${relValue.toFixed(2)}, ${label})`
+    );
+  }
+
+  private describeMood(npc: NPC): string {
+    const s = npc.emotionalState;
+    const parts: string[] = [];
+    if (s.joy > 0.7) parts.push("very happy");
+    else if (s.joy > 0.5) parts.push("pleased");
+    if (s.anger > 0.6) parts.push("angry");
+    else if (s.anger > 0.3) parts.push("irritated");
+    if (s.fear > 0.6) parts.push("fearful");
+    else if (s.fear > 0.3) parts.push("uneasy");
+    if (s.trust > 0.7) parts.push("very trusting");
+    else if (s.trust < 0.3) parts.push("wary");
+    return parts.length > 0 ? parts.join(", ") : "calm";
+  }
+
+  private relationshipLabel(value: number): string {
+    if (value > 0.5) return "close friend";
+    if (value > 0.2) return "friendly";
+    if (value > -0.2) return "neutral";
+    if (value > -0.5) return "tense";
+    return "hostile";
+  }
+
+  private logConversationSummary(npcAId: string, npcBId: string): void {
+    const a = this.store.get(npcAId);
+    const b = this.store.get(npcBId);
+    if (!a || !b) return;
+
+    const relAB = a.relationships[npcBId] ?? 0;
+    const relBA = b.relationships[npcAId] ?? 0;
+    const labelAB = this.relationshipLabel(relAB);
+    const labelBA = this.relationshipLabel(relBA);
+
+    this.log(
+      `Status: ${a.name}→${b.name}: ${labelAB} (${relAB >= 0 ? "+" : ""}${relAB.toFixed(2)}) | ${b.name}→${a.name}: ${labelBA} (${relBA >= 0 ? "+" : ""}${relBA.toFixed(2)})`
+    );
+
+    const moodA = this.describeMood(a);
+    const moodB = this.describeMood(b);
+    this.log(`Mood: ${a.name} is ${moodA} | ${b.name} is ${moodB}`);
   }
 
   // ── Helpers ──────────────────────────────────

@@ -1,5 +1,5 @@
 const OLLAMA_URL = "/api/chat";
-const MODEL = "qwen2.5:14b";
+const MODEL = "qwen2.5:7b";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -18,7 +18,6 @@ export async function accumulateChat(
       model: MODEL,
       messages,
       stream: true,
-      format: "json",
     }),
     signal,
   });
