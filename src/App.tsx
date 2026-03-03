@@ -8,7 +8,8 @@ import { NpcStore } from "./npc-store";
 import { initialNpcs } from "./npcs";
 import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
-import type { NPC, BubbleData, ActionType } from "./types";
+import type { NPC, BubbleData, ActionType, WaypointActivityId } from "./types";
+import { ACTIVITIES } from "./activities";
 import type { NpcSnapshot, FeedItem, PanelMode } from "./components/SidePanel";
 import "./App.css";
 
@@ -85,18 +86,56 @@ function App() {
       onProximity: (aId, bId) => {
         managerRef.current?.triggerConversation(aId, bId);
       },
+      onActivityStart: (npcId, activityId, waypointName) => {
+        const act = ACTIVITIES[activityId as WaypointActivityId];
+        const bubbleText = `${act.emoji} ${act.label}`;
+        setBubbles(prev => [
+          ...prev.filter(b => !(b.npcId === npcId && b.type === "action")),
+          { npcId, text: bubbleText, type: "action", startedAt: Date.now() },
+        ]);
+        const name = storeRef.current.get(npcId)?.name ?? npcId;
+        setFeed(prev => [...prev, {
+          type: "activity",
+          event: {
+            timestamp: new Date(),
+            text: `${name} started ${act.label} at ${waypointName}`,
+            activityType: "action",
+            npcId,
+          },
+        }]);
+      },
+      onActivityEnd: (npcId, _activityId, waypointName, _memoryText) => {
+        setBubbles(prev => prev.filter(b => !(b.npcId === npcId && b.type === "action")));
+        const name = storeRef.current.get(npcId)?.name ?? npcId;
+        const act = ACTIVITIES[_activityId as WaypointActivityId];
+        setFeed(prev => [...prev, {
+          type: "activity",
+          event: {
+            timestamp: new Date(),
+            text: `${name} finished ${act.label} at ${waypointName}`,
+            activityType: "action",
+            npcId,
+          },
+        }]);
+      },
       npcStore: storeRef.current,
     });
 
     // Register NPCs at different starting positions (spread across waypoints)
     const allNpcs = storeRef.current.getAll();
     const startPositions = [
-      { x: 12, y: 8 }, // Fountain
-      { x: 4, y: 12 }, // Park Bench
-      { x: 20, y: 4 }, // Old Tree
-      { x: 7, y: 3 }, // Garden
+      { x: 12, y: 8 },  // Fountain
+      { x: 4, y: 12 },  // Park Bench
+      { x: 22, y: 9 },  // Training Yard
+      { x: 7, y: 3 },   // Garden
       { x: 18, y: 13 }, // Market
-      { x: 3, y: 7 }, // Well
+      { x: 1, y: 2 },   // Chapel
+      { x: 14, y: 5 },  // Pond
+      { x: 10, y: 1 },  // Library Ruins
+      { x: 8, y: 14 },  // Tavern Porch
+      { x: 21, y: 1 },  // Hilltop
+      { x: 20, y: 4 },  // Old Tree
+      { x: 3, y: 7 },   // Well
       { x: 15, y: 10 }, // Bridge
     ];
     allNpcs.forEach((npc, i) => {
@@ -175,6 +214,10 @@ function App() {
         const [a, b] = session.participantIds;
         worldRef.current?.freezeNpc(a);
         worldRef.current?.freezeNpc(b);
+        // Clear any activity bubbles for participants
+        setBubbles(prev => prev.filter(bl =>
+          !((bl.npcId === a || bl.npcId === b) && bl.type === "action")
+        ));
         setActiveConversationPair(session.participantIds);
       },
       onConversationEnd: (session) => {

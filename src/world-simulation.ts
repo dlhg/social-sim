@@ -1,5 +1,6 @@
-import type { Position, Waypoint, NpcSpatialState, WorldSnapshot } from "./types";
+import type { Position, Waypoint, NpcSpatialState, WorldSnapshot, EmotionalState } from "./types";
 import type { NpcStore } from "./npc-store";
+import { ACTIVITIES, shouldDoActivity, pickActivity, activityDurationTicks, buildActivityMemory } from "./activities";
 
 export const WAYPOINTS: Waypoint[] = [
   { id: "fountain", name: "Fountain", position: { x: 12, y: 8 }, mood: "gathering", description: "the central fountain, a busy gathering place" },
@@ -9,6 +10,12 @@ export const WAYPOINTS: Waypoint[] = [
   { id: "market", name: "Market", position: { x: 18, y: 13 }, mood: "social", description: "the bustling market square" },
   { id: "well", name: "Well", position: { x: 3, y: 7 }, mood: "mysterious", description: "an old well at the edge of town, rumored to grant wishes" },
   { id: "bridge", name: "Bridge", position: { x: 15, y: 10 }, mood: "social", description: "a stone bridge, a natural meeting point" },
+  { id: "chapel", name: "Chapel", position: { x: 1, y: 2 }, mood: "reflective", description: "a small stone chapel, hushed and reverent" },
+  { id: "training_yard", name: "Training Yard", position: { x: 22, y: 9 }, mood: "gathering", description: "a dusty training yard with wooden dummies" },
+  { id: "library_ruins", name: "Library Ruins", position: { x: 10, y: 1 }, mood: "mysterious", description: "crumbling library ruins, books still scattered among the stones" },
+  { id: "tavern_porch", name: "Tavern Porch", position: { x: 8, y: 14 }, mood: "social", description: "the porch of a weathered tavern, smelling of bread and ale" },
+  { id: "hilltop", name: "Hilltop", position: { x: 21, y: 1 }, mood: "reflective", description: "a windswept hilltop with a view of the whole town" },
+  { id: "pond", name: "Pond", position: { x: 14, y: 5 }, mood: "intimate", description: "a quiet pond surrounded by reeds" },
 ];
 
 const PROXIMITY_THRESHOLD = 2;
@@ -20,6 +27,8 @@ export interface WorldSimulationOptions {
   gridHeight: number;
   tickIntervalMs: number;
   onProximity: (npcAId: string, npcBId: string) => void;
+  onActivityStart?: (npcId: string, activityId: string, waypointName: string) => void;
+  onActivityEnd?: (npcId: string, activityId: string, waypointName: string, memoryText: string) => void;
   npcStore?: NpcStore;
 }
 
@@ -34,6 +43,8 @@ export class WorldSimulation {
   readonly tickIntervalMs: number;
   readonly waypoints: ReadonlyArray<Waypoint> = WAYPOINTS;
   private onProximity: (a: string, b: string) => void;
+  private onActivityStart: ((npcId: string, activityId: string, waypointName: string) => void) | null;
+  private onActivityEnd: ((npcId: string, activityId: string, waypointName: string, memoryText: string) => void) | null;
   private npcStore: NpcStore | null;
   private visitHistory: Map<string, Map<string, number>> = new Map();
 
@@ -42,6 +53,8 @@ export class WorldSimulation {
     this.gridHeight = options.gridHeight;
     this.tickIntervalMs = options.tickIntervalMs;
     this.onProximity = options.onProximity;
+    this.onActivityStart = options.onActivityStart ?? null;
+    this.onActivityEnd = options.onActivityEnd ?? null;
     this.npcStore = options.npcStore ?? null;
   }
 
@@ -55,6 +68,7 @@ export class WorldSimulation {
       destination: null,
       idleTicksRemaining: this.randomIdleTicks(),
       frozen: false,
+      activeActivity: null,
     });
   }
 
@@ -88,7 +102,10 @@ export class WorldSimulation {
 
   freezeNpc(npcId: string): void {
     const npc = this.npcs.get(npcId);
-    if (npc) npc.frozen = true;
+    if (npc) {
+      npc.frozen = true;
+      npc.activeActivity = null;
+    }
   }
 
   unfreezeNpc(npcId: string): void {
@@ -120,6 +137,15 @@ export class WorldSimulation {
     for (const npc of this.npcs.values()) {
       if (npc.frozen) continue;
 
+      // Activity tick — busy NPCs do nothing else
+      if (npc.activeActivity) {
+        npc.activeActivity.ticksRemaining--;
+        if (npc.activeActivity.ticksRemaining <= 0) {
+          this.completeActivity(npc);
+        }
+        continue;
+      }
+
       if (npc.idleTicksRemaining > 0) {
         npc.idleTicksRemaining--;
         continue;
@@ -136,7 +162,14 @@ export class WorldSimulation {
           this.visitHistory.set(npc.npcId, new Map());
         }
         this.visitHistory.get(npc.npcId)!.set(npc.destination.id, Date.now());
+
+        // Try to start an activity at this waypoint
+        const arrivedWaypoint = npc.destination;
         npc.destination = null;
+        if (this.tryStartActivity(npc, arrivedWaypoint)) {
+          continue;
+        }
+
         npc.idleTicksRemaining = this.randomIdleTicks();
         continue;
       }
@@ -346,6 +379,7 @@ export class WorldSimulation {
         const a = npcList[i];
         const b = npcList[j];
         if (a.frozen || b.frozen) continue;
+        if (a.activeActivity || b.activeActivity) continue; // busy NPCs can't be interrupted
 
         // Respect avoidance overrides — don't trigger conversation
         if (this.npcStore) {
@@ -403,6 +437,74 @@ export class WorldSimulation {
       }
     }
     return bestDist <= 3 ? best : undefined;
+  }
+
+  // ── Activities ─────────────────────────────────
+
+  private tryStartActivity(npc: NpcSpatialState, waypoint: Waypoint): boolean {
+    if (!this.npcStore) return false;
+    if (!shouldDoActivity()) return false;
+
+    const npcData = this.npcStore.get(npc.npcId);
+    if (!npcData) return false;
+
+    const activityId = pickActivity(waypoint.id, npcData);
+    if (!activityId) return false;
+
+    const duration = activityDurationTicks(activityId);
+    npc.activeActivity = {
+      activityId,
+      waypointId: waypoint.id,
+      ticksRemaining: duration,
+      totalTicks: duration,
+      startedAt: Date.now(),
+    };
+
+    this.onActivityStart?.(npc.npcId, activityId, waypoint.name);
+    return true;
+  }
+
+  private completeActivity(npc: NpcSpatialState): void {
+    const activity = npc.activeActivity;
+    if (!activity) return;
+
+    const waypoint = WAYPOINTS.find(wp => wp.id === activity.waypointId);
+    const waypointName = waypoint?.name ?? activity.waypointId;
+    const memoryText = buildActivityMemory(activity.activityId, waypointName);
+
+    // Apply emotion effect
+    const actDef = ACTIVITIES[activity.activityId];
+    if (actDef.emotionEffect && this.npcStore) {
+      const effect: EmotionalState = {
+        anger: actDef.emotionEffect.anger ?? 0,
+        trust: actDef.emotionEffect.trust ?? 0,
+        fear: actDef.emotionEffect.fear ?? 0,
+        joy: actDef.emotionEffect.joy ?? 0,
+      };
+      this.npcStore.applyEmotionDelta(npc.npcId, effect);
+    }
+
+    // Create memory
+    if (this.npcStore) {
+      this.npcStore.addMemory(npc.npcId, {
+        text: memoryText,
+        importance: 0.3,
+        recency: 1,
+        emotionalWeight: 0.2,
+        involvedNpcIds: [],
+        timestamp: Date.now(),
+        type: "activity",
+      }, "shortTermMemory");
+    }
+
+    this.onActivityEnd?.(npc.npcId, activity.activityId, waypointName, memoryText);
+
+    npc.activeActivity = null;
+    npc.idleTicksRemaining = 3;
+  }
+
+  getNpcActivity(npcId: string): import("./types").ActiveActivity | null {
+    return this.npcs.get(npcId)?.activeActivity ?? null;
   }
 
   // ── Helpers ──────────────────────────────────

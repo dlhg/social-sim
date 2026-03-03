@@ -44,7 +44,8 @@ export type MemoryType =
   | "action_received"
   | "action_witnessed"
   | "alliance"
-  | "rumor_planted";
+  | "rumor_planted"
+  | "activity";
 
 export interface MemoryEntry {
   text: string;
@@ -152,6 +153,43 @@ export interface BubbleData {
   completedAt?: number;
 }
 
+// ── Waypoint Activities ─────────────────────────
+
+export type WaypointActivityId =
+  | "reading"
+  | "gardening"
+  | "shopping"
+  | "meditating"
+  | "sketching"
+  | "fishing"
+  | "people_watching"
+  | "wishing"
+  | "stargazing"
+  | "foraging"
+  | "training"
+  | "cooking"
+  | "writing"
+  | "napping";
+
+export interface WaypointActivity {
+  id: WaypointActivityId;
+  label: string;
+  emoji: string;
+  durationTicks: [number, number]; // [min, max]
+  memoryText: string;              // template with {waypoint}
+  flavorTexts: string[];
+  traitAffinity: string[];
+  emotionEffect?: Partial<EmotionalState>;
+}
+
+export interface ActiveActivity {
+  activityId: WaypointActivityId;
+  waypointId: string;
+  ticksRemaining: number;
+  totalTicks: number;
+  startedAt: number;
+}
+
 // ── World / Spatial ─────────────────────────────
 
 export interface Position {
@@ -182,6 +220,7 @@ export interface NpcSpatialState {
   destination: Waypoint | null;
   idleTicksRemaining: number;
   frozen: boolean;
+  activeActivity: ActiveActivity | null;
 }
 
 export interface WorldSnapshot {
