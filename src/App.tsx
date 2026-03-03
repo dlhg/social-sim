@@ -7,7 +7,7 @@ import { NpcStore } from "./npc-store";
 import { initialNpcs } from "./npcs";
 import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
-import type { NPC } from "./types";
+import type { NPC, BubbleData } from "./types";
 import type { TabId, NpcSnapshot, FeedItem } from "./components/SidePanel";
 import "./App.css";
 
@@ -32,6 +32,8 @@ function App() {
   const [npcHistory, setNpcHistory] = useState<Record<string, NpcSnapshot[]>>(
     {}
   );
+  const [bubbles, setBubbles] = useState<BubbleData[]>([]);
+  const bubbleTimersRef = useRef<Map<string, number>>(new Map());
 
   const managerRef = useRef<ConversationManager | null>(null);
   const worldRef = useRef<WorldSimulation | null>(null);
@@ -48,6 +50,9 @@ function App() {
     setCurrentSpeaker(null);
     setActiveConversationPair(null);
     setNpcHistory({});
+    setBubbles([]);
+    for (const t of bubbleTimersRef.current.values()) clearTimeout(t);
+    bubbleTimersRef.current.clear();
 
     // Create world simulation
     const world = new WorldSimulation({
@@ -81,10 +86,35 @@ function App() {
     const manager = new ConversationManager(storeRef.current, {
       onStreamToken: (npcId, fullText) => {
         setStreamingText((prev) => ({ ...prev, [npcId]: fullText }));
+        if (fullText) {
+          setBubbles((prev) => {
+            const idx = prev.findIndex(b => b.npcId === npcId && b.type === "speech");
+            if (idx >= 0) {
+              const updated = [...prev];
+              updated[idx] = { ...updated[idx], text: fullText };
+              return updated;
+            }
+            return [...prev, { npcId, text: fullText, type: "speech", startedAt: Date.now() }];
+          });
+        }
       },
       onTurnComplete: (msg) => {
         setFeed((prev) => [...prev, { type: "chat", msg, timestamp: Date.now() }]);
         setStreamingText((prev) => ({ ...prev, [msg.npcId]: "" }));
+
+        // Mark speech bubble as completed, schedule removal
+        setBubbles(prev => prev.map(b =>
+          b.npcId === msg.npcId && b.type === "speech"
+            ? { ...b, text: msg.text, completedAt: Date.now() }
+            : b
+        ));
+        const timerKey = msg.npcId + ":speech";
+        const prev = bubbleTimersRef.current.get(timerKey);
+        if (prev) clearTimeout(prev);
+        bubbleTimersRef.current.set(timerKey, window.setTimeout(() => {
+          setBubbles(p => p.filter(b => !(b.npcId === msg.npcId && b.type === "speech")));
+          bubbleTimersRef.current.delete(timerKey);
+        }, 3000));
 
         // Snapshot the speaker's emotional state and relationships
         const speaker = storeRef.current.get(msg.npcId);
@@ -114,6 +144,28 @@ function App() {
       },
       onActivity: (event) => {
         setFeed((prev) => [...prev, { type: "activity", event }]);
+        if (event.activityType === "thought" && event.npcId) {
+          const npcId = event.npcId;
+          // Extract thought text from format: 'Name thinks: "thought"'
+          const match = event.text.match(/thinks:\s*"(.+)"/);
+          const text = match?.[1] ?? event.text;
+          // Don't show thought if NPC has active speech bubble
+          setBubbles(prev => {
+            const hasSpeech = prev.some(b => b.npcId === npcId && b.type === "speech");
+            if (hasSpeech) return prev;
+            return [
+              ...prev.filter(b => !(b.npcId === npcId && b.type === "thought")),
+              { npcId, text, type: "thought", startedAt: Date.now(), completedAt: Date.now() },
+            ];
+          });
+          const timerKey = npcId + ":thought";
+          const prev = bubbleTimersRef.current.get(timerKey);
+          if (prev) clearTimeout(prev);
+          bubbleTimersRef.current.set(timerKey, window.setTimeout(() => {
+            setBubbles(p => p.filter(b => !(b.npcId === npcId && b.type === "thought")));
+            bubbleTimersRef.current.delete(timerKey);
+          }, 4000));
+        }
       },
       onSpeakerChange: (npcId) => {
         setCurrentSpeaker(npcId);
@@ -153,6 +205,9 @@ function App() {
     setStatus("idle");
     setCurrentSpeaker(null);
     setActiveConversationPair(null);
+    setBubbles([]);
+    for (const t of bubbleTimersRef.current.values()) clearTimeout(t);
+    bubbleTimersRef.current.clear();
   }, []);
 
   const handleTrigger = useCallback(() => {
@@ -279,6 +334,7 @@ function App() {
             getNpc={(id) => storeRef.current.get(id)}
             currentSpeaker={currentSpeaker}
             activeConversationPair={activeConversationPair}
+            bubbles={bubbles}
           />
         </div>
         <SidePanel

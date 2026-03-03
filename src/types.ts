@@ -112,6 +112,15 @@ export interface ActivityEvent {
   npcId?: string; // for styling (e.g., thought color)
 }
 
+// ── Bubbles ─────────────────────────────────────
+export interface BubbleData {
+  npcId: string;
+  text: string;
+  type: "speech" | "thought";
+  startedAt: number;
+  completedAt?: number;
+}
+
 // ── World / Spatial ─────────────────────────────
 
 export interface Position {

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { NPC } from "../types";
+import type { NPC, BubbleData } from "../types";
 import type { WorldSnapshot, NpcSpatialState } from "../types";
 import { SpriteSystem } from "../sprite-system";
 
@@ -8,6 +8,7 @@ interface WorldCanvasProps {
   getNpc: (id: string) => NPC | undefined;
   currentSpeaker: string | null;
   activeConversationPair: [string, string] | null;
+  bubbles: BubbleData[];
 }
 
 const GRID_WIDTH = 24;
@@ -54,22 +55,26 @@ export function WorldCanvas({
   getNpc,
   currentSpeaker,
   activeConversationPair,
+  bubbles,
 }: WorldCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const spritesRef = useRef(new SpriteSystem());
+  const bubbleRefsMap = useRef(new Map<string, HTMLDivElement>());
 
   // Store props in refs so the rAF loop always reads fresh values
   const getSnapshotRef = useRef(getSnapshot);
   const getNpcRef = useRef(getNpc);
   const speakerRef = useRef(currentSpeaker);
   const pairRef = useRef(activeConversationPair);
+  const bubblesRef = useRef(bubbles);
 
   getSnapshotRef.current = getSnapshot;
   getNpcRef.current = getNpc;
   speakerRef.current = currentSpeaker;
   pairRef.current = activeConversationPair;
+  bubblesRef.current = bubbles;
 
   useEffect(() => {
     spritesRef.current.load(); // fire-and-forget; draw loop checks .ready
@@ -268,20 +273,13 @@ export function WorldCanvas({
         ctx.textBaseline = "top";
         ctx.fillText(npc.name, px, feetY + 4);
 
-        // Thinking dots when speaking
-        if (isSpeaking) {
-          const dotY = feetY - sprH - 4;
-          const dotSpacing = 6;
-          for (let d = 0; d < 3; d++) {
-            const dotX = px + (d - 1) * dotSpacing;
-            const phase = Math.sin(now / 300 + d * 0.8);
-            const dotRadius = 2 + phase * 0.8;
-            const alpha = 0.4 + phase * 0.3;
-            ctx.beginPath();
-            ctx.arc(dotX, dotY, dotRadius, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-            ctx.fill();
-          }
+        // Position bubble overlay element (if one exists for this NPC)
+        const bubbleEl = bubbleRefsMap.current.get(spatial.npcId);
+        if (bubbleEl) {
+          const bubbleAnchorY = Math.max(40, feetY - sprH - 8);
+          bubbleEl.style.transform = `translate(${px}px, ${bubbleAnchorY}px) translate(-50%, -100%)`;
+          const depthZ = Math.floor(lerpY(spatial, now, snap.tickIntervalMs) * 10);
+          bubbleEl.style.zIndex = String(isSpeaking ? 10000 : depthZ);
         }
 
         // Destination indicator
@@ -318,6 +316,30 @@ export function WorldCanvas({
   return (
     <div ref={containerRef} className="scene">
       <canvas ref={canvasRef} style={{ display: "block" }} />
+      <div className="bubble-overlay">
+        {bubbles.map((b) => {
+          const npc = getNpc(b.npcId);
+          return (
+            <div
+              key={`${b.npcId}-${b.type}`}
+              ref={(el) => {
+                if (el) bubbleRefsMap.current.set(b.npcId, el);
+                else bubbleRefsMap.current.delete(b.npcId);
+              }}
+              className={`bubble bubble-${b.type}${b.completedAt ? " bubble-fading" : ""}`}
+              style={{ "--bubble-color": npc?.color ?? "#6ec6ff" } as React.CSSProperties}
+            >
+              <span className="bubble-name" style={{ color: npc?.color }}>
+                {npc?.name}
+              </span>
+              <span className="bubble-text">{b.text}</span>
+              {!b.completedAt && b.type === "speech" && (
+                <span className="bubble-cursor">|</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
