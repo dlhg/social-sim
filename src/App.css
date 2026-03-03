@@ -16,10 +16,11 @@
 }
 
 .world-panel {
-  width: 40%;
-  min-width: 300px;
+  flex: 1;
+  width: 100%;
   position: relative;
   overflow: hidden;
+  min-height: 0;
 }
 
 /* ── Scene (Canvas Container) ────────────────── */
@@ -34,57 +35,88 @@
   height: 100%;
 }
 
-/* ── Side Panel ──────────────────────────────── */
+/* ── Feed Overlay ────────────────────────────── */
 
-.side-panel {
-  flex: 1;
+.feed-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid #222;
-  min-width: 0;
-  overflow: hidden;
+  pointer-events: none;
 }
 
-.tab-bar {
+.feed-header {
   display: flex;
-  background: rgba(15, 15, 25, 0.9);
-  border-bottom: 1px solid #222;
-  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: rgba(15, 15, 30, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: auto;
 }
 
-.tab-btn {
-  flex: 1;
-  padding: 10px 16px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: #666;
-  font-family: inherit;
-  font-size: 12px;
+.feed-label {
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
-  cursor: pointer;
-  transition: all 0.15s ease;
+  color: #888;
 }
 
-.tab-btn:hover {
-  color: #aaa;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.tab-btn.active {
-  color: #e0e0e0;
-  border-bottom-color: #6ec6ff;
-}
-
-.tab-content {
-  flex: 1;
+.feed-content {
   overflow-y: auto;
   padding: 8px 12px;
-  background: rgba(10, 10, 18, 0.95);
+  background: rgba(10, 12, 22, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 12px;
   line-height: 1.6;
+  transition: max-height 0.25s ease, padding 0.25s ease, opacity 0.25s ease;
+  pointer-events: auto;
+}
+
+.feed-content.collapsed {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.feed-content.partial {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.feed-content.expanded {
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+/* ── Panel Toggle Handle ────────────────────── */
+
+.panel-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  font-size: 14px;
+  transition: color 0.15s ease;
+  pointer-events: auto;
+}
+
+.panel-toggle:hover {
+  color: #ccc;
 }
 
 /* ── Controls ───────────────────────────────── */
@@ -151,6 +183,15 @@
   background: #2196f320;
 }
 
+.btn-npcs {
+  border-color: #6ec6ff;
+  color: #6ec6ff;
+}
+
+.btn-npcs:hover {
+  background: #6ec6ff20;
+}
+
 .btn-create {
   border-color: #ce93d8;
   color: #ce93d8;
@@ -158,6 +199,13 @@
 
 .btn-create:hover {
   background: #ce93d820;
+}
+
+/* ── NPC Viewer Modal ────────────────────────── */
+
+.npc-viewer-modal {
+  width: 520px;
+  max-height: 85vh;
 }
 
 /* ── Chat Log ───────────────────────────────── */
@@ -214,16 +262,16 @@
 
 /* ── Scrollbar ──────────────────────────────── */
 
-.tab-content::-webkit-scrollbar {
+.feed-content::-webkit-scrollbar {
   width: 6px;
 }
 
-.tab-content::-webkit-scrollbar-track {
+.feed-content::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.tab-content::-webkit-scrollbar-thumb {
-  background: #333;
+.feed-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 3px;
 }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { WorldCanvas } from "./components/WorldCanvas";
-import { SidePanel } from "./components/SidePanel";
+import { FeedPanel } from "./components/SidePanel";
+import { CharacterViewer } from "./components/CharacterViewer";
 import { NpcCreator } from "./components/NpcCreator";
 import { DmTools } from "./components/DmTools";
 import { NpcStore } from "./npc-store";
@@ -8,7 +9,7 @@ import { initialNpcs } from "./npcs";
 import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
 import type { NPC, BubbleData } from "./types";
-import type { TabId, NpcSnapshot, FeedItem } from "./components/SidePanel";
+import type { NpcSnapshot, FeedItem, PanelMode } from "./components/SidePanel";
 import "./App.css";
 
 /** Extract the "speech" value from a partial JSON stream, stripping JSON syntax. */
@@ -36,9 +37,10 @@ function App() {
   const [status, setStatus] = useState<"idle" | "running" | "paused">("idle");
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [dmToolsOpen, setDmToolsOpen] = useState(false);
+  const [npcViewerOpen, setNpcViewerOpen] = useState(false);
 
-  // New state for side panel
-  const [activeTab, setActiveTab] = useState<TabId>("feed");
+  // Panel state
+  const [panelMode, setPanelMode] = useState<PanelMode>("partial");
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
   const [npcHistory, setNpcHistory] = useState<Record<string, NpcSnapshot[]>>(
     {}
@@ -297,6 +299,14 @@ function App() {
     managerRef.current?.forceConversation(aId, bId);
   }, []);
 
+  const handleTogglePanel = useCallback(() => {
+    setPanelMode((prev) => {
+      if (prev === "collapsed") return "partial";
+      if (prev === "partial") return "expanded";
+      return "collapsed";
+    });
+  }, []);
+
   const handlePlantRumor = useCallback(
     (npcId: string, aboutNpcId: string, rumor: string) => {
       const aboutName = storeRef.current.get(aboutNpcId)?.name ?? aboutNpcId;
@@ -348,17 +358,14 @@ function App() {
             activeConversationPair={activeConversationPair}
             bubbles={bubbles}
           />
+          <FeedPanel
+            npcs={npcs}
+            feed={feed}
+            currentSpeaker={currentSpeaker}
+            panelMode={panelMode}
+            onTogglePanel={handleTogglePanel}
+          />
         </div>
-        <SidePanel
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          npcs={npcs}
-          feed={feed}
-          currentSpeaker={currentSpeaker}
-          selectedNpcId={selectedNpcId}
-          onSelectNpc={setSelectedNpcId}
-          npcHistory={npcHistory}
-        />
       </div>
       <div className="controls">
         {status === "idle" ? (
@@ -381,6 +388,12 @@ function App() {
               className="btn btn-dm"
             >
               DM Tools
+            </button>
+            <button
+              onClick={() => setNpcViewerOpen(true)}
+              className="btn btn-npcs"
+            >
+              NPCs
             </button>
           </>
         )}
@@ -407,6 +420,21 @@ function App() {
           onPlantRumor={handlePlantRumor}
           onClose={() => setDmToolsOpen(false)}
         />
+      )}
+      {npcViewerOpen && (
+        <div className="modal-overlay" onClick={() => setNpcViewerOpen(false)}>
+          <div
+            className="modal-content npc-viewer-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <CharacterViewer
+              npcs={npcs}
+              selectedNpcId={selectedNpcId}
+              onSelectNpc={setSelectedNpcId}
+              npcHistory={npcHistory}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
