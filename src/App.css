@@ -811,11 +811,11 @@
   position: absolute;
   left: 0;
   top: 0;
-  max-width: 200px;
+  max-width: min(360px, 45vw);
   min-width: 60px;
-  padding: 5px 9px;
+  padding: 6px 10px;
   font-family: "SF Mono", "Fira Code", monospace;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.4;
   word-wrap: break-word;
   white-space: pre-wrap;
@@ -834,8 +834,6 @@
 
 .bubble-text {
   display: block;
-  max-height: 80px;
-  overflow: hidden;
 }
 
 @keyframes bubble-appear {
