@@ -11,6 +11,17 @@ import type { NPC, BubbleData } from "./types";
 import type { TabId, NpcSnapshot, FeedItem } from "./components/SidePanel";
 import "./App.css";
 
+/** Extract the "speech" value from a partial JSON stream, stripping JSON syntax. */
+function extractSpeechFromStream(raw: string): string {
+  // Match "speech": "..." or "speech":"..."
+  const match = raw.match(/"speech"\s*:\s*"((?:[^"\\]|\\.)*)("?)/s);
+  if (!match) return "";
+  let text = match[1];
+  // Unescape JSON string escapes
+  text = text.replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  return text;
+}
+
 function App() {
   const storeRef = useRef(new NpcStore(initialNpcs));
   const [npcs, setNpcs] = useState<NPC[]>(() => storeRef.current.getAll());
@@ -86,15 +97,16 @@ function App() {
     const manager = new ConversationManager(storeRef.current, {
       onStreamToken: (npcId, fullText) => {
         setStreamingText((prev) => ({ ...prev, [npcId]: fullText }));
-        if (fullText) {
+        const speechText = extractSpeechFromStream(fullText);
+        if (speechText) {
           setBubbles((prev) => {
             const idx = prev.findIndex(b => b.npcId === npcId && b.type === "speech");
             if (idx >= 0) {
               const updated = [...prev];
-              updated[idx] = { ...updated[idx], text: fullText };
+              updated[idx] = { ...updated[idx], text: speechText };
               return updated;
             }
-            return [...prev, { npcId, text: fullText, type: "speech", startedAt: Date.now() }];
+            return [...prev, { npcId, text: speechText, type: "speech", startedAt: Date.now() }];
           });
         }
       },
