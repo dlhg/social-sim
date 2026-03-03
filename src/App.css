@@ -964,6 +964,39 @@
   border: 1px solid rgba(176, 160, 204, 0.4);
 }
 
+/* ── Flipped Bubbles (pointer on top, bubble below NPC) ── */
+
+.bubble-flipped.bubble-speech::after {
+  bottom: auto;
+  top: -7px;
+  border-top: none;
+  border-bottom: 7px solid var(--bubble-color, #6ec6ff);
+}
+
+.bubble-flipped.bubble-speech::before {
+  bottom: auto;
+  top: -5px;
+  border-top: none;
+  border-bottom: 6px solid rgba(15, 18, 28, 0.93);
+}
+
+.bubble-flipped.bubble-thought::after {
+  bottom: auto;
+  top: -10px;
+}
+
+.bubble-flipped.bubble-thought::before {
+  bottom: auto;
+  top: -18px;
+}
+
+.bubble-flipped.bubble-action::after {
+  bottom: auto;
+  top: -8px;
+  border-top: none;
+  border-bottom: 8px solid #ff9800;
+}
+
 /* ── Bubble Fade ───────────────────────────────── */
 
 .bubble-fading {

@@ -276,8 +276,17 @@ export function WorldCanvas({
         // Position bubble overlay element (if one exists for this NPC)
         const bubbleEl = bubbleRefsMap.current.get(spatial.npcId);
         if (bubbleEl) {
-          const bubbleAnchorY = Math.max(40, feetY - sprH - 8);
-          bubbleEl.style.transform = `translate(${px}px, ${bubbleAnchorY}px) translate(-50%, -100%)`;
+          const aboveAnchorY = feetY - sprH - 8;
+          const bubbleHeight = bubbleEl.offsetHeight || 60;
+          // If the bubble would be clipped at the top, flip it below the NPC
+          if (aboveAnchorY - bubbleHeight < 0) {
+            const belowAnchorY = feetY + 20;
+            bubbleEl.style.transform = `translate(${px}px, ${belowAnchorY}px) translate(-50%, 0%)`;
+            bubbleEl.classList.add("bubble-flipped");
+          } else {
+            bubbleEl.style.transform = `translate(${px}px, ${aboveAnchorY}px) translate(-50%, -100%)`;
+            bubbleEl.classList.remove("bubble-flipped");
+          }
           const depthZ = Math.floor(lerpY(spatial, now, snap.tickIntervalMs) * 10);
           bubbleEl.style.zIndex = String(isSpeaking ? 10000 : depthZ);
         }
