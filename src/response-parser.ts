@@ -1,4 +1,4 @@
-import type { LLMResponse, MentionedNpc } from "./types";
+import type { LLMResponse, MentionedNpc, ActionData, ActionType } from "./types";
 
 export function parseLLMResponse(raw: string): LLMResponse {
   const cleaned = extractJson(raw);
@@ -118,6 +118,26 @@ function validate(obj: unknown): LLMResponse {
       ? o.promise
       : undefined;
 
+  let action: ActionData | undefined;
+  if (typeof o.action === "object" && o.action !== null) {
+    const a = o.action as Record<string, unknown>;
+    const validActions: ActionType[] = [
+      "give_gift", "mock", "storm_off", "embrace",
+      "threaten", "conspire", "spread_rumor",
+    ];
+    if (typeof a.action === "string" && validActions.includes(a.action as ActionType)) {
+      action = {
+        action: a.action as ActionType,
+        target_npc_id: typeof a.target_npc_id === "string" ? a.target_npc_id : undefined,
+        detail: typeof a.detail === "string" ? a.detail : undefined,
+      };
+      // conspire and spread_rumor require target_npc_id
+      if ((action.action === "conspire" || action.action === "spread_rumor") && !action.target_npc_id) {
+        action = undefined;
+      }
+    }
+  }
+
   return {
     speech: o.speech as string,
     emotion_delta: emotionDelta,
@@ -127,6 +147,7 @@ function validate(obj: unknown): LLMResponse {
     mentioned_npcs: mentionedNpcs,
     secret_revealed: secretRevealed,
     promise,
+    action,
   };
 }
 

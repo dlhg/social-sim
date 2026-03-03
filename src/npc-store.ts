@@ -1,4 +1,4 @@
-import type { NPC, EmotionalState, MemoryEntry, NpcPromise } from "./types";
+import type { NPC, EmotionalState, MemoryEntry, NpcPromise, BehavioralOverride } from "./types";
 
 type Listener = () => void;
 
@@ -102,6 +102,24 @@ export class NpcStore {
     if (this.npcs.has(npc.id)) return;
     this.npcs.set(npc.id, structuredClone(npc));
     this.notify();
+  }
+
+  // ── Behavioral Overrides ───────────────────
+
+  setBehavioralOverride(npcId: string, override: BehavioralOverride | null): void {
+    const npc = this.npcs.get(npcId);
+    if (!npc) return;
+    npc.behavioralOverride = override;
+    this.notify();
+  }
+
+  clearExpiredOverrides(): void {
+    const now = Date.now();
+    for (const npc of this.npcs.values()) {
+      if (npc.behavioralOverride && npc.behavioralOverride.expiresAt <= now) {
+        npc.behavioralOverride = null;
+      }
+    }
   }
 
   // ── Secrets & Promises ─────────────────────

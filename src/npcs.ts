@@ -26,6 +26,7 @@ export function createNpc(partial: {
     currentGoal: null,
     secrets: partial.secrets ?? [],
     knownSecrets: {},
+    behavioralOverride: null,
   };
 }
 

@@ -5,6 +5,8 @@ import type {
   ActivityEvent,
   LLMResponse,
   ConversationType,
+  ActionData,
+  ActionType,
 } from "./types";
 import type { NpcStore } from "./npc-store";
 import type { WorldSimulation } from "./world-simulation";
@@ -208,6 +210,9 @@ export class ConversationManager {
     // Emotional contagion: nearby NPCs feel the vibe
     this.applyEmotionalContagion(npcAId, npcBId, session);
 
+    // Post-conversation behavioral triggers (seek/avoid)
+    this.triggerPostConversationBehavior(npcAId, npcBId, session);
+
     // Fire-and-forget inner monologue reflections
     this.runPostConversationReflection(npcAId, npcBId, session).catch(
       () => {}
@@ -305,6 +310,11 @@ export class ConversationManager {
     this.store.batch(() => {
       this.applyTurnEffects(currentSpeaker, currentListener, response);
     });
+
+    // storm_off forces conversation end
+    if (response.action?.action === "storm_off") {
+      response.conversation_end = true;
+    }
 
     const msg: ConversationMessage = {
       npcId: speaker.id,
@@ -525,10 +535,436 @@ export class ConversationManager {
       }
     }
 
+    // Actions
+    if (response.action) {
+      this.processAction(speaker, listener, response.action);
+    }
+
     // Log memory formation
     const speakerMems = this.store.get(speaker.id)?.shortTermMemory.length ?? 0;
     const listenerMems = this.store.get(listener.id)?.shortTermMemory.length ?? 0;
     this.log(`Memory stored for ${speaker.name} (${speakerMems} memories) and ${listener.name} (${listenerMems} memories)`);
+  }
+
+  // ── Action Processing ───────────────────────
+
+  private processAction(speaker: NPC, listener: NPC, action: ActionData): void {
+    this.log(`${speaker.name} performs action: ${action.action}`);
+    switch (action.action) {
+      case "give_gift":
+        this.processGiveGift(speaker, listener, action);
+        break;
+      case "mock":
+        this.processMock(speaker, listener, action);
+        break;
+      case "storm_off":
+        this.processStormOff(speaker, listener);
+        break;
+      case "embrace":
+        this.processEmbrace(speaker, listener, action);
+        break;
+      case "threaten":
+        this.processThreaten(speaker, listener, action);
+        break;
+      case "conspire":
+        this.processConspire(speaker, listener, action);
+        break;
+      case "spread_rumor":
+        this.processSpreadRumor(speaker, listener, action);
+        break;
+    }
+  }
+
+  private processGiveGift(speaker: NPC, listener: NPC, action: ActionData): void {
+    const giftDesc = action.detail ?? "a small token";
+
+    this.store.applyRelationshipDelta(speaker.id, listener.id, 0.15);
+    this.store.applyRelationshipDelta(listener.id, speaker.id, 0.15);
+    this.store.applyEmotionDelta(speaker.id, { anger: 0, trust: 0.05, fear: 0, joy: 0.1 });
+    this.store.applyEmotionDelta(listener.id, { anger: 0, trust: 0.05, fear: 0, joy: 0.1 });
+
+    this.store.addMemory(speaker.id, {
+      text: `I gave ${listener.name} a gift: ${giftDesc}`,
+      importance: 0.7, recency: 1, emotionalWeight: 0.6,
+      involvedNpcIds: [listener.id], aboutNpcIds: [],
+      type: "action_performed", sentiment: 0.5, timestamp: Date.now(),
+    }, "shortTermMemory");
+
+    this.store.addMemory(listener.id, {
+      text: `${speaker.name} gave me a gift: ${giftDesc}`,
+      importance: 0.7, recency: 1, emotionalWeight: 0.6,
+      involvedNpcIds: [speaker.id], aboutNpcIds: [],
+      type: "action_received", sentiment: 0.5, timestamp: Date.now(),
+    }, "shortTermMemory");
+
+    this.callbacks.onActivity({
+      timestamp: new Date(),
+      text: `${speaker.name} gave ${listener.name} a gift: ${giftDesc}`,
+      activityType: "action",
+      npcId: speaker.id,
+    });
+
+    this.notifyWitnesses(speaker, listener, "give_gift", giftDesc);
+  }
+
+  private processMock(speaker: NPC, listener: NPC, action: ActionData): void {
+    const mockDetail = action.detail ?? "them";
+
+    this.store.applyRelationshipDelta(speaker.id, listener.id, -0.1);
+    this.store.applyRelationshipDelta(listener.id, speaker.id, -0.15);
+    this.store.applyEmotionDelta(listener.id, { anger: 0.1, trust: -0.1, fear: 0, joy: -0.05 });
+    this.store.applyEmotionDelta(speaker.id, { anger: 0, trust: 0, fear: 0, joy: 0.05 });
+
+    this.store.addMemory(speaker.id, {
+      text: `I publicly mocked ${listener.name}: ${mockDetail}`,
+      importance: 0.6, recency: 1, emotionalWeight: 0.5,
+      involvedNpcIds: [listener.id], aboutNpcIds: [listener.id],
+      type: "action_performed", sentiment: -0.4, timestamp: Date.now(),
+    }, "shortTermMemory");
+
+    this.store.addMemory(listener.id, {
+      text: `${speaker.name} publicly mocked me: ${mockDetail}`,
+      importance: 0.8, recency: 1, emotionalWeight: 0.7,
+      involvedNpcIds: [speaker.id], aboutNpcIds: [listener.id],
+      type: "action_received", sentiment: -0.6, timestamp: Date.now(),
+    }, "shortTermMemory");
+
+    this.callbacks.onActivity({
+      timestamp: new Date(),
+      text: `${speaker.name} mocked ${listener.name}: ${mockDetail}`,
+      activityType: "action",
+      npcId: speaker.id,
+    });
+
+    this.notifyWitnesses(speaker, listener, "mock", mockDetail);
+  }
+
+  private processStormOff(speaker: NPC, listener: NPC): void {
+    this.store.applyRelationshipDelta(speaker.id, listener.id, -0.1);
+    this.store.applyRelationshipDelta(listener.id, speaker.id, -0.05);
+    this.store.applyEmotionDelta(speaker.id, { anger: 0.05, trust: -0.05, fear: 0, joy: -0.05 });
+    this.store.applyEmotionDelta(listener.id, { anger: 0.05, trust: -0.05, fear: 0, joy: -0.05 });
+
+    this.store.setBehavioralOverride(speaker.id, {
+      mode: "avoid",
+      targetNpcId: listener.id,
+      expiresAt: Date.now() + 120_000,
+      reason: `Stormed off from conversation with ${listener.name}`,
+    });
+
+    this.store.addMemory(speaker.id, {
+      text: `I stormed off from my conversation with ${listener.name}`,
+      importance: 0.7, recency: 1, emotionalWeight: 0.6,
+      involvedNpcIds: [listener.id], aboutNpcIds: [],
+      type: "action_performed", sentiment: -0.3, timestamp: Date.now(),
+    }, "shortTermMemory");
+
+    this.store.addMemory(listener.id, {
+      text: `${speaker.name} stormed off during our conversation`,
+      importance: 0.7, recency: 1, emotionalWeight: 0.6,
+      involvedNpcIds: [speaker.id], aboutNpcIds: [],
+      type: "action_received", sentiment: -0.3, timestamp: Date.now(),
+    }, "shortTermMemory");
+
+    this.callbacks.onActivity({
+      timestamp: new Date(),
+      text: `${speaker.name} stormed off from ${listener.name}!`,
+      activityType: "action",
+      npcId: speaker.id,
+    });
+
+    this.notifyWitnesses(speaker, listener, "storm_off", "");
+  }
+
+  private processEmbrace(speaker: NPC, listener: NPC, action: ActionData): void {
+    const desc = action.detail ?? "a warm embrace";
+
+    this.store.applyRelationshipDelta(speaker.id, listener.id, 0.15);
+    this.store.applyRelationshipDelta(listener.id, speaker.id, 0.15);
+    this.store.applyEmotionDelta(speaker.id, { anger: -0.05, trust: 0.1, fear: -0.05, joy: 0.1 });
+    this.store.applyEmotionDelta(listener.id, { anger: -0.05, trust: 0.1, fear: -0.05, joy: 0.1 });
+
+    this.store.addMemory(speaker.id, {
+      text: `I embraced ${listener.name}: ${desc}`,
+      importance: 0.7, recency: 1, emotionalWeight: 0.7,
+      involvedNpcIds: [listener.id], aboutNpcIds: [],
+      type: "action_performed", sentiment: 0.6, timestamp: Date.now(),
+    }, "shortTermMemory");
+
+    this.store.addMemory(listener.id, {
+      text: `${speaker.name} embraced me: ${desc}`,
+      importance: 0.7, recency: 1, emotionalWeight: 0.7,
+      involvedNpcIds: [speaker.id], aboutNpcIds: [],
+      type: "action_received", sentiment: 0.6, timestamp: Date.now(),
+    }, "shortTermMemory");
+
+    this.callbacks.onActivity({
+      timestamp: new Date(),
+      text: `${speaker.name} embraced ${listener.name}`,
+      activityType: "action",
+      npcId: speaker.id,
+    });
+
+    this.notifyWitnesses(speaker, listener, "embrace", desc);
+  }
+
+  private processThreaten(speaker: NPC, listener: NPC, action: ActionData): void {
+    const threat = action.detail ?? "an unspecified threat";
+
+    this.store.applyRelationshipDelta(listener.id, speaker.id, -0.15);
+    this.store.applyRelationshipDelta(speaker.id, listener.id, -0.05);
+    this.store.applyEmotionDelta(listener.id, { anger: 0.05, trust: -0.1, fear: 0.15, joy: -0.05 });
+
+    // If listener is already fearful, trigger avoid behavior
+    const listenerState = this.store.get(listener.id);
+    if (listenerState && listenerState.emotionalState.fear > 0.5) {
+      this.store.setBehavioralOverride(listener.id, {
+        mode: "avoid",
+        targetNpcId: speaker.id,
+        expiresAt: Date.now() + 90_000,
+        reason: `Threatened by ${speaker.name}: ${threat}`,
+      });
+    }
+
+    this.store.addMemory(speaker.id, {
+      text: `I threatened ${listener.name}: ${threat}`,
+      importance: 0.8, recency: 1, emotionalWeight: 0.7,
+      involvedNpcIds: [listener.id], aboutNpcIds: [listener.id],
+      type: "action_performed", sentiment: -0.5, timestamp: Date.now(),
+    }, "shortTermMemory");
+
+    // Threats go to long-term memory for the recipient
+    this.store.addMemory(listener.id, {
+      text: `${speaker.name} threatened me: ${threat}`,
+      importance: 0.9, recency: 1, emotionalWeight: 0.9,
+      involvedNpcIds: [speaker.id], aboutNpcIds: [listener.id],
+      type: "action_received", sentiment: -0.7, timestamp: Date.now(),
+    }, "longTermMemory");
+
+    this.callbacks.onActivity({
+      timestamp: new Date(),
+      text: `${speaker.name} threatened ${listener.name}: "${threat}"`,
+      activityType: "action",
+      npcId: speaker.id,
+    });
+
+    this.notifyWitnesses(speaker, listener, "threaten", threat);
+  }
+
+  private processConspire(speaker: NPC, listener: NPC, action: ActionData): void {
+    const targetId = action.target_npc_id;
+    if (!targetId || !this.store.get(targetId)) return;
+
+    const targetName = this.npcName(targetId);
+    const plan = action.detail ?? "an unspecified scheme";
+
+    this.store.applyRelationshipDelta(speaker.id, listener.id, 0.1);
+    this.store.applyRelationshipDelta(listener.id, speaker.id, 0.1);
+    this.store.applyRelationshipDelta(speaker.id, targetId, -0.05);
+    this.store.applyRelationshipDelta(listener.id, targetId, -0.05);
+
+    this.store.addMemory(speaker.id, {
+      text: `I conspired with ${listener.name} against ${targetName}: ${plan}`,
+      importance: 0.85, recency: 1, emotionalWeight: 0.7,
+      involvedNpcIds: [listener.id], aboutNpcIds: [targetId],
+      type: "alliance", sentiment: -0.5, timestamp: Date.now(),
+    }, "longTermMemory");
+
+    this.store.addMemory(listener.id, {
+      text: `${speaker.name} proposed a conspiracy against ${targetName}: ${plan}`,
+      importance: 0.85, recency: 1, emotionalWeight: 0.7,
+      involvedNpcIds: [speaker.id], aboutNpcIds: [targetId],
+      type: "alliance", sentiment: -0.5, timestamp: Date.now(),
+    }, "longTermMemory");
+
+    this.callbacks.onActivity({
+      timestamp: new Date(),
+      text: `${speaker.name} and ${listener.name} conspired against ${targetName}`,
+      activityType: "action",
+      npcId: speaker.id,
+    });
+
+    // Conspire is private — not witnessed, but caught by existing eavesdrop system
+  }
+
+  private processSpreadRumor(speaker: NPC, listener: NPC, action: ActionData): void {
+    const targetId = action.target_npc_id;
+    if (!targetId || !this.store.get(targetId)) return;
+
+    const targetName = this.npcName(targetId);
+    const rumor = action.detail ?? "something unspecified";
+
+    this.store.addMemory(listener.id, {
+      text: `${speaker.name} told me something about ${targetName}: "${rumor}"`,
+      importance: 0.6, recency: 1, emotionalWeight: 0.4,
+      involvedNpcIds: [speaker.id], aboutNpcIds: [targetId],
+      type: "rumor_planted", sentiment: -0.3, timestamp: Date.now(),
+    }, "shortTermMemory");
+
+    this.store.addMemory(speaker.id, {
+      text: `I spread a rumor about ${targetName} to ${listener.name}: "${rumor}"`,
+      importance: 0.5, recency: 1, emotionalWeight: 0.3,
+      involvedNpcIds: [listener.id], aboutNpcIds: [targetId],
+      type: "action_performed", sentiment: -0.2, timestamp: Date.now(),
+    }, "shortTermMemory");
+
+    this.store.applyRelationshipDelta(listener.id, targetId, -0.1);
+
+    this.callbacks.onActivity({
+      timestamp: new Date(),
+      text: `${speaker.name} spread a rumor to ${listener.name} about ${targetName}`,
+      activityType: "action",
+      npcId: speaker.id,
+    });
+
+    // Rumors are private — not witnessed, caught by existing eavesdrop system
+  }
+
+  // ── Witness System ─────────────────────────
+
+  private notifyWitnesses(
+    speaker: NPC,
+    listener: NPC,
+    actionType: ActionType,
+    detail: string
+  ): void {
+    if (!this.worldSim) return;
+
+    const speakerPos = this.worldSim.getNpcPosition(speaker.id);
+    if (!speakerPos) return;
+
+    const nearbyIds = this.worldSim.getNpcsWithinRange(speakerPos, 5, [
+      speaker.id,
+      listener.id,
+    ]);
+
+    for (const witnessId of nearbyIds) {
+      const witness = this.store.get(witnessId);
+      if (!witness) continue;
+
+      let memoryText: string;
+      let emotionDelta = { anger: 0, trust: 0, fear: 0, joy: 0 };
+      let sentiment = 0;
+
+      switch (actionType) {
+        case "give_gift": {
+          memoryText = `I saw ${speaker.name} give ${listener.name} a gift: ${detail}`;
+          sentiment = 0.2;
+          const witRel = witness.relationships[speaker.id] ?? 0;
+          if (witRel > 0.3) {
+            emotionDelta = { anger: 0.03, trust: 0, fear: 0, joy: -0.02 };
+            sentiment = -0.1; // mild jealousy
+          } else {
+            emotionDelta = { anger: 0, trust: 0, fear: 0, joy: 0.02 };
+          }
+          break;
+        }
+        case "mock": {
+          memoryText = `I saw ${speaker.name} mock ${listener.name}: ${detail}`;
+          sentiment = -0.3;
+          this.store.applyRelationshipDelta(witnessId, speaker.id, -0.05);
+          const witRelToVictim = witness.relationships[listener.id] ?? 0;
+          if (witRelToVictim > -0.1) {
+            this.store.applyRelationshipDelta(witnessId, listener.id, 0.03);
+          }
+          emotionDelta = { anger: 0.03, trust: -0.02, fear: 0.02, joy: -0.02 };
+          break;
+        }
+        case "storm_off":
+          memoryText = `I saw ${speaker.name} storm off from ${listener.name}`;
+          sentiment = -0.2;
+          emotionDelta = { anger: 0, trust: 0, fear: 0.03, joy: -0.02 };
+          break;
+
+        case "embrace": {
+          memoryText = `I saw ${speaker.name} embrace ${listener.name}`;
+          sentiment = 0.3;
+          const witRelS = witness.relationships[speaker.id] ?? 0;
+          const witRelL = witness.relationships[listener.id] ?? 0;
+          if (witRelS > 0.4 || witRelL > 0.4) {
+            emotionDelta = { anger: 0.03, trust: -0.02, fear: 0, joy: -0.03 };
+            sentiment = -0.15; // jealousy
+            memoryText += " — I felt a pang of jealousy";
+          } else {
+            emotionDelta = { anger: 0, trust: 0, fear: 0, joy: 0.02 };
+          }
+          break;
+        }
+        case "threaten":
+          memoryText = `I saw ${speaker.name} threaten ${listener.name}: ${detail}`;
+          sentiment = -0.4;
+          this.store.applyRelationshipDelta(witnessId, speaker.id, -0.08);
+          emotionDelta = { anger: 0.02, trust: -0.05, fear: 0.08, joy: -0.03 };
+          break;
+
+        default:
+          continue; // conspire and spread_rumor are not witnessed visually
+      }
+
+      this.store.applyEmotionDelta(witnessId, emotionDelta);
+
+      this.store.addMemory(witnessId, {
+        text: memoryText,
+        importance: 0.6, recency: 1, emotionalWeight: 0.5,
+        involvedNpcIds: [speaker.id, listener.id],
+        aboutNpcIds: [speaker.id, listener.id],
+        type: "action_witnessed",
+        sentiment,
+        timestamp: Date.now(),
+      }, "shortTermMemory");
+    }
+  }
+
+  // ── Post-Conversation Behavioral Triggers ──
+
+  private triggerPostConversationBehavior(
+    npcAId: string,
+    npcBId: string,
+    session: ConversationSession
+  ): void {
+    const npcA = this.store.get(npcAId);
+    const npcB = this.store.get(npcBId);
+    if (!npcA || !npcB) return;
+
+    // If conspiracy happened, the non-initiating conspirator seeks the target
+    for (const msg of session.messages) {
+      if (msg.rawResponse?.action?.action === "conspire") {
+        const targetId = msg.rawResponse.action.target_npc_id;
+        if (targetId && this.store.get(targetId)) {
+          const conspiratorId = msg.npcId === npcAId ? npcBId : npcAId;
+          const existing = this.store.get(conspiratorId)?.behavioralOverride;
+          if (!existing) {
+            this.store.setBehavioralOverride(conspiratorId, {
+              mode: "seek",
+              targetNpcId: targetId,
+              expiresAt: Date.now() + 90_000,
+              reason: `Seeking ${this.npcName(targetId)} to act on conspiracy`,
+            });
+          }
+        }
+      }
+    }
+
+    // Very positive conversation → seek to stay near each other
+    const relAB = npcA.relationships[npcBId] ?? 0;
+    if (relAB > 0.6 && npcA.emotionalState.joy > 0.6 && !npcA.behavioralOverride) {
+      this.store.setBehavioralOverride(npcAId, {
+        mode: "seek",
+        targetNpcId: npcBId,
+        expiresAt: Date.now() + 45_000,
+        reason: `Wants to stay near ${npcB.name} after a great conversation`,
+      });
+    }
+
+    const relBA = npcB.relationships[npcAId] ?? 0;
+    if (relBA > 0.6 && npcB.emotionalState.joy > 0.6 && !npcB.behavioralOverride) {
+      this.store.setBehavioralOverride(npcBId, {
+        mode: "seek",
+        targetNpcId: npcAId,
+        expiresAt: Date.now() + 45_000,
+        reason: `Wants to stay near ${npcA.name} after a great conversation`,
+      });
+    }
   }
 
   // ── Rich social logging ──────────────────────

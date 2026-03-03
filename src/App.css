@@ -260,6 +260,11 @@
   font-weight: 600;
 }
 
+.activity-action {
+  color: #ff9800;
+  font-weight: 600;
+}
+
 /* ── Scrollbar ──────────────────────────────── */
 
 .feed-content::-webkit-scrollbar {
@@ -968,6 +973,36 @@
 
 .bubble-thought.bubble-fading {
   animation-delay: 3.4s;
+}
+
+/* ── Action Bubble ────────────────────────────── */
+
+.bubble-action {
+  background: rgba(30, 15, 10, 0.93);
+  border: 1px solid #ff9800;
+  border-radius: 10px;
+  color: #ffcc80;
+  font-style: italic;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 2px 12px rgba(255, 152, 0, 0.3);
+}
+
+.bubble-action::after {
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid #ff9800;
+}
+
+.bubble-action.bubble-fading {
+  animation-delay: 2.8s;
 }
 
 @keyframes bubble-fade {

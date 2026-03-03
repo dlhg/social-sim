@@ -173,6 +173,17 @@ export class WorldSimulation {
     const npcData = this.npcStore.get(npc.npcId);
     if (!npcData) return this.randomPickFallback(npc);
 
+    // Clear expired behavioral overrides
+    if (npcData.behavioralOverride && npcData.behavioralOverride.expiresAt <= Date.now()) {
+      this.npcStore.setBehavioralOverride(npc.npcId, null);
+    }
+
+    // Handle active behavioral overrides (seek/avoid)
+    if (npcData.behavioralOverride) {
+      const overrideDest = this.pickOverrideDestination(npc, npcData);
+      if (overrideDest) return overrideDest;
+    }
+
     const candidates = WAYPOINTS.filter(
       (wp) =>
         wp.position.x !== npc.position.x || wp.position.y !== npc.position.y
@@ -260,6 +271,54 @@ export class WorldSimulation {
     return scores[scores.length - 1].wp;
   }
 
+  private pickOverrideDestination(npc: NpcSpatialState, npcData: import("./types").NPC): Waypoint | null {
+    const override = npcData.behavioralOverride!;
+    const targetSpatial = this.npcs.get(override.targetNpcId);
+
+    if (!targetSpatial) {
+      // Target not in world, clear override
+      this.npcStore?.setBehavioralOverride(npc.npcId, null);
+      return null;
+    }
+
+    const candidates = WAYPOINTS.filter(
+      (wp) => wp.position.x !== npc.position.x || wp.position.y !== npc.position.y
+    );
+    if (candidates.length === 0) return null;
+
+    if (override.mode === "seek") {
+      // Find waypoint closest to the target NPC
+      let bestWp = candidates[0];
+      let bestDist = Infinity;
+      for (const wp of candidates) {
+        const dist = Math.abs(wp.position.x - targetSpatial.position.x)
+                   + Math.abs(wp.position.y - targetSpatial.position.y);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestWp = wp;
+        }
+      }
+      return bestWp;
+    }
+
+    if (override.mode === "avoid") {
+      // Find waypoint farthest from the target NPC
+      let bestWp = candidates[0];
+      let bestDist = -Infinity;
+      for (const wp of candidates) {
+        const dist = Math.abs(wp.position.x - targetSpatial.position.x)
+                   + Math.abs(wp.position.y - targetSpatial.position.y);
+        if (dist > bestDist) {
+          bestDist = dist;
+          bestWp = wp;
+        }
+      }
+      return bestWp;
+    }
+
+    return null;
+  }
+
   private waypointBusyness(wp: Waypoint): number {
     let count = 0;
     for (const npc of this.npcs.values()) {
@@ -287,6 +346,15 @@ export class WorldSimulation {
         const a = npcList[i];
         const b = npcList[j];
         if (a.frozen || b.frozen) continue;
+
+        // Respect avoidance overrides — don't trigger conversation
+        if (this.npcStore) {
+          const npcA = this.npcStore.get(a.npcId);
+          const npcB = this.npcStore.get(b.npcId);
+          if (npcA?.behavioralOverride?.mode === "avoid" && npcA.behavioralOverride.targetNpcId === b.npcId) continue;
+          if (npcB?.behavioralOverride?.mode === "avoid" && npcB.behavioralOverride.targetNpcId === a.npcId) continue;
+        }
+
         const dist =
           Math.abs(a.position.x - b.position.x) +
           Math.abs(a.position.y - b.position.y);

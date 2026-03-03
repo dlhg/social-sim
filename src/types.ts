@@ -6,6 +6,30 @@ export interface EmotionalState {
   joy: number; // 0 to 1
 }
 
+// ── Actions ───────────────────────────────────
+export type ActionType =
+  | "give_gift"
+  | "mock"
+  | "storm_off"
+  | "embrace"
+  | "threaten"
+  | "conspire"
+  | "spread_rumor";
+
+export interface ActionData {
+  action: ActionType;
+  target_npc_id?: string;   // 3rd-party target for conspire/spread_rumor
+  detail?: string;          // gift description, rumor text, conspiracy plan, etc.
+}
+
+// ── Behavioral Overrides ──────────────────────
+export interface BehavioralOverride {
+  mode: "seek" | "avoid";
+  targetNpcId: string;
+  expiresAt: number;       // Date.now() + duration
+  reason: string;
+}
+
 // ── Memory ─────────────────────────────────────
 export type MemoryType =
   | "conversation"
@@ -15,7 +39,12 @@ export type MemoryType =
   | "promise_made"
   | "promise_broken"
   | "inner_thought"
-  | "eavesdrop";
+  | "eavesdrop"
+  | "action_performed"
+  | "action_received"
+  | "action_witnessed"
+  | "alliance"
+  | "rumor_planted";
 
 export interface MemoryEntry {
   text: string;
@@ -44,6 +73,7 @@ export interface NPC {
   currentGoal: string | null;
   secrets: string[];
   knownSecrets: Record<string, string[]>; // npcId -> secrets learned about them
+  behavioralOverride?: BehavioralOverride | null;
 }
 
 // ── Promises ─────────────────────────────────
@@ -72,6 +102,7 @@ export interface LLMResponse {
   mentioned_npcs?: MentionedNpc[];
   secret_revealed?: string;
   promise?: string;
+  action?: ActionData;
 }
 
 // ── Conversation Types ───────────────────────
@@ -103,7 +134,7 @@ export interface ConversationSession {
 }
 
 // ── Activity ──────────────────────────────────
-export type ActivityType = "thought" | "gossip" | "eavesdrop" | "dm";
+export type ActivityType = "thought" | "gossip" | "eavesdrop" | "dm" | "action";
 
 export interface ActivityEvent {
   timestamp: Date;
@@ -116,7 +147,7 @@ export interface ActivityEvent {
 export interface BubbleData {
   npcId: string;
   text: string;
-  type: "speech" | "thought";
+  type: "speech" | "thought" | "action";
   startedAt: number;
   completedAt?: number;
 }

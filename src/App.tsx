@@ -8,7 +8,7 @@ import { NpcStore } from "./npc-store";
 import { initialNpcs } from "./npcs";
 import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
-import type { NPC, BubbleData } from "./types";
+import type { NPC, BubbleData, ActionType } from "./types";
 import type { NpcSnapshot, FeedItem, PanelMode } from "./components/SidePanel";
 import "./App.css";
 
@@ -22,6 +22,16 @@ function extractSpeechFromStream(raw: string): string {
   text = text.replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
   return text;
 }
+
+const ACTION_LABELS: Record<ActionType, string> = {
+  give_gift: "gives a gift",
+  mock: "mocks",
+  storm_off: "storms off!",
+  embrace: "embraces",
+  threaten: "threatens",
+  conspire: "whispers conspiratorially",
+  spread_rumor: "spreads a rumor",
+};
 
 function App() {
   const storeRef = useRef(new NpcStore(initialNpcs));
@@ -129,6 +139,23 @@ function App() {
           setBubbles(p => p.filter(b => !(b.npcId === msg.npcId && b.type === "speech")));
           bubbleTimersRef.current.delete(timerKey);
         }, 3000));
+
+        // Show action bubble if this turn had an action
+        if (msg.rawResponse?.action) {
+          const actionText = `* ${ACTION_LABELS[msg.rawResponse.action.action]} *`;
+          const npcId = msg.npcId;
+          setBubbles(prev => [
+            ...prev.filter(b => !(b.npcId === npcId && b.type === "action")),
+            { npcId, text: actionText, type: "action", startedAt: Date.now(), completedAt: Date.now() },
+          ]);
+          const actionTimerKey = npcId + ":action";
+          const prevActionTimer = bubbleTimersRef.current.get(actionTimerKey);
+          if (prevActionTimer) clearTimeout(prevActionTimer);
+          bubbleTimersRef.current.set(actionTimerKey, window.setTimeout(() => {
+            setBubbles(p => p.filter(b => !(b.npcId === npcId && b.type === "action")));
+            bubbleTimersRef.current.delete(actionTimerKey);
+          }, 3500));
+        }
 
         // Snapshot the speaker's emotional state and relationships
         const speaker = storeRef.current.get(msg.npcId);

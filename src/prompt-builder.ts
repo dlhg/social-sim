@@ -19,7 +19,8 @@ const RESPONSE_JSON_SCHEMA = `- Your response MUST be a single JSON object with 
   "conversation_end": false,
   "mentioned_npcs": [],
   "secret_revealed": null,
-  "promise": null
+  "promise": null,
+  "action": null
 }
 
 RULES FOR DELTAS:
@@ -29,6 +30,17 @@ RULES FOR DELTAS:
 - mentioned_npcs is optional. Only include if you talk about someone not in this conversation. Format: [{"npc_id": "id", "sentiment": 0.3, "what_was_said": "brief summary"}]
 - secret_revealed: set to the exact text of a secret you're revealing, or null
 - promise: set to what you promise, or null. Promises are remembered and breaking them has consequences
+
+ACTIONS (optional — set "action" to one of these, or null):
+- {"action": "give_gift", "detail": "description of the gift"} — Give a symbolic gift to show goodwill. Only if you genuinely want to strengthen the bond.
+- {"action": "embrace", "detail": "description"} — Show warmth or affection physically. Only when trust is high and the moment feels right.
+- {"action": "mock", "detail": "what you mock them about"} — Publicly belittle or ridicule. Use when angry, contemptuous, or competitive.
+- {"action": "threaten", "detail": "the threat"} — Intimidate the other person. Use when you want to establish dominance or punish.
+- {"action": "storm_off"} — Abruptly leave the conversation. Ends the conversation immediately. Use when you've had enough.
+- {"action": "conspire", "target_npc_id": "id", "detail": "the plan"} — Whisper a scheme against a third person. Only with someone you trust enough.
+- {"action": "spread_rumor", "target_npc_id": "id", "detail": "the rumor"} — Plant a false or exaggerated claim about a third person.
+- IMPORTANT: Most turns should have NO action (null). Actions are dramatic moments — use them sparingly, maybe once per conversation at most.
+
 - Output ONLY the JSON object. No markdown, no code fences, no extra text.`;
 
 // ── System prompt builder ───────────────────────
@@ -114,6 +126,8 @@ export function buildSystemPrompt(
       ? `\nTHINGS YOU'VE HEARD ABOUT ${listener.name.toUpperCase()}:\n${aboutListenerMemories}`
       : "";
 
+  const actionHints = buildActionGuidance(speaker, listener);
+
   const trajectoryBlock = ctx.trajectoryContext
     ? `\nRELATIONSHIP TRAJECTORY: ${ctx.trajectoryContext}`
     : "";
@@ -152,6 +166,7 @@ ${otherNpcsBlock}
 
 ${CONFLICT_PREAMBLE}
 ${behavioralBlock}
+${actionHints}
 
 CONVERSATION PROGRESS: Turn ${turnNumber + 1} of ${maxTurns}.
 ${turnNumber >= maxTurns - 2 ? "The conversation is wrapping up soon. Consider bringing it to a natural close." : ""}
@@ -190,21 +205,34 @@ export function buildConversationMessages(
   // Only include speech text in history (not full JSON) to keep context small
   for (const msg of session.messages) {
     if (msg.npcId === speaker.id) {
+      const historyObj: Record<string, unknown> = {
+        speech: msg.text,
+        emotion_delta: { anger: 0, trust: 0, fear: 0, joy: 0 },
+        relationship_delta: 0,
+        intent: msg.intent || "",
+        conversation_end: false,
+        action: msg.rawResponse?.action ?? null,
+      };
       msgs.push({
         role: "assistant",
-        content: JSON.stringify({
-          speech: msg.text,
-          emotion_delta: { anger: 0, trust: 0, fear: 0, joy: 0 },
-          relationship_delta: 0,
-          intent: msg.intent || "",
-          conversation_end: false,
-        }),
+        content: JSON.stringify(historyObj),
       });
     } else {
-      msgs.push({
-        role: "user",
-        content: `${msg.npcName} says: "${msg.text}"`,
-      });
+      let content = `${msg.npcName} says: "${msg.text}"`;
+      if (msg.rawResponse?.action) {
+        const a = msg.rawResponse.action;
+        const actionDescs: Record<string, string> = {
+          give_gift: `gives you a gift (${a.detail ?? "something"})`,
+          mock: `mocks you (${a.detail ?? ""})`,
+          storm_off: "storms off!",
+          embrace: "embraces you",
+          threaten: `threatens you: "${a.detail ?? ""}"`,
+          conspire: `whispers a conspiracy about ${a.target_npc_id ?? "someone"}`,
+          spread_rumor: `tells you a rumor about ${a.target_npc_id ?? "someone"}`,
+        };
+        content += ` [ACTION: ${msg.npcName} ${actionDescs[a.action] ?? a.action}]`;
+      }
+      msgs.push({ role: "user", content });
     }
   }
 
@@ -248,6 +276,35 @@ Respond with ONLY a single JSON object:
 Output ONLY the JSON object. No markdown, no code fences, no extra text.`,
     },
   ];
+}
+
+// ── Action guidance ──────────────────────────────
+
+function buildActionGuidance(speaker: NPC, listener: NPC): string {
+  const rel = speaker.relationships[listener.id] ?? 0;
+  const emo = speaker.emotionalState;
+  const hints: string[] = [];
+
+  if (rel > 0.5 && emo.joy > 0.5) {
+    hints.push("You feel close to this person. A gift or embrace might feel natural.");
+  }
+  if (rel < -0.3 && emo.anger > 0.4) {
+    hints.push("You are angry and hostile. Mocking, threatening, or storming off are options.");
+  }
+  if (emo.fear > 0.5 && emo.anger > 0.3) {
+    hints.push("You feel cornered. You might storm off or lash out with a threat.");
+  }
+  if (rel > 0.3 && emo.trust > 0.5) {
+    hints.push("You trust this person. You could propose a conspiracy against someone you both dislike.");
+  }
+  if (speaker.personalityTraits.some(t =>
+    ["calculating", "two-faced", "manipulative", "charming"].includes(t.toLowerCase())
+  )) {
+    hints.push("Your manipulative nature means spreading rumors comes naturally to you.");
+  }
+
+  if (hints.length === 0) return "";
+  return `\nACTION HINTS (consider but don't feel obligated):\n${hints.map(h => `- ${h}`).join("\n")}`;
 }
 
 // ── Emotion description (fine-grained) ──────────
