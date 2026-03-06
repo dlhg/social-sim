@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createNpc } from "../npcs";
+import { createNpc, AVATAR_OPTIONS, COLOR_SWATCHES } from "../npcs";
 import type { NPC } from "../types";
 
 interface NpcCreatorProps {
@@ -7,38 +7,6 @@ interface NpcCreatorProps {
   onCreateNpc: (npc: NPC) => void;
   existingIds: string[];
 }
-
-const COLOR_SWATCHES = [
-  "#6ec6ff",
-  "#ffb74d",
-  "#e53935",
-  "#ab47bc",
-  "#66bb6a",
-  "#ffd54f",
-  "#4dd0e1",
-  "#ff8a65",
-  "#ef5350",
-  "#7e57c2",
-];
-
-const AVATAR_OPTIONS = [
-  "😀",
-  "😈",
-  "🤔",
-  "🦊",
-  "👻",
-  "🤖",
-  "🎪",
-  "💎",
-  "🔮",
-  "🧠",
-  "⚡",
-  "🌙",
-  "🎯",
-  "🗡️",
-  "🦉",
-  "🐍",
-];
 
 export function NpcCreator({
   onClose,

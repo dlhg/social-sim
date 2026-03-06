@@ -1,5 +1,103 @@
 import type { NPC, EmotionalState } from "./types";
 
+export const COLOR_SWATCHES = [
+  "#6ec6ff",
+  "#ffb74d",
+  "#e53935",
+  "#ab47bc",
+  "#66bb6a",
+  "#ffd54f",
+  "#4dd0e1",
+  "#ff8a65",
+  "#ef5350",
+  "#7e57c2",
+];
+
+export const AVATAR_OPTIONS = [
+  "😀",
+  "😈",
+  "🤔",
+  "🦊",
+  "👻",
+  "🤖",
+  "🎪",
+  "💎",
+  "🔮",
+  "🧠",
+  "⚡",
+  "🌙",
+  "🎯",
+  "🗡️",
+  "🦉",
+  "🐍",
+];
+
+const RANDOM_NAMES = [
+  "Silas", "Wren", "Cassia", "Orion", "Thane", "Lyra",
+  "Jasper", "Ivy", "Ronan", "Petra", "Cedric", "Dove",
+  "Sable", "Flint", "Elowen", "Caspian", "Rue", "Vesper",
+  "Hadley", "Bramble", "Solene", "Caius", "Opal", "Zephyr",
+];
+
+const RANDOM_TRAITS = [
+  "brooding", "playful", "stubborn", "gentle", "reckless", "meticulous",
+  "dramatic", "stoic", "mischievous", "earnest", "cynical", "dreamy",
+  "impulsive", "patient", "sly", "loyal", "restless", "wistful",
+  "bold", "cautious", "witty", "melancholic", "fierce", "whimsical",
+];
+
+const RANDOM_DESIRES = [
+  "find belonging", "prove themselves", "protect someone dear",
+  "uncover a hidden truth", "leave a legacy", "escape the past",
+  "earn respect", "find inner peace", "experience adventure",
+  "understand human nature", "create something beautiful", "right a wrong",
+];
+
+const RANDOM_SECRETS = [
+  "I once betrayed someone who trusted me completely",
+  "I'm hiding from someone who wants to find me",
+  "I stole something valuable and never returned it",
+  "I have a forbidden talent I've never shown anyone",
+  "I witnessed something terrible and said nothing",
+  "I'm not who everyone thinks I am",
+  "I broke a sacred promise and live with the guilt",
+  "I secretly long for a life completely different from this one",
+];
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function pickN<T>(arr: T[], min: number, max: number): T[] {
+  const n = min + Math.floor(Math.random() * (max - min + 1));
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
+export function randomizeNpc(existingIds: string[]): NPC {
+  const usedNames = new Set(existingIds);
+  let name = pick(RANDOM_NAMES);
+  if (usedNames.has(name.toLowerCase())) {
+    const available = RANDOM_NAMES.filter(n => !usedNames.has(n.toLowerCase()));
+    if (available.length > 0) {
+      name = pick(available);
+    } else {
+      let suffix = 2;
+      while (usedNames.has(`${name.toLowerCase()}${suffix}`)) suffix++;
+      name = `${name}${suffix}`;
+    }
+  }
+
+  const id = name.toLowerCase().replace(/\s+/g, "-");
+  const avatar = pick(AVATAR_OPTIONS);
+  const color = pick(COLOR_SWATCHES);
+  const personalityTraits = pickN(RANDOM_TRAITS, 2, 4);
+  const coreDesires = pickN(RANDOM_DESIRES, 1, 3);
+  const secrets = Math.random() < 0.3 ? [pick(RANDOM_SECRETS)] : [];
+
+  return createNpc({ id, name, avatar, color, personalityTraits, coreDesires, secrets });
+}
+
 function defaultEmotionalState(): EmotionalState {
   return { anger: 0, trust: 0.5, fear: 0, joy: 0.5 };
 }

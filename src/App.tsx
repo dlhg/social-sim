@@ -3,9 +3,9 @@ import { WorldCanvas } from "./components/WorldCanvas";
 import { FeedPanel } from "./components/SidePanel";
 import { CharacterViewer } from "./components/CharacterViewer";
 import { NpcCreator } from "./components/NpcCreator";
+import { SetupScreen } from "./components/SetupScreen";
 import { DmTools } from "./components/DmTools";
 import { NpcStore } from "./npc-store";
-import { initialNpcs } from "./npcs";
 import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
 import type { NPC, BubbleData, ActionType, WaypointActivityId } from "./types";
@@ -35,8 +35,9 @@ const ACTION_LABELS: Record<ActionType, string> = {
 };
 
 function App() {
-  const storeRef = useRef(new NpcStore(initialNpcs));
-  const [npcs, setNpcs] = useState<NPC[]>(() => storeRef.current.getAll());
+  const storeRef = useRef(new NpcStore([]));
+  const [npcs, setNpcs] = useState<NPC[]>([]);
+  const [roster, setRoster] = useState<NPC[]>([]);
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [streamingText, setStreamingText] = useState<Record<string, string>>(
     {}
@@ -63,10 +64,28 @@ function App() {
   const worldRef = useRef<WorldSimulation | null>(null);
 
   useEffect(() => {
+    setNpcs(storeRef.current.getAll());
     return storeRef.current.subscribe(() => {
       setNpcs(storeRef.current.getAll());
     });
+  }, [status]);
+
+  const handleAddToRoster = useCallback((npc: NPC) => {
+    setRoster((prev) => {
+      if (prev.some((n) => n.id === npc.id)) return prev;
+      if (prev.length >= 13) return prev;
+      return [...prev, npc];
+    });
   }, []);
+
+  const handleRemoveFromRoster = useCallback((npcId: string) => {
+    setRoster((prev) => prev.filter((n) => n.id !== npcId));
+  }, []);
+
+  const handleStartSimulation = useCallback(() => {
+    storeRef.current = new NpcStore(roster);
+    handleStart();
+  }, [roster]);
 
   const handleStart = useCallback(() => {
     setFeed([]);
@@ -282,6 +301,7 @@ function App() {
   }, [status]);
 
   const handleStop = useCallback(() => {
+    setRoster(storeRef.current.getAll());
     managerRef.current?.stop();
     managerRef.current = null;
     worldRef.current?.stop();
@@ -411,6 +431,19 @@ function App() {
     []
   );
 
+  if (status === "idle") {
+    return (
+      <div className="app">
+        <SetupScreen
+          roster={roster}
+          onAddToRoster={handleAddToRoster}
+          onRemoveFromRoster={handleRemoveFromRoster}
+          onStartSimulation={handleStartSimulation}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <div className="main-content">
@@ -438,35 +471,27 @@ function App() {
         </div>
       </div>
       <div className="controls">
-        {status === "idle" ? (
-          <button onClick={handleStart} className="btn btn-start">
-            Start
-          </button>
-        ) : (
-          <>
-            <button onClick={handlePause} className="btn btn-pause">
-              {status === "paused" ? "Resume" : "Pause"}
-            </button>
-            <button onClick={handleStop} className="btn btn-stop">
-              Stop
-            </button>
-            <button onClick={handleTrigger} className="btn btn-trigger">
-              Trigger Conversation
-            </button>
-            <button
-              onClick={() => setDmToolsOpen(true)}
-              className="btn btn-dm"
-            >
-              DM Tools
-            </button>
-            <button
-              onClick={() => setNpcViewerOpen(true)}
-              className="btn btn-npcs"
-            >
-              NPCs
-            </button>
-          </>
-        )}
+        <button onClick={handlePause} className="btn btn-pause">
+          {status === "paused" ? "Resume" : "Pause"}
+        </button>
+        <button onClick={handleStop} className="btn btn-stop">
+          Stop
+        </button>
+        <button onClick={handleTrigger} className="btn btn-trigger">
+          Trigger Conversation
+        </button>
+        <button
+          onClick={() => setDmToolsOpen(true)}
+          className="btn btn-dm"
+        >
+          DM Tools
+        </button>
+        <button
+          onClick={() => setNpcViewerOpen(true)}
+          className="btn btn-npcs"
+        >
+          NPCs
+        </button>
         <button
           onClick={() => setCreatorOpen(true)}
           className="btn btn-create"

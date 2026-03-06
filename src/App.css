@@ -1049,3 +1049,288 @@
   animation: blink 0.8s step-end infinite;
   color: var(--bubble-color, #6ec6ff);
 }
+
+/* ── Setup Screen ──────────────────────────────── */
+
+.setup-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px;
+  overflow-y: auto;
+  gap: 32px;
+}
+
+.setup-header {
+  text-align: center;
+}
+
+.setup-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #e0e0e0;
+}
+
+.setup-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #666;
+  letter-spacing: 1px;
+}
+
+/* ── Roster ────────────────────────────────────── */
+
+.roster-section {
+  width: 100%;
+  max-width: 720px;
+}
+
+.roster-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.roster-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #888;
+}
+
+.roster-count {
+  font-size: 12px;
+  color: #555;
+  font-variant-numeric: tabular-nums;
+}
+
+.roster-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.roster-empty {
+  border: 1px dashed #333;
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+  color: #444;
+  font-size: 13px;
+}
+
+.roster-card {
+  position: relative;
+  width: 140px;
+  padding: 14px 12px;
+  border: 1px solid #2a2a42;
+  border-radius: 8px;
+  background: #1a1a2e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.15s;
+}
+
+.roster-card:hover {
+  border-color: #444;
+}
+
+.roster-card-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #666;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.roster-card:hover .roster-card-remove {
+  opacity: 1;
+}
+
+.roster-card-remove:hover {
+  color: #e53935;
+  background: rgba(229, 57, 53, 0.15);
+}
+
+.roster-card-avatar {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.roster-card-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.roster-card-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  justify-content: center;
+}
+
+.roster-card-traits .trait-chip {
+  font-size: 10px;
+  padding: 1px 6px;
+}
+
+.roster-card-desire {
+  font-size: 10px;
+  color: #555;
+  text-align: center;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ── Action Buttons ────────────────────────────── */
+
+.setup-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-premade {
+  border-color: #4dd0e1;
+  color: #4dd0e1;
+}
+
+.btn-premade:hover:not(:disabled) {
+  background: #4dd0e120;
+}
+
+.btn-randomize {
+  border-color: #ffd54f;
+  color: #ffd54f;
+}
+
+.btn-randomize:hover:not(:disabled) {
+  background: #ffd54f20;
+}
+
+.setup-actions .btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ── Premade Gallery ───────────────────────────── */
+
+.premade-gallery {
+  width: 100%;
+  max-width: 720px;
+  border: 1px solid #2a2a42;
+  border-radius: 8px;
+  padding: 16px;
+  background: rgba(26, 26, 46, 0.5);
+}
+
+.premade-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.premade-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #1a1a2e;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  min-width: 90px;
+}
+
+.premade-card:hover:not(:disabled) {
+  border-color: #555;
+  background: #2a2a42;
+}
+
+.premade-card:disabled {
+  cursor: default;
+}
+
+.premade-card-added {
+  opacity: 0.4;
+}
+
+.premade-card-avatar {
+  font-size: 24px;
+}
+
+.premade-card-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.premade-card-badge {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #666;
+}
+
+/* ── Start Area ────────────────────────────────── */
+
+.setup-start-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-start-sim {
+  padding: 14px 48px;
+  border: 1px solid #4caf50;
+  border-radius: 8px;
+  background: #4caf5020;
+  color: #4caf50;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-start-sim:hover:not(:disabled) {
+  background: #4caf5040;
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.2);
+}
+
+.btn-start-sim:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.setup-start-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #555;
+}
