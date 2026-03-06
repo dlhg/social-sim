@@ -37,6 +37,7 @@ export class WorldSimulation {
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private running = false;
   private paused = false;
+  private slowNpcIds: Set<string> = new Set();
 
   readonly gridWidth: number;
   readonly gridHeight: number;
@@ -98,6 +99,16 @@ export class WorldSimulation {
     }
   }
 
+  // ── Speed control ──────────────────────────────
+
+  setSlowNpc(npcId: string, slow: boolean): void {
+    if (slow) {
+      this.slowNpcIds.add(npcId);
+    } else {
+      this.slowNpcIds.delete(npcId);
+    }
+  }
+
   // ── Freeze / Unfreeze ────────────────────────
 
   freezeNpc(npcId: string): void {
@@ -151,6 +162,11 @@ export class WorldSimulation {
         continue;
       }
 
+      // NPCs with active bubbles move slower (~30% of ticks skipped)
+      if (this.slowNpcIds.has(npc.npcId) && Math.random() < 0.3) {
+        continue;
+      }
+
       if (!npc.destination) {
         npc.destination = this.pickDestination(npc);
       }
@@ -178,20 +194,40 @@ export class WorldSimulation {
       npc.previousPosition = { ...npc.position };
       npc.lastTickTime = now;
 
-      // Step one tile toward destination
+      // Step one tile toward destination, avoiding other NPCs
       const dx = dest.x - npc.position.x;
       const dy = dest.y - npc.position.y;
 
+      // Build list of candidate moves in priority order
+      const candidates: Position[] = [];
       if (dx !== 0 && dy !== 0) {
         if (Math.random() < 0.5) {
-          npc.position.x += Math.sign(dx);
+          candidates.push({ x: npc.position.x + Math.sign(dx), y: npc.position.y });
+          candidates.push({ x: npc.position.x, y: npc.position.y + Math.sign(dy) });
         } else {
-          npc.position.y += Math.sign(dy);
+          candidates.push({ x: npc.position.x, y: npc.position.y + Math.sign(dy) });
+          candidates.push({ x: npc.position.x + Math.sign(dx), y: npc.position.y });
         }
       } else if (dx !== 0) {
-        npc.position.x += Math.sign(dx);
+        candidates.push({ x: npc.position.x + Math.sign(dx), y: npc.position.y });
       } else {
-        npc.position.y += Math.sign(dy);
+        candidates.push({ x: npc.position.x, y: npc.position.y + Math.sign(dy) });
+      }
+
+      // Pick the first candidate that doesn't crowd another NPC
+      let moved = false;
+      for (const candidate of candidates) {
+        if (!this.isTooCloseToOthers(candidate, npc.npcId)) {
+          npc.position.x = candidate.x;
+          npc.position.y = candidate.y;
+          moved = true;
+          break;
+        }
+      }
+
+      // If all moves are blocked, stay put this tick
+      if (!moved) {
+        npc.previousPosition = { ...npc.position };
       }
     }
 
@@ -398,6 +434,17 @@ export class WorldSimulation {
         }
       }
     }
+  }
+
+  // ── Collision avoidance ────────────────────
+
+  private isTooCloseToOthers(pos: Position, excludeNpcId: string): boolean {
+    for (const other of this.npcs.values()) {
+      if (other.npcId === excludeNpcId) continue;
+      const dist = Math.abs(pos.x - other.position.x) + Math.abs(pos.y - other.position.y);
+      if (dist <= 1) return true;
+    }
+    return false;
   }
 
   // ── Spatial queries ─────────────────────────

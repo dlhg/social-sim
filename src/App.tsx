@@ -74,6 +74,16 @@ function App() {
     });
   }, [status]);
 
+  // Sync bubble state → slow movement for NPCs with active bubbles
+  useEffect(() => {
+    const world = worldRef.current;
+    if (!world) return;
+    const npcIdsWithBubbles = new Set(bubbles.map(b => b.npcId));
+    for (const npc of npcs) {
+      world.setSlowNpc(npc.id, npcIdsWithBubbles.has(npc.id));
+    }
+  }, [bubbles, npcs]);
+
   const handleAddToRoster = useCallback((npc: NPC) => {
     setRoster((prev) => {
       if (prev.some((n) => n.id === npc.id)) return prev;
@@ -106,7 +116,7 @@ function App() {
     const world = new WorldSimulation({
       gridWidth: 24,
       gridHeight: 16,
-      tickIntervalMs: 200,
+      tickIntervalMs: 285,
       onProximity: (aId, bId) => {
         managerRef.current?.triggerConversation(aId, bId);
       },
@@ -468,7 +478,7 @@ function App() {
               worldRef.current?.getSnapshot() ?? {
                 npcs: [],
                 waypoints: [],
-                tickIntervalMs: 200,
+                tickIntervalMs: 285,
               }
             }
             getNpc={(id) => storeRef.current.get(id)}
