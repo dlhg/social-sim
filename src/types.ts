@@ -144,6 +144,22 @@ export interface ActivityEvent {
   npcId?: string; // for styling (e.g., thought color)
 }
 
+// ── Floaters (floating status text) ──────────────
+export type FloaterCategory = "emotion" | "relationship" | "secret" | "promise";
+
+export interface FloaterData {
+  id: string;
+  npcId: string;
+  text: string;
+  color: string;
+  category: FloaterCategory;
+  spawnedAt: number;
+  directionX: 1 | -1;   // drift left or right (away from conversation partner)
+  delay: number;         // stagger delay in ms for simultaneous floaters
+  offsetY: number;       // vertical spread offset in px
+  driftScale: number;    // multiplier on drift distance (0.7 – 1.3)
+}
+
 // ── Bubbles ─────────────────────────────────────
 export interface BubbleData {
   npcId: string;

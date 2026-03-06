@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { NPC, BubbleData } from "../types";
+import type { NPC, BubbleData, FloaterData } from "../types";
 import type { WorldSnapshot, NpcSpatialState } from "../types";
 import { SpriteSystem } from "../sprite-system";
 
@@ -9,6 +9,7 @@ interface WorldCanvasProps {
   currentSpeaker: string | null;
   activeConversationPair: [string, string] | null;
   bubbles: BubbleData[];
+  floaters: FloaterData[];
 }
 
 const GRID_WIDTH = 24;
@@ -56,12 +57,14 @@ export function WorldCanvas({
   currentSpeaker,
   activeConversationPair,
   bubbles,
+  floaters,
 }: WorldCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const spritesRef = useRef(new SpriteSystem());
   const bubbleRefsMap = useRef(new Map<string, HTMLDivElement>());
+  const floaterRefsMap = useRef(new Map<string, HTMLDivElement>());
 
   // Store props in refs so the rAF loop always reads fresh values
   const getSnapshotRef = useRef(getSnapshot);
@@ -69,12 +72,14 @@ export function WorldCanvas({
   const speakerRef = useRef(currentSpeaker);
   const pairRef = useRef(activeConversationPair);
   const bubblesRef = useRef(bubbles);
+  const floatersRef = useRef(floaters);
 
   getSnapshotRef.current = getSnapshot;
   getNpcRef.current = getNpc;
   speakerRef.current = currentSpeaker;
   pairRef.current = activeConversationPair;
   bubblesRef.current = bubbles;
+  floatersRef.current = floaters;
 
   useEffect(() => {
     spritesRef.current.load(); // fire-and-forget; draw loop checks .ready
@@ -311,6 +316,21 @@ export function WorldCanvas({
         }
       }
 
+      // Position floater elements at NPC's side, drifting outward
+      for (const floater of floatersRef.current) {
+        const floaterEl = floaterRefsMap.current.get(floater.id);
+        if (!floaterEl) continue;
+        const spatial = snap.npcs.find(n => n.npcId === floater.npcId);
+        if (!spatial) continue;
+
+        const fx = offsetX + (lerpX(spatial, now, snap.tickIntervalMs) + 0.5) * tileSize;
+        const fy = offsetY + (lerpY(spatial, now, snap.tickIntervalMs) + 0.5) * tileSize;
+        // Start at the sprite's side, roughly shoulder height
+        const startX = fx + floater.directionX * tileSize * 0.5;
+        const startY = fy - tileSize * 0.3 + floater.offsetY;
+        floaterEl.style.transform = `translate(${startX}px, ${startY}px)`;
+      }
+
       rafRef.current = requestAnimationFrame(frame);
     }
 
@@ -348,6 +368,33 @@ export function WorldCanvas({
             </div>
           );
         })}
+      </div>
+      <div className="floater-overlay">
+        {floaters.map((f) => (
+          <div
+            key={f.id}
+            ref={(el) => {
+              if (el) floaterRefsMap.current.set(f.id, el);
+              else floaterRefsMap.current.delete(f.id);
+            }}
+            className="floater-anchor"
+            style={{
+              "--dir": f.directionX,
+              "--drift": f.driftScale,
+            } as React.CSSProperties}
+          >
+            <span
+              className={`floater floater-${f.category}`}
+              style={{
+                "--floater-color": f.color,
+                animationDelay: `${f.delay}ms`,
+                textAlign: f.directionX > 0 ? "left" : "right",
+              } as React.CSSProperties}
+            >
+              {f.text}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );

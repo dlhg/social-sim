@@ -8,7 +8,7 @@ import { DmTools } from "./components/DmTools";
 import { NpcStore } from "./npc-store";
 import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
-import type { NPC, BubbleData, ActionType, WaypointActivityId } from "./types";
+import type { NPC, BubbleData, FloaterData, ActionType, WaypointActivityId } from "./types";
 import { ACTIVITIES } from "./activities";
 import type { NpcSnapshot, FeedItem, PanelMode } from "./components/SidePanel";
 import "./App.css";
@@ -58,6 +58,7 @@ function App() {
     {}
   );
   const [bubbles, setBubbles] = useState<BubbleData[]>([]);
+  const [floaters, setFloaters] = useState<FloaterData[]>([]);
   const bubbleTimersRef = useRef<Map<string, number>>(new Map());
 
   const managerRef = useRef<ConversationManager | null>(null);
@@ -94,6 +95,7 @@ function App() {
     setActiveConversationPair(null);
     setNpcHistory({});
     setBubbles([]);
+    setFloaters([]);
     for (const t of bubbleTimersRef.current.values()) clearTimeout(t);
     bubbleTimersRef.current.clear();
 
@@ -276,6 +278,12 @@ function App() {
           setStreamingText((prev) => ({ ...prev, [npcId]: "" }));
         }
       },
+      onFloater: (floater) => {
+        setFloaters(prev => [...prev, floater]);
+        setTimeout(() => {
+          setFloaters(prev => prev.filter(f => f.id !== floater.id));
+        }, 2200 + floater.delay);
+      },
     });
 
     managerRef.current = manager;
@@ -310,6 +318,7 @@ function App() {
     setCurrentSpeaker(null);
     setActiveConversationPair(null);
     setBubbles([]);
+    setFloaters([]);
     for (const t of bubbleTimersRef.current.values()) clearTimeout(t);
     bubbleTimersRef.current.clear();
   }, []);
@@ -460,6 +469,7 @@ function App() {
             currentSpeaker={currentSpeaker}
             activeConversationPair={activeConversationPair}
             bubbles={bubbles}
+            floaters={floaters}
           />
           <FeedPanel
             npcs={npcs}

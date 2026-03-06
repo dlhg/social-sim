@@ -7,6 +7,8 @@ import type {
   ConversationType,
   ActionData,
   ActionType,
+  FloaterData,
+  FloaterCategory,
 } from "./types";
 import type { NpcStore } from "./npc-store";
 import type { WorldSimulation } from "./world-simulation";
@@ -21,6 +23,7 @@ export interface ConversationManagerCallbacks {
   onConversationEnd: (session: ConversationSession) => void;
   onActivity: (event: ActivityEvent) => void;
   onSpeakerChange: (npcId: string | null) => void;
+  onFloater?: (floater: FloaterData) => void;
 }
 
 export class ConversationManager {
@@ -335,7 +338,7 @@ export class ConversationManager {
       this.log(`${speaker.name}'s intent: ${response.intent}`);
     }
 
-    this.logEmotionShifts(speaker.name, response);
+    this.logEmotionShifts(speaker, listener, response);
     this.logRelationshipShift(speaker, listener, response);
 
     // Eavesdropping: 50% chance per turn, check nearby NPCs
@@ -969,32 +972,55 @@ export class ConversationManager {
 
   // ── Rich social logging ──────────────────────
 
-  private logEmotionShifts(name: string, response: LLMResponse): void {
+  private static readonly EMOTION_COLORS: Record<string, { pos: string; neg: string }> = {
+    joy:   { pos: "#ffd54f", neg: "#b56576" },
+    trust: { pos: "#66bb6a", neg: "#7a8ba0" },
+    anger: { pos: "#ff7043", neg: "#4dd0e1" },
+    fear:  { pos: "#ce93d8", neg: "#81d4fa" },
+  };
+
+  private logEmotionShifts(speaker: NPC, listener: NPC, response: LLMResponse): void {
     const d = response.emotion_delta;
     const shifts: string[] = [];
 
-    if (Math.abs(d.joy) >= 0.01) {
-      shifts.push(d.joy > 0 ? `+joy` : `-joy`);
-    }
-    if (Math.abs(d.trust) >= 0.01) {
-      shifts.push(d.trust > 0 ? `+trust` : `-trust`);
-    }
-    if (Math.abs(d.anger) >= 0.01) {
-      shifts.push(d.anger > 0 ? `+anger` : `-anger`);
-    }
-    if (Math.abs(d.fear) >= 0.01) {
-      shifts.push(d.fear > 0 ? `+fear` : `-fear`);
+    const emotions: Array<{ key: string; val: number }> = [
+      { key: "joy", val: d.joy },
+      { key: "trust", val: d.trust },
+      { key: "anger", val: d.anger },
+      { key: "fear", val: d.fear },
+    ];
+
+    const active = emotions.filter(e => Math.abs(e.val) >= 0.01);
+    const awayDir = this.awayDirection(speaker.id, listener.id);
+
+    // Fan floaters out: alternate directions, spread vertically, vary drift
+    for (let i = 0; i < active.length; i++) {
+      const { key, val } = active[i];
+      const label = val > 0 ? `+${key}` : `-${key}`;
+      shifts.push(label);
+      const colors = ConversationManager.EMOTION_COLORS[key];
+
+      // First floater goes away from partner, subsequent alternate
+      const dir: 1 | -1 = i % 2 === 0 ? awayDir : (-awayDir as 1 | -1);
+      // Spread vertically: even indices go up, odd go down from center
+      const ySpread = (i - (active.length - 1) / 2) * 14;
+      // Vary drift distance so paths diverge further
+      const drift = 0.8 + Math.random() * 0.5;
+
+      this.emitFloater(
+        speaker.id,
+        label,
+        val > 0 ? colors.pos : colors.neg,
+        "emotion",
+        { delay: i * 100, directionX: dir, offsetY: ySpread, driftScale: drift },
+      );
     }
 
     if (shifts.length > 0) {
-      // Read back the resulting emotional state
-      const npc = this.store.get(
-        // find the NPC by name — we have the store
-        this.store.getAll().find((n) => n.name === name)?.id ?? ""
-      );
+      const npc = this.store.get(speaker.id);
       if (npc) {
         const mood = this.describeMood(npc);
-        this.log(`${name} feels ${shifts.join(", ")} → now ${mood}`);
+        this.log(`${speaker.name} feels ${shifts.join(", ")} → now ${mood}`);
       }
     }
   }
@@ -1013,6 +1039,18 @@ export class ConversationManager {
 
     this.log(
       `${speaker.name} ${arrow} toward ${listener.name} (${relValue >= 0 ? "+" : ""}${relValue.toFixed(2)}, ${label})`
+    );
+
+    const isPositive = response.relationship_delta > 0;
+    const symbol = isPositive ? "\u2665" : "\u2661"; // filled / hollow heart
+    const floaterText = `${symbol} ${isPositive ? "+" : ""}${response.relationship_delta.toFixed(2)} ${listener.name}`;
+    const awayDir = this.awayDirection(speaker.id, listener.id);
+    this.emitFloater(
+      speaker.id,
+      floaterText,
+      isPositive ? "#f48fb1" : "#78909c",
+      "relationship",
+      { delay: 200, directionX: awayDir, offsetY: -8, driftScale: 1.1 },
     );
   }
 
@@ -1292,6 +1330,50 @@ export class ConversationManager {
 
   private npcName(id: string): string {
     return this.store.get(id)?.name ?? id;
+  }
+
+  private floaterCounter = 0;
+
+  /**
+   * Determine the "away from partner" direction.
+   * Returns 1 (right) or -1 (left).
+   */
+  private awayDirection(npcId: string, awayFromNpcId?: string): 1 | -1 {
+    if (awayFromNpcId && this.worldSim) {
+      const myPos = this.worldSim.getNpcPosition(npcId);
+      const theirPos = this.worldSim.getNpcPosition(awayFromNpcId);
+      if (myPos && theirPos) {
+        const dx = theirPos.x - myPos.x;
+        if (Math.abs(dx) > 0.5) return dx > 0 ? -1 : 1;
+      }
+    }
+    return Math.random() < 0.5 ? 1 : -1;
+  }
+
+  private emitFloater(
+    npcId: string,
+    text: string,
+    color: string,
+    category: FloaterCategory,
+    opts: {
+      delay?: number;
+      directionX?: 1 | -1;
+      offsetY?: number;
+      driftScale?: number;
+    } = {},
+  ): void {
+    this.callbacks.onFloater?.({
+      id: `fl-${Date.now()}-${this.floaterCounter++}`,
+      npcId,
+      text,
+      color,
+      category,
+      spawnedAt: Date.now(),
+      directionX: opts.directionX ?? (Math.random() < 0.5 ? 1 : -1),
+      delay: opts.delay ?? 0,
+      offsetY: opts.offsetY ?? 0,
+      driftScale: opts.driftScale ?? 1,
+    });
   }
 
   private log(text: string): void {

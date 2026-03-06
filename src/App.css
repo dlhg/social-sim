@@ -1050,6 +1050,89 @@
   color: var(--bubble-color, #6ec6ff);
 }
 
+/* ── Floater Overlay ──────────────────────────── */
+
+.floater-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.floater-anchor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+  /* --dir: 1 or -1, set by JS */
+}
+
+.floater {
+  display: inline-block;
+  font: bold 10px "SF Mono", "Fira Code", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--floater-color, #ccc);
+  text-shadow:
+    0 0 8px var(--floater-color, #ccc),
+    0 1px 3px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+  will-change: transform, opacity;
+  animation:
+    floater-drift-x 2.2s cubic-bezier(0.25, 0.8, 0.25, 1) both,
+    floater-drift-y 2.2s cubic-bezier(0.33, 1, 0.68, 1) both,
+    floater-fade 2.2s ease both;
+}
+
+.floater-relationship {
+  font-size: 11px;
+  letter-spacing: 0.3px;
+}
+
+/* Horizontal: drift outward with slight deceleration */
+@keyframes floater-drift-x {
+  0% {
+    translate: 0 0;
+  }
+  8% {
+    translate: calc(var(--dir, 1) * var(--drift, 1) * 4px) 0;
+  }
+  100% {
+    translate: calc(var(--dir, 1) * var(--drift, 1) * 70px) 0;
+  }
+}
+
+/* Vertical: arc upward then settle — gives the curved path feel */
+@keyframes floater-drift-y {
+  0% {
+    transform: translateY(0) scale(0.7);
+  }
+  8% {
+    transform: translateY(0) scale(1.15);
+  }
+  16% {
+    transform: translateY(-2px) scale(1);
+  }
+  40% {
+    transform: translateY(-18px) scale(1);
+  }
+  70% {
+    transform: translateY(-22px) scale(1);
+  }
+  100% {
+    transform: translateY(-16px) scale(0.92);
+  }
+}
+
+/* Opacity: pop in, hold, fade out */
+@keyframes floater-fade {
+  0% { opacity: 0; }
+  8% { opacity: 1; }
+  55% { opacity: 0.95; }
+  100% { opacity: 0; }
+}
+
 /* ── Setup Screen ──────────────────────────────── */
 
 .setup-screen {
