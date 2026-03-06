@@ -35,7 +35,8 @@ export class ConversationManager {
   private cooldowns: Map<string, number> = new Map();
   private lastConversationEnd = 0;
 
-  private readonly MAX_TURNS = 6;
+  private readonly MIN_TURNS = 3;
+  private readonly MAX_TURNS = 18;
   private readonly COOLDOWN_MS = 30_000;
   private readonly GLOBAL_COOLDOWN_MS = 5_000;
   private readonly MIN_TURN_DURATION_MS = 1_500;
@@ -139,7 +140,7 @@ export class ConversationManager {
       participantIds: [npcAId, npcBId],
       messages: [],
       turnCount: 0,
-      maxTurns: this.MAX_TURNS,
+      maxTurns: this.rollMaxTurns(),
       status: "active",
       startedAt: Date.now(),
     };
@@ -149,14 +150,14 @@ export class ConversationManager {
     this.store.recordRelationshipSnapshot(npcAId, npcBId);
     const convType = this.classifyConversationType(npcA, npcB);
     this.callbacks.onConversationStart(session);
-    this.log(`Conversation started between ${npcA.name} and ${npcB.name} [${convType}]`);
+    this.log(`Conversation started between ${npcA.name} and ${npcB.name} [${convType}, max ${session.maxTurns} turns]`);
 
     const speakers = [npcA, npcB];
     let consecutiveFailures = 0;
 
     let speakerIndex = 0;
     let turnsCompleted = 0;
-    while (turnsCompleted < this.MAX_TURNS) {
+    while (turnsCompleted < session.maxTurns) {
       if (!this.running || session.status !== "active") break;
 
       // Wait while paused
@@ -191,7 +192,7 @@ export class ConversationManager {
         break;
       }
 
-      if (turnsCompleted < this.MAX_TURNS) {
+      if (turnsCompleted < session.maxTurns) {
         const elapsed = Date.now() - turnStart;
         const remaining = this.MIN_TURN_DURATION_MS - elapsed;
         if (remaining > 0) {
@@ -1196,6 +1197,19 @@ export class ConversationManager {
         activityType: "eavesdrop",
       });
     }
+  }
+
+  /**
+   * Weighted random turn count: most conversations land 6-10,
+   * short ones (3-5) and long ones (11-18) are rarer.
+   */
+  private rollMaxTurns(): number {
+    // Sum of two dice-style rolls biased toward the middle
+    const base = this.MIN_TURNS;
+    const range = this.MAX_TURNS - this.MIN_TURNS; // 15
+    // Average of two uniform randoms → triangular-ish distribution centered at ~10
+    const r = (Math.random() + Math.random()) / 2;
+    return base + Math.round(r * range);
   }
 
   private classifyConversationType(a: NPC, b: NPC): ConversationType {

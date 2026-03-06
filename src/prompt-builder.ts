@@ -183,10 +183,10 @@ ${behavioralBlock}
 ${actionHints}
 
 CONVERSATION PROGRESS: Turn ${turnNumber + 1} of ${maxTurns}.
-${turnNumber >= maxTurns - 2 ? "The conversation is wrapping up soon. Consider bringing it to a natural close." : ""}
+${turnNumber >= maxTurns - 2 ? "The conversation is wrapping up soon. Consider bringing it to a natural close." : ""}${turnNumber > 0 && turnNumber >= Math.floor(maxTurns * 0.6) && turnNumber < maxTurns - 2 ? " You can set conversation_end to true if this feels like a natural stopping point." : ""}
 
 RESPONSE FORMAT:
-- Stay in character. Speak naturally in 1-3 sentences.
+- Stay in character. Vary your message length naturally — sometimes just a word or two ("Yeah." / "No way."), sometimes a full paragraph. Match the energy: quick banter should be short, emotional or story-heavy moments can be longer. Don't always write the same amount.
 - NEVER repeat or paraphrase what was already said. Always move the conversation forward.
 - React to what ${listener.name} actually said. Ask follow-up questions, share new thoughts, change the subject, disagree, joke — anything but echo.
 - If the conversation is going in circles, take it in a completely new direction.
