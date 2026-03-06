@@ -5,12 +5,12 @@ import type { NpcSnapshot } from "./SidePanel";
 const ITEM_LIFETIME_MS = 5 * 60_000;
 
 const CATEGORY_COLORS: Record<string, string> = {
-  food: "#ff9800",
-  herb: "#66bb6a",
-  fish: "#42a5f5",
-  trinket: "#ab47bc",
-  book: "#8d6e63",
-  craft: "#fdd835",
+  food: "#e0a84c",
+  herb: "#5cb87a",
+  fish: "#6ba4d4",
+  trinket: "#a876c4",
+  book: "#9e8878",
+  craft: "#e0c84c",
 };
 
 function timeRemaining(item: InventoryItem): string {
@@ -31,10 +31,10 @@ interface CharacterViewerProps {
 }
 
 const EMOTION_COLORS: Record<string, string> = {
-  anger: "#e53935",
-  trust: "#42a5f5",
-  fear: "#ab47bc",
-  joy: "#fdd835",
+  anger: "#d4616a",
+  trust: "#6ba4d4",
+  fear: "#a876c4",
+  joy: "#e0c84c",
 };
 
 function relationshipLabel(value: number): string {
@@ -215,7 +215,7 @@ export function CharacterViewer({
                 const other = npcMap[otherId];
                 if (!other) return null;
                 const pct = ((value + 1) / 2) * 100;
-                const barColor = value >= 0 ? "#4caf50" : "#e53935";
+                const barColor = value >= 0 ? "#5cb87a" : "#d4616a";
                 return (
                   <div key={otherId} className="relationship-row">
                     <span className="rel-npc">

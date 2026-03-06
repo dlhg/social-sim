@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { NPC, BubbleData, FloaterData } from "../types";
+import type { NPC, BubbleData, FloaterData, DayPhase } from "../types";
 import type { WorldSnapshot, NpcSpatialState } from "../types";
 import { SpriteSystem } from "../sprite-system";
 
@@ -10,6 +10,43 @@ interface WorldCanvasProps {
   activeConversationPair: [string, string] | null;
   bubbles: BubbleData[];
   floaters: FloaterData[];
+  dayPhase: DayPhase;
+}
+
+// Time-of-day color tints (subtle overlays on canvas)
+const PHASE_TINTS: Record<DayPhase, { bg: string; grid: string; tintColor: string; tintAlpha: number }> = {
+  morning: { bg: "#141a22", grid: "#1a2230", tintColor: "180, 160, 100", tintAlpha: 0.04 },
+  afternoon: { bg: "#161e2a", grid: "#1c2636", tintColor: "200, 200, 200", tintAlpha: 0 },
+  evening: { bg: "#10141e", grid: "#161c28", tintColor: "80, 100, 180", tintAlpha: 0.06 },
+};
+
+// Ambient particles
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  alpha: number;
+  alphaSpeed: number;
+  phase: number; // for sin wave brightness
+}
+
+function createParticles(count: number, w: number, h: number): Particle[] {
+  const particles: Particle[] = [];
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      vx: (Math.random() - 0.5) * 0.15,
+      vy: (Math.random() - 0.5) * 0.1 - 0.05,
+      size: Math.random() * 1.5 + 0.5,
+      alpha: Math.random() * 0.3,
+      alphaSpeed: Math.random() * 0.003 + 0.001,
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+  return particles;
 }
 
 const GRID_WIDTH = 24;
@@ -77,6 +114,7 @@ export function WorldCanvas({
   activeConversationPair,
   bubbles,
   floaters,
+  dayPhase,
 }: WorldCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -84,6 +122,7 @@ export function WorldCanvas({
   const spritesRef = useRef(new SpriteSystem());
   const bubbleRefsMap = useRef(new Map<string, HTMLDivElement>());
   const floaterRefsMap = useRef(new Map<string, HTMLDivElement>());
+  const particlesRef = useRef<Particle[]>([]);
 
   // Store props in refs so the rAF loop always reads fresh values
   const getSnapshotRef = useRef(getSnapshot);
@@ -92,6 +131,7 @@ export function WorldCanvas({
   const pairRef = useRef(activeConversationPair);
   const bubblesRef = useRef(bubbles);
   const floatersRef = useRef(floaters);
+  const dayPhaseRef = useRef(dayPhase);
 
   getSnapshotRef.current = getSnapshot;
   getNpcRef.current = getNpc;
@@ -99,6 +139,7 @@ export function WorldCanvas({
   pairRef.current = activeConversationPair;
   bubblesRef.current = bubbles;
   floatersRef.current = floaters;
+  dayPhaseRef.current = dayPhase;
 
   const cameraRef = useRef<CameraState>({
     cx: GRID_WIDTH / 2,
@@ -191,12 +232,15 @@ export function WorldCanvas({
       const offsetX = width / 2 - camPixelX;
       const offsetY = height / 2 - camPixelY;
 
+      // Time-of-day tinting
+      const phaseTint = PHASE_TINTS[dayPhaseRef.current];
+
       // Background
-      ctx.fillStyle = "#0f1923";
+      ctx.fillStyle = phaseTint.bg;
       ctx.fillRect(0, 0, width, height);
 
       // Grid area background
-      ctx.fillStyle = "#141e2b";
+      ctx.fillStyle = phaseTint.grid;
       ctx.fillRect(
         offsetX,
         offsetY,
@@ -204,12 +248,23 @@ export function WorldCanvas({
         tileSize * GRID_HEIGHT
       );
 
+      // Phase tint overlay
+      if (phaseTint.tintAlpha > 0) {
+        ctx.fillStyle = `rgba(${phaseTint.tintColor}, ${phaseTint.tintAlpha})`;
+        ctx.fillRect(
+          offsetX,
+          offsetY,
+          tileSize * GRID_WIDTH,
+          tileSize * GRID_HEIGHT
+        );
+      }
+
       // Dim the environment during conversations
       const envAlpha = 1 - cam.dimAmount * 0.6;
       ctx.globalAlpha = envAlpha;
 
       // Subtle grid lines
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.03)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.025)";
       ctx.lineWidth = 1;
       for (let x = 0; x <= GRID_WIDTH; x++) {
         ctx.beginPath();
@@ -224,14 +279,46 @@ export function WorldCanvas({
         ctx.stroke();
       }
 
+      // Ambient particles
+      if (particlesRef.current.length === 0 && width > 0) {
+        particlesRef.current = createParticles(40, width, height);
+      }
+      const isEvening = dayPhaseRef.current === "evening";
+      const particleColor = isEvening ? "180, 200, 255" : "255, 240, 200";
+      for (const p of particlesRef.current) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.phase += p.alphaSpeed;
+        const pAlpha = (0.15 + 0.2 * Math.sin(p.phase)) * (isEvening ? 1.5 : 0.8);
+
+        // Wrap around
+        if (p.x < 0) p.x = width;
+        if (p.x > width) p.x = 0;
+        if (p.y < 0) p.y = height;
+        if (p.y > height) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${particleColor}, ${pAlpha * envAlpha})`;
+        ctx.fill();
+      }
+
       // Waypoints
       for (const wp of snap.waypoints) {
         const wx = offsetX + (wp.position.x + 0.5) * tileSize;
         const wy = offsetY + (wp.position.y + 0.5) * tileSize;
 
+        // Soft glow behind waypoint
+        const glowRadius = tileSize * 0.5;
+        const glowGrad = ctx.createRadialGradient(wx, wy, 0, wx, wy, glowRadius);
+        glowGrad.addColorStop(0, "rgba(255, 255, 255, 0.04)");
+        glowGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+        ctx.fillStyle = glowGrad;
+        ctx.fillRect(wx - glowRadius, wy - glowRadius, glowRadius * 2, glowRadius * 2);
+
         // Small diamond marker
-        const s = tileSize * 0.15;
-        ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+        const s = tileSize * 0.12;
+        ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
         ctx.beginPath();
         ctx.moveTo(wx, wy - s);
         ctx.lineTo(wx + s, wy);
@@ -241,11 +328,11 @@ export function WorldCanvas({
         ctx.fill();
 
         // Label
-        ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-        ctx.font = `${Math.max(9, tileSize * 0.3)}px "SF Mono", "Fira Code", monospace`;
+        ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
+        ctx.font = `500 ${Math.max(9, tileSize * 0.28)}px "Inter", -apple-system, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        ctx.fillText(wp.name, wx, wy + s + 4);
+        ctx.fillText(wp.name, wx, wy + s + 5);
       }
 
       ctx.globalAlpha = 1;
@@ -352,7 +439,7 @@ export function WorldCanvas({
           const radius = tileSize * 0.38;
           ctx.beginPath();
           ctx.arc(px, py, radius, 0, Math.PI * 2);
-          ctx.fillStyle = "#1a1a2e";
+          ctx.fillStyle = "#1e1e30";
           ctx.fill();
           ctx.strokeStyle = npc.color;
           ctx.lineWidth = isSpeaking ? 3 : 2;
@@ -366,7 +453,7 @@ export function WorldCanvas({
 
         // Name label
         ctx.fillStyle = npc.color;
-        ctx.font = `bold ${Math.max(10, tileSize * 0.3)}px "SF Mono", "Fira Code", monospace`;
+        ctx.font = `600 ${Math.max(10, tileSize * 0.28)}px "Inter", -apple-system, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
         ctx.fillText(npc.name, px, feetY + 4);

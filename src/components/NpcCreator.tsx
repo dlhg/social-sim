@@ -11,12 +11,12 @@ interface NpcCreatorProps {
 const CATEGORY_ORDER: ItemCategory[] = ["food", "herb", "fish", "trinket", "craft", "book"];
 
 const CATEGORY_COLORS: Record<string, string> = {
-  food: "#ff9800",
-  herb: "#66bb6a",
-  fish: "#42a5f5",
-  trinket: "#ab47bc",
-  book: "#8d6e63",
-  craft: "#fdd835",
+  food: "#e0a84c",
+  herb: "#5cb87a",
+  fish: "#6ba4d4",
+  trinket: "#a876c4",
+  book: "#9e8878",
+  craft: "#e0c84c",
 };
 
 export function NpcCreator({

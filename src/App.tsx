@@ -9,7 +9,7 @@ import { NpcStore } from "./npc-store";
 import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
 import { DayCycle } from "./day-cycle";
-import type { NPC, BubbleData, FloaterData, ActionType, WaypointActivityId } from "./types";
+import type { NPC, BubbleData, FloaterData, ActionType, WaypointActivityId, DayPhase } from "./types";
 import { ACTIVITIES } from "./activities";
 import { pickInteraction, executeInteraction } from "./interactions";
 import type { NpcSnapshot, FeedItem } from "./components/SidePanel";
@@ -69,6 +69,7 @@ function App() {
   const worldRef = useRef<WorldSimulation | null>(null);
   const dayCycleRef = useRef<DayCycle | null>(null);
   const [dayLabel, setDayLabel] = useState("");
+  const [dayPhase, setDayPhase] = useState<DayPhase>("morning");
 
   useEffect(() => {
     setNpcs(storeRef.current.getAll());
@@ -505,6 +506,7 @@ function App() {
       language: languageRef.current,
       onPhaseChange: (state) => {
         setDayLabel(dayCycle.getLabel());
+        setDayPhase(state.phase);
         setFeed(prev => [...prev, {
           type: "activity",
           event: {
@@ -716,6 +718,7 @@ function App() {
             activeConversationPair={activeConversationPair}
             bubbles={bubbles}
             floaters={floaters}
+            dayPhase={dayPhase}
           />
         </div>
       </div>

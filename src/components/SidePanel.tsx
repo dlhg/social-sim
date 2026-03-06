@@ -24,13 +24,13 @@ const FILTER_LABELS: Record<FilterKey, string> = {
 };
 
 const FILTER_COLORS: Record<FilterKey, string> = {
-  chat: "#e0e0e0",
+  chat: "#e2e0ea",
   thought: "#b0a0cc",
-  gossip: "#ff9800",
-  eavesdrop: "#ab47bc",
-  dm: "#4caf50",
-  action: "#ff9800",
-  system: "#999",
+  gossip: "#e0a84c",
+  eavesdrop: "#a876c4",
+  dm: "#5cb87a",
+  action: "#e0a84c",
+  system: "#9896a8",
 };
 
 const ALL_FILTERS: FilterKey[] = ["chat", "thought", "gossip", "eavesdrop", "dm", "action", "system"];

@@ -1,3 +1,56 @@
+/* ── Design Tokens ─────────────────────────────── */
+
+:root {
+  /* Warm dark base palette */
+  --bg-deepest: #101118;
+  --bg-base: #161622;
+  --bg-surface: #1e1e30;
+  --bg-raised: #252538;
+  --bg-hover: #2e2e44;
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  /* Text */
+  --text-primary: #e2e0ea;
+  --text-secondary: #9896a8;
+  --text-muted: #6b6980;
+  --text-faint: #4a4860;
+
+  /* 4 Semantic accent colors */
+  --accent-life: #5cb87a;       /* go, spawn, positive, DM tools */
+  --accent-life-dim: rgba(92, 184, 122, 0.12);
+  --accent-caution: #e0a84c;    /* pause, gossip, warnings, actions */
+  --accent-caution-dim: rgba(224, 168, 76, 0.12);
+  --accent-danger: #d4616a;     /* stop, errors, hostile */
+  --accent-danger-dim: rgba(212, 97, 106, 0.12);
+  --accent-info: #6ba4d4;       /* triggers, system, neutral UI */
+  --accent-info-dim: rgba(107, 164, 212, 0.12);
+
+  /* Narrative-specific (feed/bubbles only) */
+  --color-thought: #b0a0cc;
+  --color-gossip: #e0a84c;
+  --color-eavesdrop: #a876c4;
+  --color-secret: #e0c84c;
+
+  /* Canvas */
+  --canvas-bg: #111720;
+  --canvas-grid-bg: #161e2a;
+
+  /* Typography */
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", "JetBrains Mono", monospace;
+
+  /* Motion */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 0.15s;
+  --duration-normal: 0.25s;
+  --duration-slow: 0.4s;
+}
+
 *,
 *::before,
 *::after {
@@ -13,8 +66,9 @@ html, body, #root {
 }
 
 body {
-  background: #0a0a12;
-  color: #e0e0e0;
+  background: var(--bg-deepest);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
