@@ -4,7 +4,7 @@ import type { NPC, ConversationMessage, ActivityEvent, EmotionalState, ActivityT
 export interface NpcSnapshot {
   timestamp: number;
   emotions: EmotionalState;
-  relationships: Record<string, number>;
+  relationships: Record<string, { regard: number; affection: number }>;
 }
 
 export type FeedItem =

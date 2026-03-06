@@ -243,7 +243,7 @@ function App() {
         const act = ACTIVITIES[activityId as WaypointActivityId];
         if (!act) return;
 
-        const rel = observer.relationships[actorId] ?? 0;
+        const rel = observer.relationships[actorId]?.regard ?? 0;
         const traits = observer.personalityTraits.map(t => t.toLowerCase());
         const emo = observer.emotionalState;
 

@@ -4,6 +4,16 @@ export interface EmotionalState {
   trust: number; // 0 to 1
   fear: number; // 0 to 1
   joy: number; // 0 to 1
+  sadness: number; // 0 to 1
+  curiosity: number; // 0 to 1
+  disgust: number; // 0 to 1
+  guilt: number; // 0 to 1
+}
+
+// ── Relationship ──────────────────────────────
+export interface RelationshipState {
+  regard: number; // -1 to 1 (general like/dislike)
+  affection: number; // 0 to 1 (romantic attraction)
 }
 
 // ── Actions ───────────────────────────────────
@@ -79,7 +89,7 @@ export interface NPC {
   personalityTraits: string[];
   coreDesires: string[];
   emotionalState: EmotionalState;
-  relationships: Record<string, number>; // NPC id -> -1 to 1
+  relationships: Record<string, RelationshipState>; // NPC id -> relationship state
   shortTermMemory: MemoryEntry[];
   longTermMemory: MemoryEntry[];
   currentGoal: string | null;
@@ -121,6 +131,7 @@ export interface LLMResponse {
   speech: string;
   emotion_delta: EmotionalState; // deltas, can be negative
   relationship_delta: number; // -1 to 1
+  affection_delta: number; // -0.1 to 0.1
   intent: string;
   conversation_end: boolean;
   mentioned_npcs?: MentionedNpc[];

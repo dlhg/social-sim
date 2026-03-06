@@ -13,8 +13,9 @@ const CONFLICT_PREAMBLE = `IMPORTANT BEHAVIORAL RULES:
 const RESPONSE_JSON_SCHEMA = `- Your response MUST be a single JSON object with exactly these fields:
 {
   "speech": "what you say out loud",
-  "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0 },
+  "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0, "sadness": 0, "curiosity": 0, "disgust": 0, "guilt": 0 },
   "relationship_delta": 0,
+  "affection_delta": 0,
   "intent": "brief description of your goal in saying this",
   "conversation_end": false,
   "mentioned_npcs": [],
@@ -24,8 +25,9 @@ const RESPONSE_JSON_SCHEMA = `- Your response MUST be a single JSON object with 
 }
 
 RULES FOR DELTAS:
-- emotion_delta values range from -0.2 to +0.2 (small shifts per turn)
-- relationship_delta ranges from -0.1 to +0.1
+- emotion_delta values range from -0.2 to +0.2 (small shifts per turn). Emotions: anger, trust, fear, joy, sadness, curiosity, disgust, guilt
+- relationship_delta ranges from -0.1 to +0.1 (general regard — how much you like/dislike them)
+- affection_delta ranges from -0.1 to +0.1 (romantic/deep attraction — set this if you feel a romantic pull, warmth, or infatuation toward this person. Leave at 0 if feelings are purely platonic)
 - Set conversation_end to true only if you want to end the conversation
 - mentioned_npcs is optional. Only include if you talk about someone not in this conversation. Format: [{"npc_id": "id", "sentiment": 0.3, "what_was_said": "brief summary"}]
 - secret_revealed: set to the exact text of a secret you're revealing, or null
@@ -62,7 +64,9 @@ export function buildSystemPrompt(
   maxTurns: number,
   ctx: PromptContext = {}
 ): string {
-  const relationship = speaker.relationships[listener.id] ?? 0;
+  const relState = speaker.relationships[listener.id];
+  const relationship = relState?.regard ?? 0;
+  const affection = relState?.affection ?? 0;
   const relLabel = relationshipLabel(relationship);
   const emotionSummary = describeEmotions(speaker.emotionalState);
 
@@ -170,7 +174,7 @@ CURRENT GOAL: ${speaker.currentGoal ?? "none"}
 ${secretsBlock}${inventoryBlock}
 
 You are talking to ${listener.name}.
-YOUR RELATIONSHIP WITH ${listener.name}: ${relLabel} (${relationship.toFixed(2)})
+YOUR RELATIONSHIP WITH ${listener.name}: ${relLabel} (regard: ${relationship.toFixed(2)})${affection > 0.15 ? `\nROMANTIC FEELINGS: ${describeAffection(affection)}` : ""}
 ${trajectoryBlock}
 ${locationBlock}
 ${timeBlock}
@@ -226,8 +230,9 @@ export function buildConversationMessages(
     if (msg.npcId === speaker.id) {
       const historyObj: Record<string, unknown> = {
         speech: msg.text,
-        emotion_delta: { anger: 0, trust: 0, fear: 0, joy: 0 },
+        emotion_delta: { anger: 0, trust: 0, fear: 0, joy: 0, sadness: 0, curiosity: 0, disgust: 0, guilt: 0 },
         relationship_delta: 0,
+        affection_delta: 0,
         intent: msg.intent || "",
         conversation_end: false,
         action: msg.rawResponse?.action ?? null,
@@ -302,7 +307,8 @@ You MUST write ALL text in ${language}. Never use any other language.`,
 // ── Action guidance ──────────────────────────────
 
 function buildActionGuidance(speaker: NPC, listener: NPC): string {
-  const rel = speaker.relationships[listener.id] ?? 0;
+  const rel = speaker.relationships[listener.id]?.regard ?? 0;
+  const aff = speaker.relationships[listener.id]?.affection ?? 0;
   const emo = speaker.emotionalState;
   const hints: string[] = [];
 
@@ -317,6 +323,15 @@ function buildActionGuidance(speaker: NPC, listener: NPC): string {
   }
   if (rel > 0.3 && emo.trust > 0.5) {
     hints.push("You trust this person. You could propose a conspiracy against someone you both dislike.");
+  }
+  if (aff > 0.4) {
+    hints.push("You have romantic feelings for this person. You might flirt, be extra attentive, or give a meaningful gift.");
+  }
+  if (emo.guilt > 0.5 && rel > -0.2) {
+    hints.push("You feel guilty. You might apologize, confess something, or try to make amends.");
+  }
+  if (emo.disgust > 0.5) {
+    hints.push("You feel revulsion. You might give a cold shoulder, make a cutting judgment, or storm off.");
   }
   if (speaker.personalityTraits.some(t =>
     ["calculating", "two-faced", "manipulative", "charming"].includes(t.toLowerCase())
@@ -362,7 +377,43 @@ function describeEmotion(axis: string, value: number): string | null {
     if (value <= 0.3) return "glum";
     return null;
   }
+  if (axis === "sadness") {
+    if (value >= 0.8) return "grief-stricken";
+    if (value >= 0.6) return "deeply sad";
+    if (value >= 0.4) return "melancholy";
+    if (value >= 0.25) return "wistful";
+    return null;
+  }
+  if (axis === "curiosity") {
+    if (value >= 0.8) return "intensely curious";
+    if (value >= 0.6) return "curious";
+    if (value <= 0.1) return "apathetic";
+    if (value <= 0.2) return "disengaged";
+    return null;
+  }
+  if (axis === "disgust") {
+    if (value >= 0.8) return "revolted";
+    if (value >= 0.6) return "disgusted";
+    if (value >= 0.4) return "repulsed";
+    if (value >= 0.25) return "put off";
+    return null;
+  }
+  if (axis === "guilt") {
+    if (value >= 0.8) return "wracked with guilt";
+    if (value >= 0.6) return "very guilty";
+    if (value >= 0.4) return "guilty";
+    if (value >= 0.25) return "uneasy conscience";
+    return null;
+  }
   return null;
+}
+
+function describeAffection(value: number): string {
+  if (value >= 0.8) return "infatuated — you can barely think straight around them";
+  if (value >= 0.6) return "smitten — you feel a strong romantic pull";
+  if (value >= 0.4) return "fond — you feel warmth and attraction";
+  if (value >= 0.2) return "intrigued — there's a spark of something";
+  return "neutral";
 }
 
 function describeEmotions(state: EmotionalState): string {
@@ -390,7 +441,7 @@ function bucketEmotion(v: number): string {
 }
 
 function emotionBehavioralGuidance(state: EmotionalState): string[] {
-  const key = `${bucketEmotion(state.anger)}_${bucketEmotion(state.trust)}_${bucketEmotion(state.fear)}_${bucketEmotion(state.joy)}`;
+  const key = `${bucketEmotion(state.anger)}_${bucketEmotion(state.trust)}_${bucketEmotion(state.fear)}_${bucketEmotion(state.joy)}_${bucketEmotion(state.sadness)}_${bucketEmotion(state.curiosity)}_${bucketEmotion(state.disgust)}_${bucketEmotion(state.guilt)}`;
   const cached = emotionGuidanceCache.get(key);
   if (cached) return cached;
 
@@ -460,6 +511,57 @@ function emotionBehavioralGuidance(state: EmotionalState): string[] {
     );
   }
 
+  // Sadness
+  if (state.sadness >= 0.7) {
+    guidance.push(
+      "You are deeply sad. You may withdraw, speak quietly, or struggle to engage. " +
+        "You might seek comfort or retreat into silence. Sadness colors everything."
+    );
+  } else if (state.sadness >= 0.4) {
+    guidance.push(
+      "You feel melancholy. Be reflective, wistful, perhaps a little distant. " +
+        "You might bring up losses or missed opportunities."
+    );
+  }
+
+  // Curiosity
+  if (state.curiosity >= 0.7) {
+    guidance.push(
+      "You are intensely curious. Ask probing questions, dig deeper into topics, " +
+        "and pursue threads others might drop. You want to understand."
+    );
+  } else if (state.curiosity <= 0.15) {
+    guidance.push(
+      "You are apathetic and disengaged. Nothing interests you right now. " +
+        "Give short, uninterested answers. Don't pursue topics."
+    );
+  }
+
+  // Disgust
+  if (state.disgust >= 0.6) {
+    guidance.push(
+      "You feel moral revulsion. Be judgmental, dismissive, or cutting. " +
+        "You may express contempt through cold rejection rather than heated anger."
+    );
+  } else if (state.disgust >= 0.4) {
+    guidance.push(
+      "You feel put off. Show subtle distaste — wrinkled nose, clipped words, avoidance of certain topics."
+    );
+  }
+
+  // Guilt
+  if (state.guilt >= 0.6) {
+    guidance.push(
+      "You feel deeply guilty. You may want to confess, apologize, or make amends. " +
+        "You might avoid eye contact, overexplain yourself, or be unusually agreeable to compensate."
+    );
+  } else if (state.guilt >= 0.4) {
+    guidance.push(
+      "Your conscience is bothering you. You might deflect, change the subject when certain topics come up, " +
+        "or be overly generous to cover your discomfort."
+    );
+  }
+
   // Compound emotional states
   if (state.anger >= 0.4 && state.fear >= 0.4) {
     guidance.push(
@@ -477,6 +579,23 @@ function emotionBehavioralGuidance(state: EmotionalState): string[] {
     guidance.push(
       "You are anxious and distrustful. You see threats everywhere. " +
         "Read between the lines of everything they say."
+    );
+  }
+  if (state.sadness >= 0.4 && state.guilt >= 0.4) {
+    guidance.push(
+      "You feel sad and guilty — a heavy combination. You may spiral into self-blame " +
+        "or seek reassurance that you haven't ruined things."
+    );
+  }
+  if (state.disgust >= 0.4 && state.anger >= 0.4) {
+    guidance.push(
+      "You feel both disgusted and angry — cold fury. You don't just dislike what's happening, " +
+        "you find it morally repugnant. Be scathing."
+    );
+  }
+  if (state.curiosity >= 0.5 && state.fear >= 0.4) {
+    guidance.push(
+      "You are curious despite being afraid. You want to investigate even though it scares you."
     );
   }
 

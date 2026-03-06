@@ -140,7 +140,7 @@ export class DayCycle {
     promiser: NPC,
     promisee: NPC,
   ): Promise<{ text: string; kept: boolean } | null> {
-    const rel = promiser.relationships[promisee.id] ?? 0;
+    const rel = promiser.relationships[promisee.id]?.regard ?? 0;
 
     // Check if a third party is involved (from conspire actions)
     const thirdPartyIds = this.extractThirdPartyIds(promise.text);
@@ -259,8 +259,8 @@ You MUST write ALL text in ${this.language}. Never use any other language.`,
 
     // Emotional effects
     const emotionDelta: EmotionalState = kept
-      ? { anger: -0.03, trust: 0.04, fear: -0.02, joy: 0.05 }
-      : { anger: 0.06, trust: -0.05, fear: 0.02, joy: -0.04 };
+      ? { anger: -0.03, trust: 0.04, fear: -0.02, joy: 0.05, sadness: -0.02, curiosity: 0, disgust: 0, guilt: -0.02 }
+      : { anger: 0.06, trust: -0.05, fear: 0.02, joy: -0.04, sadness: 0.04, curiosity: 0, disgust: 0, guilt: 0.03 };
 
     this.store.applyEmotionDelta(promiser.id, emotionDelta);
     this.store.applyEmotionDelta(promisee.id, emotionDelta);
@@ -274,7 +274,7 @@ You MUST write ALL text in ${this.language}. Never use any other language.`,
 }
 
 function moodSummary(npc: NPC): string {
-  const { anger, trust, fear, joy } = npc.emotionalState;
+  const { anger, trust, fear, joy, sadness, curiosity, disgust, guilt } = npc.emotionalState;
   const parts: string[] = [];
   if (joy > 0.6) parts.push("happy");
   else if (joy < 0.3) parts.push("unhappy");
@@ -282,5 +282,9 @@ function moodSummary(npc: NPC): string {
   if (fear > 0.4) parts.push("anxious");
   if (trust > 0.6) parts.push("trusting");
   else if (trust < 0.3) parts.push("distrustful");
+  if (sadness > 0.5) parts.push("sad");
+  if (curiosity > 0.6) parts.push("curious");
+  if (disgust > 0.4) parts.push("repulsed");
+  if (guilt > 0.4) parts.push("guilty");
   return parts.length > 0 ? parts.join(", ") : "calm";
 }

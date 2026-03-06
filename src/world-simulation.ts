@@ -303,7 +303,7 @@ export class WorldSimulation {
           Math.abs(otherSpatial.position.x - wp.position.x) +
           Math.abs(otherSpatial.position.y - wp.position.y);
         if (distToWp <= 3) {
-          const rel = npcData.relationships[otherSpatial.npcId] ?? 0;
+          const rel = npcData.relationships[otherSpatial.npcId]?.regard ?? 0;
           const isAggressive = npcData.personalityTraits.some((t) =>
             ["competitive", "aggressive", "confrontational", "contrarian"].includes(
               t.toLowerCase()
@@ -614,6 +614,10 @@ export class WorldSimulation {
         trust: actDef.emotionEffect.trust ?? 0,
         fear: actDef.emotionEffect.fear ?? 0,
         joy: actDef.emotionEffect.joy ?? 0,
+        sadness: actDef.emotionEffect.sadness ?? 0,
+        curiosity: actDef.emotionEffect.curiosity ?? 0,
+        disgust: actDef.emotionEffect.disgust ?? 0,
+        guilt: actDef.emotionEffect.guilt ?? 0,
       };
       this.npcStore.applyEmotionDelta(npc.npcId, effect);
     }
@@ -727,9 +731,10 @@ export class WorldSimulation {
   private findBestFriend(npc: import("./types").NPC): string | null {
     let best: string | null = null;
     let bestRel = 0.2; // minimum threshold
-    for (const [otherId, rel] of Object.entries(npc.relationships)) {
-      if (rel > bestRel && this.npcs.has(otherId)) {
-        bestRel = rel;
+    for (const [otherId, relState] of Object.entries(npc.relationships)) {
+      const regard = relState?.regard ?? 0;
+      if (regard > bestRel && this.npcs.has(otherId)) {
+        bestRel = regard;
         best = otherId;
       }
     }

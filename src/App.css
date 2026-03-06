@@ -697,6 +697,13 @@
   letter-spacing: 0.5px;
 }
 
+.rel-affection {
+  color: #f48fb1;
+  font-size: 11px;
+  margin-left: 4px;
+  letter-spacing: 1px;
+}
+
 /* ── Memory List ────────────────────────────── */
 
 .memory-list {

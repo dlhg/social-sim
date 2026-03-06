@@ -1,4 +1,4 @@
-import type { NPC, EmotionalState, MemoryEntry, NpcPromise, BehavioralOverride, InventoryItem, ItemCategory } from "./types";
+import type { NPC, EmotionalState, MemoryEntry, NpcPromise, BehavioralOverride, InventoryItem, ItemCategory, RelationshipState } from "./types";
 
 type Listener = () => void;
 
@@ -51,10 +51,12 @@ export class NpcStore {
 
   // ── Mutations ────────────────────────────────
 
+  static readonly EMOTION_KEYS = ["anger", "trust", "fear", "joy", "sadness", "curiosity", "disgust", "guilt"] as const;
+
   applyEmotionDelta(npcId: string, delta: EmotionalState): void {
     const npc = this.npcs.get(npcId);
     if (!npc) return;
-    for (const key of ["anger", "trust", "fear", "joy"] as const) {
+    for (const key of NpcStore.EMOTION_KEYS) {
       npc.emotionalState[key] = clamp(
         npc.emotionalState[key] + delta[key],
         0,
@@ -67,13 +69,30 @@ export class NpcStore {
   applyRelationshipDelta(
     npcId: string,
     targetId: string,
-    delta: number
+    delta: number,
+    affectionDelta = 0
   ): void {
     const npc = this.npcs.get(npcId);
     if (!npc) return;
-    const current = npc.relationships[targetId] ?? 0;
-    npc.relationships[targetId] = clamp(current + delta, -1, 1);
+    if (!npc.relationships[targetId]) {
+      npc.relationships[targetId] = { regard: 0, affection: 0 };
+    }
+    const rel = npc.relationships[targetId];
+    rel.regard = clamp(rel.regard + delta, -1, 1);
+    rel.affection = clamp(rel.affection + affectionDelta, 0, 1);
     this.notify();
+  }
+
+  /** Get the regard value for a relationship (convenience helper) */
+  getRegard(npcId: string, targetId: string): number {
+    const npc = this.npcs.get(npcId);
+    return npc?.relationships[targetId]?.regard ?? 0;
+  }
+
+  /** Get the affection value for a relationship */
+  getAffection(npcId: string, targetId: string): number {
+    const npc = this.npcs.get(npcId);
+    return npc?.relationships[targetId]?.affection ?? 0;
   }
 
   addMemory(
@@ -192,12 +211,17 @@ export class NpcStore {
 
   // ── Decay ───────────────────────────────────
 
-  /** Pull all emotions toward a baseline (0.3) by the given rate. Call after each conversation. */
+  private static readonly EMOTION_BASELINES: Record<string, number> = {
+    anger: 0.3, trust: 0.3, fear: 0.3, joy: 0.3,
+    sadness: 0.15, curiosity: 0.4, disgust: 0.1, guilt: 0.1,
+  };
+
+  /** Pull all emotions toward their baselines by the given rate. Call after each conversation. */
   decayEmotions(npcId: string, rate = 0.15): void {
     const npc = this.npcs.get(npcId);
     if (!npc) return;
-    const baseline = 0.3;
-    for (const key of ["anger", "trust", "fear", "joy"] as const) {
+    for (const key of NpcStore.EMOTION_KEYS) {
+      const baseline = NpcStore.EMOTION_BASELINES[key] ?? 0.3;
       npc.emotionalState[key] += (baseline - npc.emotionalState[key]) * rate;
     }
     this.notify();
@@ -223,7 +247,7 @@ export class NpcStore {
     const key = [npcAId, npcBId].sort().join(":");
     const npcA = this.npcs.get(npcAId);
     if (!npcA) return;
-    const value = npcA.relationships[npcBId] ?? 0;
+    const value = npcA.relationships[npcBId]?.regard ?? 0;
     if (!this.relationshipHistory.has(key)) {
       this.relationshipHistory.set(key, []);
     }

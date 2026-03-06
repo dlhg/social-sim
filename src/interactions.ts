@@ -59,7 +59,7 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
       return traits.some(t => ["kind", "charming", "optimistic", "enthusiastic"].includes(t));
     },
     weight: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return rel > -0.2 ? 2 : 0.3;
     },
   },
@@ -96,11 +96,11 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
     importance: 0.6,
     requiresItem: "trinket",
     condition: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return rel > 0;
     },
     weight: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return rel > 0.3 ? 4 : 2;
     },
   },
@@ -119,7 +119,7 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
     requiresItem: "craft",
     condition: () => true,
     weight: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return rel > -0.1 ? 2 : 0.5;
     },
   },
@@ -141,7 +141,7 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
       return traits.some(t => ["kind", "charming", "optimistic"].includes(t));
     },
     weight: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return rel > -0.1 ? 2 : 0.5;
     },
   },
@@ -162,7 +162,7 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
       return traits.some(t => ["competitive", "aggressive", "confrontational", "confident"].includes(t));
     },
     weight: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       // More likely with rivals or neutral, less with close friends
       if (rel < -0.3) return 3;
       if (rel < 0.2) return 2;
@@ -202,11 +202,11 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
     emotionTarget: { joy: -0.04, trust: -0.04 },
     importance: 0.4,
     condition: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return rel < -0.2;
     },
     weight: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return Math.max(0, -rel * 4);
     },
   },
@@ -227,7 +227,7 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
       return traits.some(t => ["charming", "philosophical", "tangential", "enthusiastic"].includes(t));
     },
     weight: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return rel > 0 ? 2 : 0.8;
     },
   },
@@ -244,11 +244,11 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
     emotionTarget: { trust: 0.01 },
     importance: 0.4,
     condition: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return rel > 0;
     },
     weight: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return Math.max(0, rel * 3);
     },
   },
@@ -265,7 +265,7 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
     emotionTarget: { joy: 0.05, trust: 0.02 },
     importance: 0.3,
     condition: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return rel > -0.1;
     },
     weight: (actor, _target) => {
@@ -289,14 +289,14 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
     importance: 0.5,
     condition: (actor, target) => {
       const traits = actor.personalityTraits.map(t => t.toLowerCase());
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return (
         traits.some(t => ["sardonic", "aggressive", "confrontational", "competitive"].includes(t)) &&
         rel < 0.2
       );
     },
     weight: (actor, target) => {
-      const rel = actor.relationships[target.id] ?? 0;
+      const rel = actor.relationships[target.id]?.regard ?? 0;
       return rel < -0.2 ? 3 : 1;
     },
   },
@@ -405,6 +405,10 @@ export function executeInteraction(
     trust: partial.trust ?? 0,
     fear: partial.fear ?? 0,
     joy: partial.joy ?? 0,
+    sadness: partial.sadness ?? 0,
+    curiosity: partial.curiosity ?? 0,
+    disgust: partial.disgust ?? 0,
+    guilt: partial.guilt ?? 0,
   });
   store.applyEmotionDelta(actorId, toEmo(def.emotionActor));
   store.applyEmotionDelta(targetId, toEmo(def.emotionTarget));

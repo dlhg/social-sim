@@ -35,6 +35,10 @@ const EMOTION_COLORS: Record<string, string> = {
   trust: "#6ba4d4",
   fear: "#a876c4",
   joy: "#e0c84c",
+  sadness: "#90a4ae",
+  curiosity: "#4fc3f7",
+  disgust: "#a1887f",
+  guilt: "#b39ddb",
 };
 
 function relationshipLabel(value: number): string {
@@ -180,7 +184,7 @@ export function CharacterViewer({
           <div className="npc-section">
             <div className="section-label">Emotional State</div>
             <div className="emotion-bars">
-              {(["anger", "trust", "fear", "joy"] as const).map((emotion) => {
+              {(["anger", "trust", "fear", "joy", "sadness", "curiosity", "disgust", "guilt"] as const).map((emotion) => {
                 const value = selected.emotionalState[emotion];
                 const historyData = history.map((s) => s.emotions[emotion]);
                 return (
@@ -211,11 +215,13 @@ export function CharacterViewer({
               {Object.entries(selected.relationships).length === 0 && (
                 <div className="empty-state">No relationships yet</div>
               )}
-              {Object.entries(selected.relationships).map(([otherId, value]) => {
+              {Object.entries(selected.relationships).map(([otherId, relState]) => {
                 const other = npcMap[otherId];
                 if (!other) return null;
-                const pct = ((value + 1) / 2) * 100;
-                const barColor = value >= 0 ? "#5cb87a" : "#d4616a";
+                const regard = relState?.regard ?? 0;
+                const affection = relState?.affection ?? 0;
+                const pct = ((regard + 1) / 2) * 100;
+                const barColor = regard >= 0 ? "#5cb87a" : "#d4616a";
                 return (
                   <div key={otherId} className="relationship-row">
                     <span className="rel-npc">
@@ -226,14 +232,19 @@ export function CharacterViewer({
                       <div
                         className="rel-bar-fill"
                         style={{
-                          left: value >= 0 ? "50%" : `${pct}%`,
-                          width: `${Math.abs(value) * 50}%`,
+                          left: regard >= 0 ? "50%" : `${pct}%`,
+                          width: `${Math.abs(regard) * 50}%`,
                           background: barColor,
                         }}
                       />
                     </div>
-                    <span className="rel-value">{value.toFixed(2)}</span>
-                    <span className="rel-label">{relationshipLabel(value)}</span>
+                    <span className="rel-value">{regard.toFixed(2)}</span>
+                    <span className="rel-label">{relationshipLabel(regard)}</span>
+                    {affection > 0.1 && (
+                      <span className="rel-affection" title={`Affection: ${affection.toFixed(2)}`}>
+                        {"♥".repeat(Math.min(3, Math.ceil(affection * 3)))}
+                      </span>
+                    )}
                   </div>
                 );
               })}

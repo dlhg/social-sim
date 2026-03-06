@@ -85,9 +85,14 @@ function validate(obj: unknown): LLMResponse {
     trust: clampDelta(toNumber(emotions.trust, 0)),
     fear: clampDelta(toNumber(emotions.fear, 0)),
     joy: clampDelta(toNumber(emotions.joy, 0)),
+    sadness: clampDelta(toNumber(emotions.sadness, 0)),
+    curiosity: clampDelta(toNumber(emotions.curiosity, 0)),
+    disgust: clampDelta(toNumber(emotions.disgust, 0)),
+    guilt: clampDelta(toNumber(emotions.guilt, 0)),
   };
 
   const rd = clampRelDelta(toNumber(o.relationship_delta, 0));
+  const ad = clampRelDelta(toNumber(o.affection_delta, 0));
   const intent = typeof o.intent === "string" ? o.intent : "";
   const conversationEnd =
     typeof o.conversation_end === "boolean" ? o.conversation_end : false;
@@ -142,6 +147,7 @@ function validate(obj: unknown): LLMResponse {
     speech: o.speech as string,
     emotion_delta: emotionDelta,
     relationship_delta: rd,
+    affection_delta: ad,
     intent,
     conversation_end: conversationEnd,
     mentioned_npcs: mentionedNpcs,

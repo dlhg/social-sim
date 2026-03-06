@@ -382,21 +382,27 @@ export class ConversationManager {
     this.store.applyRelationshipDelta(
       speaker.id,
       listener.id,
-      response.relationship_delta
+      response.relationship_delta,
+      response.affection_delta
     );
 
     // Listener gets dampened mirror of relationship delta
     this.store.applyRelationshipDelta(
       listener.id,
       speaker.id,
-      response.relationship_delta * 0.5
+      response.relationship_delta * 0.5,
+      response.affection_delta * 0.3
     );
 
     const emotionMagnitude =
       Math.abs(response.emotion_delta.anger) +
       Math.abs(response.emotion_delta.trust) +
       Math.abs(response.emotion_delta.fear) +
-      Math.abs(response.emotion_delta.joy);
+      Math.abs(response.emotion_delta.joy) +
+      Math.abs(response.emotion_delta.sadness) +
+      Math.abs(response.emotion_delta.curiosity) +
+      Math.abs(response.emotion_delta.disgust) +
+      Math.abs(response.emotion_delta.guilt);
 
     const speakerMemory = `I said to ${listener.name}: "${response.speech}"`;
     const listenerMemory = `${speaker.name} said to me: "${response.speech}"`;
@@ -615,8 +621,8 @@ export class ConversationManager {
 
     this.store.applyRelationshipDelta(speaker.id, listener.id, 0.15);
     this.store.applyRelationshipDelta(listener.id, speaker.id, 0.15);
-    this.store.applyEmotionDelta(speaker.id, { anger: 0, trust: 0.05, fear: 0, joy: 0.1 });
-    this.store.applyEmotionDelta(listener.id, { anger: 0, trust: 0.05, fear: 0, joy: 0.1 });
+    this.store.applyEmotionDelta(speaker.id, { anger: 0, trust: 0.05, fear: 0, joy: 0.1, sadness: 0, curiosity: 0, disgust: 0, guilt: 0 });
+    this.store.applyEmotionDelta(listener.id, { anger: 0, trust: 0.05, fear: 0, joy: 0.1, sadness: 0, curiosity: 0, disgust: 0, guilt: 0 });
 
     this.store.addMemory(speaker.id, {
       text: `I gave ${listener.name} a gift: ${giftDesc}`,
@@ -647,8 +653,8 @@ export class ConversationManager {
 
     this.store.applyRelationshipDelta(speaker.id, listener.id, -0.1);
     this.store.applyRelationshipDelta(listener.id, speaker.id, -0.15);
-    this.store.applyEmotionDelta(listener.id, { anger: 0.1, trust: -0.1, fear: 0, joy: -0.05 });
-    this.store.applyEmotionDelta(speaker.id, { anger: 0, trust: 0, fear: 0, joy: 0.05 });
+    this.store.applyEmotionDelta(listener.id, { anger: 0.1, trust: -0.1, fear: 0, joy: -0.05, sadness: 0.05, curiosity: 0, disgust: 0.03, guilt: 0 });
+    this.store.applyEmotionDelta(speaker.id, { anger: 0, trust: 0, fear: 0, joy: 0.05, sadness: 0, curiosity: 0, disgust: 0, guilt: 0 });
 
     this.store.addMemory(speaker.id, {
       text: `I publicly mocked ${listener.name}: ${mockDetail}`,
@@ -677,8 +683,8 @@ export class ConversationManager {
   private processStormOff(speaker: NPC, listener: NPC): void {
     this.store.applyRelationshipDelta(speaker.id, listener.id, -0.1);
     this.store.applyRelationshipDelta(listener.id, speaker.id, -0.05);
-    this.store.applyEmotionDelta(speaker.id, { anger: 0.05, trust: -0.05, fear: 0, joy: -0.05 });
-    this.store.applyEmotionDelta(listener.id, { anger: 0.05, trust: -0.05, fear: 0, joy: -0.05 });
+    this.store.applyEmotionDelta(speaker.id, { anger: 0.05, trust: -0.05, fear: 0, joy: -0.05, sadness: 0, curiosity: 0, disgust: 0.03, guilt: 0 });
+    this.store.applyEmotionDelta(listener.id, { anger: 0.05, trust: -0.05, fear: 0, joy: -0.05, sadness: 0.03, curiosity: 0, disgust: 0, guilt: 0 });
 
     this.store.setBehavioralOverride(speaker.id, {
       mode: "avoid",
@@ -716,8 +722,8 @@ export class ConversationManager {
 
     this.store.applyRelationshipDelta(speaker.id, listener.id, 0.15);
     this.store.applyRelationshipDelta(listener.id, speaker.id, 0.15);
-    this.store.applyEmotionDelta(speaker.id, { anger: -0.05, trust: 0.1, fear: -0.05, joy: 0.1 });
-    this.store.applyEmotionDelta(listener.id, { anger: -0.05, trust: 0.1, fear: -0.05, joy: 0.1 });
+    this.store.applyEmotionDelta(speaker.id, { anger: -0.05, trust: 0.1, fear: -0.05, joy: 0.1, sadness: -0.05, curiosity: 0, disgust: 0, guilt: 0 });
+    this.store.applyEmotionDelta(listener.id, { anger: -0.05, trust: 0.1, fear: -0.05, joy: 0.1, sadness: -0.05, curiosity: 0, disgust: 0, guilt: 0 });
 
     this.store.addMemory(speaker.id, {
       text: `I embraced ${listener.name}: ${desc}`,
@@ -748,7 +754,7 @@ export class ConversationManager {
 
     this.store.applyRelationshipDelta(listener.id, speaker.id, -0.15);
     this.store.applyRelationshipDelta(speaker.id, listener.id, -0.05);
-    this.store.applyEmotionDelta(listener.id, { anger: 0.05, trust: -0.1, fear: 0.15, joy: -0.05 });
+    this.store.applyEmotionDelta(listener.id, { anger: 0.05, trust: -0.1, fear: 0.15, joy: -0.05, sadness: 0, curiosity: 0, disgust: 0, guilt: 0 });
 
     // If listener is already fearful, trigger avoid behavior
     const listenerState = this.store.get(listener.id);
@@ -878,19 +884,19 @@ export class ConversationManager {
       if (!witness) continue;
 
       let memoryText: string;
-      let emotionDelta = { anger: 0, trust: 0, fear: 0, joy: 0 };
+      let emotionDelta = { anger: 0, trust: 0, fear: 0, joy: 0, sadness: 0, curiosity: 0, disgust: 0, guilt: 0 };
       let sentiment = 0;
 
       switch (actionType) {
         case "give_gift": {
           memoryText = `I saw ${speaker.name} give ${listener.name} a gift: ${detail}`;
           sentiment = 0.2;
-          const witRel = witness.relationships[speaker.id] ?? 0;
+          const witRel = witness.relationships[speaker.id]?.regard ?? 0;
           if (witRel > 0.3) {
-            emotionDelta = { anger: 0.03, trust: 0, fear: 0, joy: -0.02 };
+            emotionDelta = { anger: 0.03, trust: 0, fear: 0, joy: -0.02, sadness: 0.02, curiosity: 0, disgust: 0, guilt: 0 };
             sentiment = -0.1; // mild jealousy
           } else {
-            emotionDelta = { anger: 0, trust: 0, fear: 0, joy: 0.02 };
+            emotionDelta = { anger: 0, trust: 0, fear: 0, joy: 0.02, sadness: 0, curiosity: 0, disgust: 0, guilt: 0 };
           }
           break;
         }
@@ -898,30 +904,30 @@ export class ConversationManager {
           memoryText = `I saw ${speaker.name} mock ${listener.name}: ${detail}`;
           sentiment = -0.3;
           this.store.applyRelationshipDelta(witnessId, speaker.id, -0.05);
-          const witRelToVictim = witness.relationships[listener.id] ?? 0;
+          const witRelToVictim = witness.relationships[listener.id]?.regard ?? 0;
           if (witRelToVictim > -0.1) {
             this.store.applyRelationshipDelta(witnessId, listener.id, 0.03);
           }
-          emotionDelta = { anger: 0.03, trust: -0.02, fear: 0.02, joy: -0.02 };
+          emotionDelta = { anger: 0.03, trust: -0.02, fear: 0.02, joy: -0.02, sadness: 0.02, curiosity: 0, disgust: 0.02, guilt: 0 };
           break;
         }
         case "storm_off":
           memoryText = `I saw ${speaker.name} storm off from ${listener.name}`;
           sentiment = -0.2;
-          emotionDelta = { anger: 0, trust: 0, fear: 0.03, joy: -0.02 };
+          emotionDelta = { anger: 0, trust: 0, fear: 0.03, joy: -0.02, sadness: 0, curiosity: 0.02, disgust: 0, guilt: 0 };
           break;
 
         case "embrace": {
           memoryText = `I saw ${speaker.name} embrace ${listener.name}`;
           sentiment = 0.3;
-          const witRelS = witness.relationships[speaker.id] ?? 0;
-          const witRelL = witness.relationships[listener.id] ?? 0;
+          const witRelS = witness.relationships[speaker.id]?.regard ?? 0;
+          const witRelL = witness.relationships[listener.id]?.regard ?? 0;
           if (witRelS > 0.4 || witRelL > 0.4) {
-            emotionDelta = { anger: 0.03, trust: -0.02, fear: 0, joy: -0.03 };
+            emotionDelta = { anger: 0.03, trust: -0.02, fear: 0, joy: -0.03, sadness: 0.03, curiosity: 0, disgust: 0, guilt: 0 };
             sentiment = -0.15; // jealousy
             memoryText += " — I felt a pang of jealousy";
           } else {
-            emotionDelta = { anger: 0, trust: 0, fear: 0, joy: 0.02 };
+            emotionDelta = { anger: 0, trust: 0, fear: 0, joy: 0.02, sadness: 0, curiosity: 0, disgust: 0, guilt: 0 };
           }
           break;
         }
@@ -929,7 +935,7 @@ export class ConversationManager {
           memoryText = `I saw ${speaker.name} threaten ${listener.name}: ${detail}`;
           sentiment = -0.4;
           this.store.applyRelationshipDelta(witnessId, speaker.id, -0.08);
-          emotionDelta = { anger: 0.02, trust: -0.05, fear: 0.08, joy: -0.03 };
+          emotionDelta = { anger: 0.02, trust: -0.05, fear: 0.08, joy: -0.03, sadness: 0, curiosity: 0, disgust: 0.02, guilt: 0 };
           break;
 
         default:
@@ -981,7 +987,7 @@ export class ConversationManager {
     }
 
     // Very positive conversation → seek to stay near each other
-    const relAB = npcA.relationships[npcBId] ?? 0;
+    const relAB = npcA.relationships[npcBId]?.regard ?? 0;
     if (relAB > 0.6 && npcA.emotionalState.joy > 0.6 && !npcA.behavioralOverride) {
       this.store.setBehavioralOverride(npcAId, {
         mode: "seek",
@@ -991,7 +997,7 @@ export class ConversationManager {
       });
     }
 
-    const relBA = npcB.relationships[npcAId] ?? 0;
+    const relBA = npcB.relationships[npcAId]?.regard ?? 0;
     if (relBA > 0.6 && npcB.emotionalState.joy > 0.6 && !npcB.behavioralOverride) {
       this.store.setBehavioralOverride(npcBId, {
         mode: "seek",
@@ -1005,10 +1011,14 @@ export class ConversationManager {
   // ── Rich social logging ──────────────────────
 
   private static readonly EMOTION_COLORS: Record<string, { pos: string; neg: string }> = {
-    joy:   { pos: "#ffd54f", neg: "#b56576" },
-    trust: { pos: "#66bb6a", neg: "#7a8ba0" },
-    anger: { pos: "#ff7043", neg: "#4dd0e1" },
-    fear:  { pos: "#ce93d8", neg: "#81d4fa" },
+    joy:       { pos: "#ffd54f", neg: "#b56576" },
+    trust:     { pos: "#66bb6a", neg: "#7a8ba0" },
+    anger:     { pos: "#ff7043", neg: "#4dd0e1" },
+    fear:      { pos: "#ce93d8", neg: "#81d4fa" },
+    sadness:   { pos: "#90a4ae", neg: "#ffcc80" },
+    curiosity: { pos: "#4fc3f7", neg: "#bcaaa4" },
+    disgust:   { pos: "#a1887f", neg: "#c5e1a5" },
+    guilt:     { pos: "#b39ddb", neg: "#80cbc4" },
   };
 
   private logEmotionShifts(speaker: NPC, listener: NPC, response: LLMResponse): void {
@@ -1020,6 +1030,10 @@ export class ConversationManager {
       { key: "trust", val: d.trust },
       { key: "anger", val: d.anger },
       { key: "fear", val: d.fear },
+      { key: "sadness", val: d.sadness },
+      { key: "curiosity", val: d.curiosity },
+      { key: "disgust", val: d.disgust },
+      { key: "guilt", val: d.guilt },
     ];
 
     const active = emotions.filter(e => Math.abs(e.val) >= 0.01);
@@ -1066,7 +1080,8 @@ export class ConversationManager {
 
     const arrow = response.relationship_delta > 0 ? "warmed" : "cooled";
     const updatedSpeaker = this.store.get(speaker.id);
-    const relValue = updatedSpeaker?.relationships[listener.id] ?? 0;
+    const relState = updatedSpeaker?.relationships[listener.id];
+    const relValue = relState?.regard ?? 0;
     const label = this.relationshipLabel(relValue);
 
     this.log(
@@ -1097,6 +1112,11 @@ export class ConversationManager {
     else if (s.fear > 0.3) parts.push("uneasy");
     if (s.trust > 0.7) parts.push("very trusting");
     else if (s.trust < 0.3) parts.push("wary");
+    if (s.sadness > 0.6) parts.push("melancholy");
+    else if (s.sadness > 0.3) parts.push("downcast");
+    if (s.curiosity > 0.7) parts.push("very curious");
+    if (s.disgust > 0.5) parts.push("repulsed");
+    if (s.guilt > 0.5) parts.push("guilt-ridden");
     return parts.length > 0 ? parts.join(", ") : "calm";
   }
 
@@ -1113,8 +1133,8 @@ export class ConversationManager {
     const b = this.store.get(npcBId);
     if (!a || !b) return;
 
-    const relAB = a.relationships[npcBId] ?? 0;
-    const relBA = b.relationships[npcAId] ?? 0;
+    const relAB = a.relationships[npcBId]?.regard ?? 0;
+    const relBA = b.relationships[npcAId]?.regard ?? 0;
     const labelAB = this.relationshipLabel(relAB);
     const labelBA = this.relationshipLabel(relBA);
 
@@ -1187,6 +1207,10 @@ export class ConversationManager {
         trust: 0,
         fear: avgAnger > 0.05 ? 0.03 * proximityScale : 0,
         joy: avgJoy > 0.03 ? 0.02 * proximityScale : avgJoy < -0.03 ? -0.01 * proximityScale : 0,
+        sadness: 0,
+        curiosity: 0,
+        disgust: 0,
+        guilt: 0,
       };
 
       if (delta.fear === 0 && delta.joy === 0) continue;
@@ -1222,8 +1246,8 @@ export class ConversationManager {
   }
 
   private classifyConversationType(a: NPC, b: NPC): ConversationType {
-    const relAB = a.relationships[b.id] ?? 0;
-    const relBA = b.relationships[a.id] ?? 0;
+    const relAB = a.relationships[b.id]?.regard ?? 0;
+    const relBA = b.relationships[a.id]?.regard ?? 0;
     const avgRel = (relAB + relBA) / 2;
     const velocity = this.store.getRelationshipVelocity(a.id, b.id);
 
@@ -1314,8 +1338,8 @@ export class ConversationManager {
       });
 
       // Visible reaction based on relationship to the speakers
-      const relToSpeaker = eavesdropper.relationships[speaker.id] ?? 0;
-      const relToListener = eavesdropper.relationships[listener.id] ?? 0;
+      const relToSpeaker = eavesdropper.relationships[speaker.id]?.regard ?? 0;
+      const relToListener = eavesdropper.relationships[listener.id]?.regard ?? 0;
       const avgRel = (relToSpeaker + relToListener) / 2;
       const traits = eavesdropper.personalityTraits.map(t => t.toLowerCase());
 
