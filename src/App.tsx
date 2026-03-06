@@ -133,6 +133,8 @@ function App() {
 
     // Execute effects
     executeInteraction(result, storeRef.current);
+    worldRef.current?.recordSocialContact(result.actorId);
+    worldRef.current?.recordSocialContact(result.targetId);
 
     // Show bubble on actor
     const bubbleKey = `${result.actorId}-interaction`;
@@ -240,32 +242,84 @@ function App() {
         const act = ACTIVITIES[activityId as WaypointActivityId];
         if (!act) return;
 
-        // Generate an observation based on personality + relationship
         const rel = observer.relationships[actorId] ?? 0;
         const traits = observer.personalityTraits.map(t => t.toLowerCase());
+        const emo = observer.emotionalState;
+
+        // Build a personality-driven opinion
         let opinion: string;
-        if (rel > 0.3) {
-          opinion = `I noticed ${actor.name} ${act.label}. Good for them.`;
+        let emotionDelta: Partial<import("./types").EmotionalState> = {};
+        let seekTarget: string | null = null;
+
+        // Activity-specific reactions
+        if (activityId === "training" && traits.some(t => ["competitive", "aggressive"].includes(t))) {
+          opinion = `${actor.name} is training. I should keep my skills sharp too.`;
+          emotionDelta = { anger: -0.02, joy: 0.02 };
+        } else if (activityId === "cooking" && emo.joy < 0.3) {
+          opinion = `${actor.name} is cooking. The smell is comforting.`;
+          emotionDelta = { joy: 0.03 };
+          if (rel > 0.1) seekTarget = actorId;
+        } else if (activityId === "meditating" && traits.some(t => ["philosophical", "anxious"].includes(t))) {
+          opinion = `${actor.name} is meditating. Maybe I should try that.`;
+          emotionDelta = { fear: -0.02 };
+        } else if (activityId === "writing" && traits.includes("curious")) {
+          opinion = `${actor.name} is writing something. I wonder what about.`;
+        } else if (activityId === "people_watching" && traits.includes("suspicious")) {
+          opinion = `${actor.name} is watching people. What are they looking for?`;
+          emotionDelta = { trust: -0.02 };
+        } else if (rel > 0.3) {
+          const positive = [
+            `${actor.name} is ${act.label}. Good for them.`,
+            `Nice to see ${actor.name} ${act.label}.`,
+            `${actor.name} seems content ${act.label}.`,
+          ];
+          opinion = positive[Math.floor(Math.random() * positive.length)];
+          emotionDelta = { joy: 0.01 };
         } else if (rel < -0.2) {
-          opinion = `I saw ${actor.name} ${act.label}. Typical.`;
-        } else if (traits.includes("curious") || traits.includes("perceptive")) {
+          const negative = [
+            `${actor.name} is ${act.label}. Typical.`,
+            `Of course ${actor.name} is ${act.label}. How predictable.`,
+            `I saw ${actor.name} ${act.label}. I don't care.`,
+          ];
+          opinion = negative[Math.floor(Math.random() * negative.length)];
+          emotionDelta = { anger: 0.01 };
+        } else if (traits.includes("perceptive")) {
           opinion = `I noticed ${actor.name} ${act.label}. Interesting.`;
         } else {
           opinion = `I saw ${actor.name} ${act.label} nearby.`;
         }
 
-        // Create memory
+        // Apply emotion effects
+        if (Object.keys(emotionDelta).length > 0) {
+          const full: import("./types").EmotionalState = {
+            anger: emotionDelta.anger ?? 0,
+            trust: emotionDelta.trust ?? 0,
+            fear: emotionDelta.fear ?? 0,
+            joy: emotionDelta.joy ?? 0,
+          };
+          storeRef.current.applyEmotionDelta(observerId, full);
+        }
+
+        // Behavioral reaction: seek the actor (e.g., drawn by cooking smell)
+        if (seekTarget && !observer.behavioralOverride) {
+          storeRef.current.setBehavioralOverride(observerId, {
+            mode: "seek",
+            targetNpcId: seekTarget,
+            expiresAt: Date.now() + 30_000,
+            reason: opinion,
+          });
+        }
+
         storeRef.current.addMemory(observerId, {
           text: opinion,
-          importance: 0.2,
+          importance: 0.25,
           recency: 1,
-          emotionalWeight: 0.15,
+          emotionalWeight: 0.2,
           involvedNpcIds: [actorId],
           timestamp: Date.now(),
           type: "observation",
         }, "shortTermMemory");
 
-        // Show as thought in feed
         setFeed(prev => [...prev, {
           type: "activity",
           event: {
@@ -386,6 +440,8 @@ function App() {
         const [a, b] = session.participantIds;
         worldRef.current?.unfreezeNpc(a);
         worldRef.current?.unfreezeNpc(b);
+        worldRef.current?.recordSocialContact(a);
+        worldRef.current?.recordSocialContact(b);
         setActiveConversationPair(null);
       },
       onActivity: (event) => {
@@ -424,6 +480,23 @@ function App() {
         setTimeout(() => {
           setFloaters(prev => prev.filter(f => f.id !== floater.id));
         }, 4700 + floater.delay);
+      },
+      onEavesdropReaction: (eavesdropperId, text) => {
+        const now = Date.now();
+        setBubbles(prev => [
+          ...prev.filter(b => !(b.npcId === eavesdropperId && b.type === "thought")),
+          { npcId: eavesdropperId, text, type: "thought", startedAt: now },
+        ]);
+        const key = `${eavesdropperId}-eavesdrop`;
+        const existing = bubbleTimersRef.current.get(key);
+        if (existing) clearTimeout(existing);
+        const timer = window.setTimeout(() => {
+          setBubbles(prev => prev.filter(b =>
+            !(b.npcId === eavesdropperId && b.type === "thought" && b.startedAt === now)
+          ));
+          bubbleTimersRef.current.delete(key);
+        }, 4000);
+        bubbleTimersRef.current.set(key, timer);
       },
     });
 

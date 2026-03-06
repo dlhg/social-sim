@@ -25,6 +25,7 @@ export interface ConversationManagerCallbacks {
   onActivity: (event: ActivityEvent) => void;
   onSpeakerChange: (npcId: string | null) => void;
   onFloater?: (floater: FloaterData) => void;
+  onEavesdropReaction?: (eavesdropperId: string, text: string) => void;
 }
 
 export class ConversationManager {
@@ -603,7 +604,14 @@ export class ConversationManager {
   }
 
   private processGiveGift(speaker: NPC, listener: NPC, action: ActionData): void {
-    const giftDesc = action.detail ?? "a small token";
+    let giftDesc = action.detail ?? "a small token";
+
+    // Try to consume an actual inventory item
+    if (speaker.inventory.length > 0) {
+      const item = speaker.inventory[0];
+      giftDesc = `${item.emoji} ${item.label}`;
+      this.store.removeItem(speaker.id, item.id);
+    }
 
     this.store.applyRelationshipDelta(speaker.id, listener.id, 0.15);
     this.store.applyRelationshipDelta(listener.id, speaker.id, 0.15);
@@ -1304,6 +1312,34 @@ export class ConversationManager {
         text: `${eavesdropper.name} overheard ${speaker.name} talking to ${listener.name}`,
         activityType: "eavesdrop",
       });
+
+      // Visible reaction based on relationship to the speakers
+      const relToSpeaker = eavesdropper.relationships[speaker.id] ?? 0;
+      const relToListener = eavesdropper.relationships[listener.id] ?? 0;
+      const avgRel = (relToSpeaker + relToListener) / 2;
+      const traits = eavesdropper.personalityTraits.map(t => t.toLowerCase());
+
+      let reaction: string;
+      if (traits.includes("curious") || traits.includes("perceptive")) {
+        reaction = "👂 listening intently...";
+      } else if (avgRel > 0.3) {
+        reaction = "🤔 overhearing friends talk...";
+      } else if (avgRel < -0.2) {
+        reaction = "😒 overhearing them talk...";
+        // Leave if they dislike both speakers
+        if (!eavesdropper.behavioralOverride && relToSpeaker < -0.1 && relToListener < -0.1) {
+          this.store.setBehavioralOverride(eavesdropperId, {
+            mode: "avoid",
+            targetNpcId: speaker.id,
+            expiresAt: Date.now() + 30_000,
+            reason: "didn't want to hear that conversation",
+          });
+        }
+      } else {
+        reaction = "👀 overhearing a conversation...";
+      }
+
+      this.callbacks.onEavesdropReaction?.(eavesdropperId, reaction);
     }
   }
 

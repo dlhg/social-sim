@@ -76,6 +76,8 @@ export class WorldSimulation {
 
   addNpc(npcId: string, startPosition?: Position): void {
     const pos = startPosition ?? this.randomWaypoint().position;
+    // Stagger initial social timers so NPCs don't all get lonely at once
+    this.lastInteractionTime.set(npcId, Date.now() + Math.random() * 60_000);
     this.npcs.set(npcId, {
       npcId,
       position: { ...pos },
@@ -262,6 +264,7 @@ export class WorldSimulation {
     this.checkProximity();
     this.checkActivityObservations();
     this.decayItems(now);
+    this.checkDrives(now);
     this.onTickCallback?.();
   }
 
@@ -651,6 +654,102 @@ export class WorldSimulation {
 
   private randomWaypoint(): Waypoint {
     return WAYPOINTS[Math.floor(Math.random() * WAYPOINTS.length)];
+  }
+
+  // ── Drives: NPC-initiated seeking & social needs ──
+
+  private lastDriveCheck = 0;
+  private lastInteractionTime: Map<string, number> = new Map();
+
+  /** Record that an NPC just had a social interaction (conversation or interaction) */
+  recordSocialContact(npcId: string): void {
+    this.lastInteractionTime.set(npcId, Date.now());
+  }
+
+  private checkDrives(now: number): void {
+    if (!this.npcStore) return;
+    // Check every ~10 seconds
+    if (now - this.lastDriveCheck < 10_000) return;
+    this.lastDriveCheck = now;
+
+    for (const spatial of this.npcs.values()) {
+      if (spatial.frozen) continue;
+      if (spatial.activeActivity) continue;
+
+      const npc = this.npcStore.get(spatial.npcId);
+      if (!npc) continue;
+      // Don't override existing behavioral overrides
+      if (npc.behavioralOverride) continue;
+
+      // Drive 1: Gift-seeking — NPC has items and a friend nearby-ish
+      if (npc.inventory.length > 0) {
+        const bestFriend = this.findBestFriend(npc);
+        if (bestFriend && Math.random() < 0.3) {
+          this.npcStore.setBehavioralOverride(spatial.npcId, {
+            mode: "seek",
+            targetNpcId: bestFriend,
+            expiresAt: now + 60_000,
+            reason: "want to give a gift",
+          });
+          continue;
+        }
+      }
+
+      // Drive 2: Loneliness — seek social contact if isolated too long
+      const lastSocial = this.lastInteractionTime.get(spatial.npcId) ?? 0;
+      const lonelySecs = (now - lastSocial) / 1000;
+      if (lonelySecs > 90 && Math.random() < 0.15) {
+        // Find someone they like (or anyone if desperate)
+        const target = this.findBestFriend(npc) ?? this.findNearestOther(spatial);
+        if (target) {
+          this.npcStore.setBehavioralOverride(spatial.npcId, {
+            mode: "seek",
+            targetNpcId: target,
+            expiresAt: now + 45_000,
+            reason: "feeling lonely",
+          });
+          continue;
+        }
+      }
+
+      // Drive 3: Restlessness — NPCs with high anger/fear and no activity seek action waypoints
+      if ((npc.emotionalState.anger > 0.6 || npc.emotionalState.fear > 0.6) && Math.random() < 0.1) {
+        // Let the normal destination picker handle this — it already scores for emotions.
+        // But nudge by clearing their current destination so they re-pick
+        if (spatial.destination && !spatial.frozen) {
+          spatial.destination = null;
+          spatial.idleTicksRemaining = 0;
+        }
+      }
+    }
+  }
+
+  private findBestFriend(npc: import("./types").NPC): string | null {
+    let best: string | null = null;
+    let bestRel = 0.2; // minimum threshold
+    for (const [otherId, rel] of Object.entries(npc.relationships)) {
+      if (rel > bestRel && this.npcs.has(otherId)) {
+        bestRel = rel;
+        best = otherId;
+      }
+    }
+    return best;
+  }
+
+  private findNearestOther(spatial: NpcSpatialState): string | null {
+    let nearest: string | null = null;
+    let nearestDist = Infinity;
+    for (const other of this.npcs.values()) {
+      if (other.npcId === spatial.npcId) continue;
+      if (other.frozen) continue;
+      const dist = Math.abs(other.position.x - spatial.position.x)
+                 + Math.abs(other.position.y - spatial.position.y);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = other.npcId;
+      }
+    }
+    return nearest;
   }
 
   private decayItems(now: number): void {
