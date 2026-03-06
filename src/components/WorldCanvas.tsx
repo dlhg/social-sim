@@ -11,6 +11,7 @@ interface WorldCanvasProps {
   bubbles: BubbleData[];
   floaters: FloaterData[];
   dayPhase: DayPhase;
+  onNpcClick?: (npcId: string) => void;
 }
 
 // Time-of-day color tints (subtle overlays on canvas)
@@ -115,6 +116,7 @@ export function WorldCanvas({
   bubbles,
   floaters,
   dayPhase,
+  onNpcClick,
 }: WorldCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -123,6 +125,9 @@ export function WorldCanvas({
   const bubbleRefsMap = useRef(new Map<string, HTMLDivElement>());
   const floaterRefsMap = useRef(new Map<string, HTMLDivElement>());
   const particlesRef = useRef<Particle[]>([]);
+  const npcScreenPositions = useRef<{ npcId: string; x: number; y: number; radius: number }[]>([]);
+  const onNpcClickRef = useRef(onNpcClick);
+  onNpcClickRef.current = onNpcClick;
 
   // Store props in refs so the rAF loop always reads fresh values
   const getSnapshotRef = useRef(getSnapshot);
@@ -369,6 +374,8 @@ export function WorldCanvas({
           lerpY(b, now, snap.tickIntervalMs)
       );
 
+      const framePositions: { npcId: string; x: number; y: number; radius: number }[] = [];
+
       for (const spatial of sortedNpcs) {
         const npc = getNpcRef.current(spatial.npcId);
         if (!npc) continue;
@@ -496,8 +503,13 @@ export function WorldCanvas({
           ctx.setLineDash([]);
         }
 
+        // Track screen position for click hit-testing
+        framePositions.push({ npcId: spatial.npcId, x: px, y: feetY - sprH * 0.5, radius: sprW * 0.6 });
+
         ctx.globalAlpha = 1;
       }
+
+      npcScreenPositions.current = framePositions;
 
       // Position floater elements at NPC's side, drifting outward
       for (const floater of floatersRef.current) {
@@ -525,8 +537,26 @@ export function WorldCanvas({
     };
   }, []);
 
+  const handleCanvasClick = (e: React.MouseEvent) => {
+    if (!onNpcClickRef.current) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    // Find closest NPC within hit radius
+    let bestId: string | null = null;
+    let bestDist = Infinity;
+    for (const pos of npcScreenPositions.current) {
+      const d = Math.hypot(mx - pos.x, my - pos.y);
+      if (d < pos.radius && d < bestDist) {
+        bestDist = d;
+        bestId = pos.npcId;
+      }
+    }
+    if (bestId) onNpcClickRef.current(bestId);
+  };
+
   return (
-    <div ref={containerRef} className="scene">
+    <div ref={containerRef} className="scene" onClick={handleCanvasClick}>
       <canvas ref={canvasRef} style={{ display: "block" }} />
       <div className="bubble-overlay">
         {bubbles.map((b) => {

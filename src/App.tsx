@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { WorldCanvas } from "./components/WorldCanvas";
 import { FeedPanel } from "./components/SidePanel";
 import { CharacterViewer } from "./components/CharacterViewer";
+import { NpcInspector } from "./components/NpcInspector";
 import { NpcCreator } from "./components/NpcCreator";
 import { SetupScreen } from "./components/SetupScreen";
 import { DmTools } from "./components/DmTools";
@@ -719,8 +720,15 @@ function App() {
             bubbles={bubbles}
             floaters={floaters}
             dayPhase={dayPhase}
+            onNpcClick={setSelectedNpcId}
           />
         </div>
+        <NpcInspector
+          npcs={npcs}
+          selectedNpcId={selectedNpcId}
+          npcHistory={npcHistory}
+          dayLabel={dayLabel}
+        />
       </div>
       <div className="controls">
         <button onClick={handlePause} className="btn btn-pause">
