@@ -198,25 +198,38 @@ export class WorldSimulation {
       const dx = dest.x - npc.position.x;
       const dy = dest.y - npc.position.y;
 
-      // Build list of candidate moves in priority order
+      // Build list of candidate moves: direct moves first, then perpendicular detours
       const candidates: Position[] = [];
+      const { x, y } = npc.position;
       if (dx !== 0 && dy !== 0) {
+        // Diagonal: both direct moves, then neither is a detour since both help
         if (Math.random() < 0.5) {
-          candidates.push({ x: npc.position.x + Math.sign(dx), y: npc.position.y });
-          candidates.push({ x: npc.position.x, y: npc.position.y + Math.sign(dy) });
+          candidates.push({ x: x + Math.sign(dx), y });
+          candidates.push({ x, y: y + Math.sign(dy) });
         } else {
-          candidates.push({ x: npc.position.x, y: npc.position.y + Math.sign(dy) });
-          candidates.push({ x: npc.position.x + Math.sign(dx), y: npc.position.y });
+          candidates.push({ x, y: y + Math.sign(dy) });
+          candidates.push({ x: x + Math.sign(dx), y });
         }
       } else if (dx !== 0) {
-        candidates.push({ x: npc.position.x + Math.sign(dx), y: npc.position.y });
+        candidates.push({ x: x + Math.sign(dx), y });
+        // Perpendicular detours when moving along x-axis
+        const perpDir = Math.random() < 0.5 ? 1 : -1;
+        candidates.push({ x, y: y + perpDir });
+        candidates.push({ x, y: y - perpDir });
       } else {
-        candidates.push({ x: npc.position.x, y: npc.position.y + Math.sign(dy) });
+        candidates.push({ x, y: y + Math.sign(dy) });
+        // Perpendicular detours when moving along y-axis
+        const perpDir = Math.random() < 0.5 ? 1 : -1;
+        candidates.push({ x: x + perpDir, y });
+        candidates.push({ x: x - perpDir, y });
       }
 
-      // Pick the first candidate that doesn't crowd another NPC
+      // Filter to in-bounds candidates, then pick first that doesn't crowd another NPC
+      const inBounds = candidates.filter(
+        c => c.x >= 0 && c.x < this.gridWidth && c.y >= 0 && c.y < this.gridHeight
+      );
       let moved = false;
-      for (const candidate of candidates) {
+      for (const candidate of inBounds) {
         if (!this.isTooCloseToOthers(candidate, npc)) {
           npc.position.x = candidate.x;
           npc.position.y = candidate.y;
