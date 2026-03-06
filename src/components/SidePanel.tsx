@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import type { NPC, ConversationMessage, ActivityEvent, EmotionalState } from "../types";
+import { useEffect, useRef, useState } from "react";
+import type { NPC, ConversationMessage, ActivityEvent, EmotionalState, ActivityType } from "../types";
 
 export interface NpcSnapshot {
   timestamp: number;
@@ -12,6 +12,35 @@ export type FeedItem =
   | { type: "activity"; event: ActivityEvent };
 
 export type PanelMode = "collapsed" | "partial" | "expanded";
+
+type FilterKey = "chat" | ActivityType | "system";
+
+const FILTER_LABELS: Record<FilterKey, string> = {
+  chat: "Chat",
+  thought: "Thoughts",
+  gossip: "Gossip",
+  eavesdrop: "Eavesdrop",
+  dm: "DMs",
+  action: "Actions",
+  system: "System",
+};
+
+const FILTER_COLORS: Record<FilterKey, string> = {
+  chat: "#e0e0e0",
+  thought: "#b0a0cc",
+  gossip: "#ff9800",
+  eavesdrop: "#ab47bc",
+  dm: "#4caf50",
+  action: "#ff9800",
+  system: "#999",
+};
+
+const ALL_FILTERS: FilterKey[] = ["chat", "thought", "gossip", "eavesdrop", "dm", "action", "system"];
+
+function getFilterKey(item: FeedItem): FilterKey {
+  if (item.type === "chat") return "chat";
+  return item.event.activityType ?? "system";
+}
 
 interface FeedPanelProps {
   npcs: NPC[];
@@ -37,6 +66,10 @@ export function FeedPanel({
   onTogglePanel,
 }: FeedPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(
+    () => new Set(ALL_FILTERS)
+  );
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     if (panelMode !== "collapsed") {
@@ -44,23 +77,60 @@ export function FeedPanel({
     }
   }, [feed, currentSpeaker, panelMode]);
 
+  const toggleFilter = (key: FilterKey) => {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const npcMap = Object.fromEntries(npcs.map((n) => [n.id, n]));
 
   return (
     <div className="feed-overlay">
       <div className="feed-header">
         <span className="feed-label">Feed</span>
-        <button className="panel-toggle" onClick={onTogglePanel}>
-          {panelMode === "expanded" ? "▴" : "▾"}
-        </button>
+        <div className="feed-header-buttons">
+          <button
+            className={`feed-filter-toggle ${filtersOpen ? "active" : ""}`}
+            onClick={() => setFiltersOpen((v) => !v)}
+            title="Filter feed"
+          >
+            ⚙
+          </button>
+          <button className="panel-toggle" onClick={onTogglePanel}>
+            {panelMode === "expanded" ? "▴" : "▾"}
+          </button>
+        </div>
       </div>
+
+      {filtersOpen && (
+        <div className="feed-filters">
+          {ALL_FILTERS.map((key) => (
+            <button
+              key={key}
+              className={`feed-filter-chip ${activeFilters.has(key) ? "on" : "off"}`}
+              style={{
+                borderColor: activeFilters.has(key) ? FILTER_COLORS[key] : "transparent",
+                color: activeFilters.has(key) ? FILTER_COLORS[key] : "#555",
+              }}
+              onClick={() => toggleFilter(key)}
+            >
+              {FILTER_LABELS[key]}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className={`feed-content ${panelMode}`}>
         {feed.map((item, i) => {
+          const visible = activeFilters.has(getFilterKey(item));
           if (item.type === "chat") {
             const npc = npcMap[item.msg.npcId];
             return (
-              <div key={i} className="chat-entry">
+              <div key={i} className={`chat-entry feed-item ${visible ? "feed-item-visible" : "feed-item-hidden"}`}>
                 <span className="chat-name" style={{ color: npc?.color }}>
                   {item.msg.npcName}:
                 </span>{" "}
@@ -72,7 +142,7 @@ export function FeedPanel({
             ? `activity-entry activity-${item.event.activityType}`
             : "activity-entry";
           return (
-            <div key={i} className={activityClass}>
+            <div key={i} className={`${activityClass} feed-item ${visible ? "feed-item-visible" : "feed-item-hidden"}`}>
               <span className="activity-time">
                 {formatTime(item.event.timestamp)}
               </span>{" "}
@@ -80,7 +150,7 @@ export function FeedPanel({
             </div>
           );
         })}
-        {currentSpeaker && (
+        {currentSpeaker && activeFilters.has("chat") && (
           <div className="chat-entry streaming">
             <span
               className="chat-name"
