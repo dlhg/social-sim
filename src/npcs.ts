@@ -1,4 +1,4 @@
-import type { NPC, EmotionalState } from "./types";
+import type { NPC, EmotionalState, InventoryItem, ItemCategory } from "./types";
 
 export const COLOR_SWATCHES = [
   "#6ec6ff",
@@ -88,6 +88,40 @@ const RANDOM_SECRETS = [
   "I've been lying about where I came from",
 ];
 
+const RANDOM_ITEMS: { label: string; emoji: string; category: ItemCategory }[] = [
+  { label: "warm bread", emoji: "🍞", category: "food" },
+  { label: "honey cake", emoji: "🍰", category: "food" },
+  { label: "hearty stew", emoji: "🍲", category: "food" },
+  { label: "lavender sprig", emoji: "💜", category: "herb" },
+  { label: "wild mint", emoji: "🌿", category: "herb" },
+  { label: "chamomile bunch", emoji: "🌼", category: "herb" },
+  { label: "rosemary", emoji: "🌱", category: "herb" },
+  { label: "small trout", emoji: "🐟", category: "fish" },
+  { label: "silverfin", emoji: "🐠", category: "fish" },
+  { label: "carved pendant", emoji: "📿", category: "trinket" },
+  { label: "small mirror", emoji: "🪞", category: "trinket" },
+  { label: "colorful ribbon", emoji: "🎀", category: "trinket" },
+  { label: "lucky coin", emoji: "🪙", category: "trinket" },
+  { label: "charcoal sketch", emoji: "🖼️", category: "craft" },
+  { label: "portrait drawing", emoji: "🎨", category: "craft" },
+];
+
+export function randomizeInventory(): InventoryItem[] {
+  // 40% chance of no items, otherwise 1-3 items
+  if (Math.random() < 0.4) return [];
+  const count = 1 + Math.floor(Math.random() * 3);
+  const shuffled = [...RANDOM_ITEMS].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count).map((item) => ({
+    id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    label: item.label,
+    category: item.category,
+    emoji: item.emoji,
+    acquiredAt: Date.now(),
+  }));
+}
+
+export { RANDOM_ITEMS };
+
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -105,6 +139,7 @@ export interface RandomNpcFields {
   traits: string[];
   desires: string[];
   secrets: string[];
+  inventory: InventoryItem[];
 }
 
 export function randomizeFields(existingIds: string[]): RandomNpcFields {
@@ -128,6 +163,7 @@ export function randomizeFields(existingIds: string[]): RandomNpcFields {
     traits: pickN(RANDOM_TRAITS, 2, 4),
     desires: pickN(RANDOM_DESIRES, 1, 3),
     secrets: pickN(RANDOM_SECRETS, 1, 2),
+    inventory: randomizeInventory(),
   };
 }
 
@@ -152,7 +188,8 @@ export function randomizeNpc(existingIds: string[]): NPC {
   const coreDesires = pickN(RANDOM_DESIRES, 1, 3);
   const secrets = pickN(RANDOM_SECRETS, 1, 2);
 
-  return createNpc({ id, name, avatar, color, personalityTraits, coreDesires, secrets });
+  const inventory = randomizeInventory();
+  return createNpc({ id, name, avatar, color, personalityTraits, coreDesires, secrets, inventory });
 }
 
 function defaultEmotionalState(): EmotionalState {
@@ -168,6 +205,7 @@ export function createNpc(partial: {
   coreDesires: string[];
   emotionalState?: Partial<EmotionalState>;
   secrets?: string[];
+  inventory?: InventoryItem[];
 }): NPC {
   return {
     ...partial,
@@ -182,7 +220,7 @@ export function createNpc(partial: {
     secrets: partial.secrets ?? [],
     knownSecrets: {},
     behavioralOverride: null,
-    inventory: [],
+    inventory: partial.inventory ?? [],
   };
 }
 

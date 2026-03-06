@@ -1,12 +1,23 @@
 import { useState } from "react";
-import { createNpc, randomizeFields, AVATAR_OPTIONS, COLOR_SWATCHES } from "../npcs";
-import type { NPC } from "../types";
+import { createNpc, randomizeFields, AVATAR_OPTIONS, COLOR_SWATCHES, RANDOM_ITEMS } from "../npcs";
+import type { NPC, InventoryItem, ItemCategory } from "../types";
 
 interface NpcCreatorProps {
   onClose: () => void;
   onCreateNpc: (npc: NPC) => void;
   existingIds: string[];
 }
+
+const CATEGORY_ORDER: ItemCategory[] = ["food", "herb", "fish", "trinket", "craft", "book"];
+
+const CATEGORY_COLORS: Record<string, string> = {
+  food: "#ff9800",
+  herb: "#66bb6a",
+  fish: "#42a5f5",
+  trinket: "#ab47bc",
+  book: "#8d6e63",
+  craft: "#fdd835",
+};
 
 export function NpcCreator({
   onClose,
@@ -19,6 +30,7 @@ export function NpcCreator({
   const [traits, setTraits] = useState("");
   const [desires, setDesires] = useState("");
   const [secrets, setSecrets] = useState("");
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [error, setError] = useState("");
 
   const derivedId = name.trim().toLowerCase().replace(/\s+/g, "-");
@@ -32,7 +44,26 @@ export function NpcCreator({
     setTraits(r.traits.join(", "));
     setDesires(r.desires.join(", "));
     setSecrets(r.secrets.join("\n"));
+    setInventory(r.inventory);
     setError("");
+  }
+
+  function addItem(item: typeof RANDOM_ITEMS[number]) {
+    if (inventory.length >= 8) return;
+    setInventory((prev) => [
+      ...prev,
+      {
+        id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        label: item.label,
+        category: item.category,
+        emoji: item.emoji,
+        acquiredAt: Date.now(),
+      },
+    ]);
+  }
+
+  function removeItem(itemId: string) {
+    setInventory((prev) => prev.filter((i) => i.id !== itemId));
   }
 
   function handleSubmit() {
@@ -77,11 +108,20 @@ export function NpcCreator({
       personalityTraits: parsedTraits,
       coreDesires: parsedDesires,
       secrets: parsedSecrets,
+      inventory,
     });
 
     onCreateNpc(npc);
     onClose();
   }
+
+  // Group available items by category
+  const itemsByCategory = CATEGORY_ORDER
+    .map((cat) => ({
+      category: cat,
+      items: RANDOM_ITEMS.filter((i) => i.category === cat),
+    }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -163,6 +203,54 @@ export function NpcCreator({
           rows={3}
           className="secrets-textarea"
         />
+
+        <label>
+          Starting Inventory
+          <span className="creator-inv-count">{inventory.length}/8</span>
+        </label>
+        {inventory.length > 0 && (
+          <div className="creator-inv-current">
+            {inventory.map((item) => (
+              <span
+                key={item.id}
+                className="creator-inv-item"
+                style={{ borderColor: CATEGORY_COLORS[item.category] }}
+              >
+                {item.emoji} {item.label}
+                <button
+                  className="creator-inv-remove"
+                  onClick={() => removeItem(item.id)}
+                  title="Remove"
+                >
+                  x
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="creator-inv-picker">
+          {itemsByCategory.map((group) => (
+            <div key={group.category} className="creator-inv-group">
+              <span
+                className="creator-inv-cat-label"
+                style={{ color: CATEGORY_COLORS[group.category] }}
+              >
+                {group.category}
+              </span>
+              {group.items.map((item) => (
+                <button
+                  key={item.label}
+                  className="creator-inv-add-btn"
+                  disabled={inventory.length >= 8}
+                  onClick={() => addItem(item)}
+                  title={`Add ${item.label}`}
+                >
+                  {item.emoji} {item.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
 
         {error && <div className="form-error">{error}</div>}
 

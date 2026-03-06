@@ -1,6 +1,27 @@
-import { useEffect, useRef, useCallback } from "react";
-import type { NPC } from "../types";
+import { useEffect, useRef, useCallback, useState } from "react";
+import type { NPC, InventoryItem } from "../types";
 import type { NpcSnapshot } from "./SidePanel";
+
+const ITEM_LIFETIME_MS = 5 * 60_000;
+
+const CATEGORY_COLORS: Record<string, string> = {
+  food: "#ff9800",
+  herb: "#66bb6a",
+  fish: "#42a5f5",
+  trinket: "#ab47bc",
+  book: "#8d6e63",
+  craft: "#fdd835",
+};
+
+function timeRemaining(item: InventoryItem): string {
+  const elapsed = Date.now() - item.acquiredAt;
+  const remaining = Math.max(0, ITEM_LIFETIME_MS - elapsed);
+  const secs = Math.ceil(remaining / 1000);
+  if (secs <= 0) return "expiring";
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
 
 interface CharacterViewerProps {
   npcs: NPC[];
@@ -101,6 +122,15 @@ export function CharacterViewer({
   const selected = selectedNpcId ? npcMap[selectedNpcId] : null;
   const history = selectedNpcId ? npcHistory[selectedNpcId] ?? [] : [];
 
+  // Tick every 5s to update inventory timers
+  const [, setTick] = useState(0);
+  const hasItems = selected ? selected.inventory.length > 0 : false;
+  useEffect(() => {
+    if (!hasItems) return;
+    const id = setInterval(() => setTick((t) => t + 1), 5000);
+    return () => clearInterval(id);
+  }, [hasItems]);
+
   return (
     <div className="character-viewer">
       <div className="npc-selector">
@@ -113,6 +143,9 @@ export function CharacterViewer({
           >
             <span className="npc-chip-avatar">{npc.avatar}</span>
             <span className="npc-chip-name">{npc.name}</span>
+            {npc.inventory.length > 0 && (
+              <span className="npc-chip-inv-count">{npc.inventory.length}</span>
+            )}
           </button>
         ))}
       </div>
@@ -232,18 +265,39 @@ export function CharacterViewer({
             </div>
           )}
 
-          {selected.inventory.length > 0 && (
-            <div className="npc-section">
-              <div className="section-label">Inventory</div>
+          <div className="npc-section">
+            <div className="section-label">
+              Inventory
+              <span className="section-label-count">
+                {selected.inventory.length}/8
+              </span>
+            </div>
+            {selected.inventory.length === 0 ? (
+              <div className="empty-state">No items</div>
+            ) : (
               <div className="inventory-list">
                 {selected.inventory.map((item) => (
-                  <span key={item.id} className="inventory-item" title={item.category}>
-                    {item.emoji} {item.label}
+                  <span
+                    key={item.id}
+                    className="inventory-item"
+                    style={{
+                      borderColor: CATEGORY_COLORS[item.category] ?? "rgba(255,255,255,0.1)",
+                    }}
+                  >
+                    <span className="inv-emoji">{item.emoji}</span>
+                    <span className="inv-label">{item.label}</span>
+                    <span
+                      className="inv-category"
+                      style={{ color: CATEGORY_COLORS[item.category] }}
+                    >
+                      {item.category}
+                    </span>
+                    <span className="inv-timer">{timeRemaining(item)}</span>
                   </span>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="npc-section">
             <div className="section-label">Recent Memories</div>
