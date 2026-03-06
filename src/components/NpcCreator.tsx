@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createNpc, AVATAR_OPTIONS, COLOR_SWATCHES } from "../npcs";
+import { createNpc, randomizeFields, AVATAR_OPTIONS, COLOR_SWATCHES } from "../npcs";
 import type { NPC } from "../types";
 
 interface NpcCreatorProps {
@@ -23,6 +23,17 @@ export function NpcCreator({
 
   const derivedId = name.trim().toLowerCase().replace(/\s+/g, "-");
   const isDuplicate = derivedId !== "" && existingIds.includes(derivedId);
+
+  function handleRandomize() {
+    const r = randomizeFields(existingIds);
+    setName(r.name);
+    setAvatar(r.avatar);
+    setColor(r.color);
+    setTraits(r.traits.join(", "));
+    setDesires(r.desires.join(", "));
+    setSecrets(r.secrets.join("\n"));
+    setError("");
+  }
 
   function handleSubmit() {
     const trimmed = name.trim();
@@ -75,7 +86,12 @@ export function NpcCreator({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h3>Create NPC</h3>
+        <div className="modal-header-row">
+          <h3>Create NPC</h3>
+          <button className="btn btn-randomize-fields" onClick={handleRandomize}>
+            Randomize
+          </button>
+        </div>
 
         <label>Name</label>
         <input

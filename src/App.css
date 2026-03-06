@@ -612,6 +612,35 @@
   font-family: inherit;
 }
 
+.modal-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modal-header-row h3 {
+  margin: 0;
+}
+
+.btn-randomize-fields {
+  padding: 4px 12px;
+  font-size: 11px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: transparent;
+  color: #aaa;
+  cursor: pointer;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn-randomize-fields:hover {
+  border-color: #888;
+  color: #ddd;
+}
+
 .modal-content h3 {
   margin: 0 0 16px;
   font-size: 14px;

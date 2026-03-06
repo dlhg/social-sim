@@ -44,6 +44,12 @@ const RANDOM_TRAITS = [
   "dramatic", "stoic", "mischievous", "earnest", "cynical", "dreamy",
   "impulsive", "patient", "sly", "loyal", "restless", "wistful",
   "bold", "cautious", "witty", "melancholic", "fierce", "whimsical",
+  "charming", "suspicious", "competitive", "philosophical", "anxious",
+  "optimistic", "pessimistic", "calculating", "blunt", "perceptive",
+  "confrontational", "flattering", "sardonic", "enthusiastic", "contrarian",
+  "manipulative", "generous", "vindictive", "idealistic", "paranoid",
+  "compassionate", "detached", "obsessive", "irreverent", "territorial",
+  "self-destructive", "nurturing", "defiant", "enigmatic", "sentimental",
 ];
 
 const RANDOM_DESIRES = [
@@ -51,6 +57,12 @@ const RANDOM_DESIRES = [
   "uncover a hidden truth", "leave a legacy", "escape the past",
   "earn respect", "find inner peace", "experience adventure",
   "understand human nature", "create something beautiful", "right a wrong",
+  "be feared by everyone", "find true love", "amass power quietly",
+  "outlive their enemies", "be remembered after death", "atone for past sins",
+  "destroy something corrupt", "build something that lasts", "learn every secret in town",
+  "find someone who truly understands them", "prove the world wrong",
+  "live without regret", "protect the vulnerable", "escape their own reputation",
+  "control the narrative", "find a worthy rival", "disappear without a trace",
 ];
 
 const RANDOM_SECRETS = [
@@ -62,6 +74,18 @@ const RANDOM_SECRETS = [
   "I'm not who everyone thinks I am",
   "I broke a sacred promise and live with the guilt",
   "I secretly long for a life completely different from this one",
+  "I caused someone's downfall and let someone else take the blame",
+  "I hear voices that no one else can hear",
+  "I've been planning to leave this place forever",
+  "I killed someone and I'd do it again",
+  "I'm in love with someone who doesn't know I exist",
+  "I have a debt I can never repay",
+  "I once abandoned someone who needed me most",
+  "I know something about this town that could destroy it",
+  "My greatest achievement was actually someone else's work",
+  "I keep a trophy from every person who has wronged me",
+  "I pretend to be weaker than I actually am",
+  "I've been lying about where I came from",
 ];
 
 function pick<T>(arr: T[]): T {
@@ -72,6 +96,39 @@ function pickN<T>(arr: T[], min: number, max: number): T[] {
   const n = min + Math.floor(Math.random() * (max - min + 1));
   const shuffled = [...arr].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, n);
+}
+
+export interface RandomNpcFields {
+  name: string;
+  avatar: string;
+  color: string;
+  traits: string[];
+  desires: string[];
+  secrets: string[];
+}
+
+export function randomizeFields(existingIds: string[]): RandomNpcFields {
+  const usedNames = new Set(existingIds);
+  let name = pick(RANDOM_NAMES);
+  if (usedNames.has(name.toLowerCase())) {
+    const available = RANDOM_NAMES.filter(n => !usedNames.has(n.toLowerCase()));
+    if (available.length > 0) {
+      name = pick(available);
+    } else {
+      let suffix = 2;
+      while (usedNames.has(`${name.toLowerCase()}${suffix}`)) suffix++;
+      name = `${name}${suffix}`;
+    }
+  }
+
+  return {
+    name,
+    avatar: pick(AVATAR_OPTIONS),
+    color: pick(COLOR_SWATCHES),
+    traits: pickN(RANDOM_TRAITS, 2, 4),
+    desires: pickN(RANDOM_DESIRES, 1, 3),
+    secrets: pickN(RANDOM_SECRETS, 1, 2),
+  };
 }
 
 export function randomizeNpc(existingIds: string[]): NPC {
@@ -93,7 +150,7 @@ export function randomizeNpc(existingIds: string[]): NPC {
   const color = pick(COLOR_SWATCHES);
   const personalityTraits = pickN(RANDOM_TRAITS, 2, 4);
   const coreDesires = pickN(RANDOM_DESIRES, 1, 3);
-  const secrets = Math.random() < 0.3 ? [pick(RANDOM_SECRETS)] : [];
+  const secrets = pickN(RANDOM_SECRETS, 1, 2);
 
   return createNpc({ id, name, avatar, color, personalityTraits, coreDesires, secrets });
 }
