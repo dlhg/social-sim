@@ -106,17 +106,18 @@ export class ConversationManager {
     this.runConversation(npcAId, npcBId);
   }
 
-  triggerConversation(npcAId: string, npcBId: string): void {
-    if (this.activeSession || !this.running || this.paused) return;
+  triggerConversation(npcAId: string, npcBId: string): boolean {
+    if (this.activeSession || !this.running || this.paused) return false;
 
     const now = Date.now();
-    if (now - this.lastConversationEnd < this.GLOBAL_COOLDOWN_MS) return;
+    if (now - this.lastConversationEnd < this.GLOBAL_COOLDOWN_MS) return false;
 
     const pKey = this.pairKey(npcAId, npcBId);
     const lastTime = this.cooldowns.get(pKey) ?? 0;
-    if (now - lastTime < this.COOLDOWN_MS) return;
+    if (now - lastTime < this.COOLDOWN_MS) return false;
 
     this.runConversation(npcAId, npcBId);
+    return true;
   }
 
   private pairKey(a: string, b: string): string {

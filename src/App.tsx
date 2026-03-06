@@ -11,6 +11,7 @@ import { WorldSimulation } from "./world-simulation";
 import { DayCycle } from "./day-cycle";
 import type { NPC, BubbleData, FloaterData, ActionType, WaypointActivityId } from "./types";
 import { ACTIVITIES } from "./activities";
+import { pickInteraction, executeInteraction } from "./interactions";
 import type { NpcSnapshot, FeedItem, PanelMode } from "./components/SidePanel";
 import "./App.css";
 
@@ -104,6 +105,68 @@ function App() {
     handleStart();
   }, [roster]);
 
+  // ── Interaction system ───────────────────────
+  const interactionCooldowns = useRef<Map<string, number>>(new Map());
+  const INTERACTION_COOLDOWN_MS = 20_000;
+  const INTERACTION_CHANCE = 0.35; // 35% chance per proximity tick when conv doesn't fire
+
+  const tryInteraction = useCallback((aId: string, bId: string) => {
+    const now = Date.now();
+    const pairKey = [aId, bId].sort().join(":");
+    const last = interactionCooldowns.current.get(pairKey) ?? 0;
+    if (now - last < INTERACTION_COOLDOWN_MS) return;
+    if (Math.random() > INTERACTION_CHANCE) return;
+
+    const actorNpc = storeRef.current.get(aId);
+    const targetNpc = storeRef.current.get(bId);
+    if (!actorNpc || !targetNpc) return;
+
+    // Randomly pick who initiates
+    const [actor, target] = Math.random() < 0.5
+      ? [actorNpc, targetNpc]
+      : [targetNpc, actorNpc];
+
+    const result = pickInteraction(actor, target);
+    if (!result) return;
+
+    interactionCooldowns.current.set(pairKey, now);
+
+    // Execute effects
+    executeInteraction(result, storeRef.current);
+
+    // Show bubble on actor
+    const bubbleKey = `${result.actorId}-interaction`;
+    setBubbles(prev => [
+      ...prev.filter(b => b.npcId !== result.actorId || b.type !== "action"),
+      {
+        npcId: result.actorId,
+        text: result.actorBubbleText,
+        type: "action",
+        startedAt: now,
+      },
+    ]);
+
+    // Auto-clear bubble after 3.5s
+    const timer = window.setTimeout(() => {
+      setBubbles(prev => prev.filter(b =>
+        !(b.npcId === result.actorId && b.type === "action" && b.startedAt === now)
+      ));
+      bubbleTimersRef.current.delete(bubbleKey);
+    }, 3500);
+    bubbleTimersRef.current.set(bubbleKey, timer);
+
+    // Feed entry
+    setFeed(prev => [...prev, {
+      type: "activity",
+      event: {
+        timestamp: new Date(),
+        text: result.feedText,
+        activityType: "action",
+        npcId: result.actorId,
+      },
+    }]);
+  }, []);
+
   const handleStart = useCallback(() => {
     setFeed([]);
     setStreamingText({});
@@ -121,7 +184,10 @@ function App() {
       gridHeight: 16,
       tickIntervalMs: 285,
       onProximity: (aId, bId) => {
-        managerRef.current?.triggerConversation(aId, bId);
+        const started = managerRef.current?.triggerConversation(aId, bId);
+        if (!started) {
+          tryInteraction(aId, bId);
+        }
       },
       onActivityStart: (npcId, activityId, waypointName) => {
         const act = ACTIVITIES[activityId as WaypointActivityId];
@@ -152,6 +218,61 @@ function App() {
             text: `${name} finished ${act.label} at ${waypointName}`,
             activityType: "action",
             npcId,
+          },
+        }]);
+      },
+      onItemAcquired: (npcId, itemLabel, itemEmoji) => {
+        const name = storeRef.current.get(npcId)?.name ?? npcId;
+        setFeed(prev => [...prev, {
+          type: "activity",
+          event: {
+            timestamp: new Date(),
+            text: `${name} acquired ${itemEmoji} ${itemLabel}`,
+            activityType: "action",
+            npcId,
+          },
+        }]);
+      },
+      onObserveActivity: (observerId, actorId, activityId) => {
+        const observer = storeRef.current.get(observerId);
+        const actor = storeRef.current.get(actorId);
+        if (!observer || !actor) return;
+        const act = ACTIVITIES[activityId as WaypointActivityId];
+        if (!act) return;
+
+        // Generate an observation based on personality + relationship
+        const rel = observer.relationships[actorId] ?? 0;
+        const traits = observer.personalityTraits.map(t => t.toLowerCase());
+        let opinion: string;
+        if (rel > 0.3) {
+          opinion = `I noticed ${actor.name} ${act.label}. Good for them.`;
+        } else if (rel < -0.2) {
+          opinion = `I saw ${actor.name} ${act.label}. Typical.`;
+        } else if (traits.includes("curious") || traits.includes("perceptive")) {
+          opinion = `I noticed ${actor.name} ${act.label}. Interesting.`;
+        } else {
+          opinion = `I saw ${actor.name} ${act.label} nearby.`;
+        }
+
+        // Create memory
+        storeRef.current.addMemory(observerId, {
+          text: opinion,
+          importance: 0.2,
+          recency: 1,
+          emotionalWeight: 0.15,
+          involvedNpcIds: [actorId],
+          timestamp: Date.now(),
+          type: "observation",
+        }, "shortTermMemory");
+
+        // Show as thought in feed
+        setFeed(prev => [...prev, {
+          type: "activity",
+          event: {
+            timestamp: new Date(),
+            text: `${observer.name}: "${opinion}"`,
+            activityType: "thought",
+            npcId: observerId,
           },
         }]);
       },

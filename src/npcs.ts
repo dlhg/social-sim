@@ -182,6 +182,7 @@ export function createNpc(partial: {
     secrets: partial.secrets ?? [],
     knownSecrets: {},
     behavioralOverride: null,
+    inventory: [],
   };
 }
 

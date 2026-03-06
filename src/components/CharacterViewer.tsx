@@ -232,6 +232,19 @@ export function CharacterViewer({
             </div>
           )}
 
+          {selected.inventory.length > 0 && (
+            <div className="npc-section">
+              <div className="section-label">Inventory</div>
+              <div className="inventory-list">
+                {selected.inventory.map((item) => (
+                  <span key={item.id} className="inventory-item" title={item.category}>
+                    {item.emoji} {item.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="npc-section">
             <div className="section-label">Recent Memories</div>
             <div className="memory-list">

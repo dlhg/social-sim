@@ -1,4 +1,4 @@
-import type { NPC, EmotionalState, MemoryEntry, NpcPromise, BehavioralOverride } from "./types";
+import type { NPC, EmotionalState, MemoryEntry, NpcPromise, BehavioralOverride, InventoryItem, ItemCategory } from "./types";
 
 type Listener = () => void;
 
@@ -155,6 +155,39 @@ export class NpcStore {
     return this.promises.filter(
       (p) => p.promiserId === npcId || p.promiseeId === npcId
     );
+  }
+
+  // ── Inventory ────────────────────────────────
+
+  addItem(npcId: string, item: InventoryItem): void {
+    const npc = this.npcs.get(npcId);
+    if (!npc) return;
+    npc.inventory.push(item);
+    if (npc.inventory.length > 8) {
+      // Drop oldest item to keep inventory small
+      npc.inventory.shift();
+    }
+    this.notify();
+  }
+
+  removeItem(npcId: string, itemId: string): InventoryItem | undefined {
+    const npc = this.npcs.get(npcId);
+    if (!npc) return undefined;
+    const idx = npc.inventory.findIndex(i => i.id === itemId);
+    if (idx === -1) return undefined;
+    const [removed] = npc.inventory.splice(idx, 1);
+    this.notify();
+    return removed;
+  }
+
+  getItemsByCategory(npcId: string, category: ItemCategory): InventoryItem[] {
+    const npc = this.npcs.get(npcId);
+    if (!npc) return [];
+    return npc.inventory.filter(i => i.category === category);
+  }
+
+  hasItemCategory(npcId: string, category: ItemCategory): boolean {
+    return this.getItemsByCategory(npcId, category).length > 0;
   }
 
   // ── Decay ───────────────────────────────────

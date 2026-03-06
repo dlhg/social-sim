@@ -1,6 +1,6 @@
 import type { Position, Waypoint, NpcSpatialState, WorldSnapshot, EmotionalState, DayPhase } from "./types";
 import type { NpcStore } from "./npc-store";
-import { ACTIVITIES, shouldDoActivity, pickActivity, activityDurationTicks, buildActivityMemory } from "./activities";
+import { ACTIVITIES, shouldDoActivity, pickActivity, activityDurationTicks, buildActivityMemory, rollItemYield } from "./activities";
 
 export const WAYPOINTS: Waypoint[] = [
   { id: "fountain", name: "Fountain", position: { x: 12, y: 8 }, mood: "gathering", description: "the central fountain, a busy gathering place" },
@@ -29,6 +29,8 @@ export interface WorldSimulationOptions {
   onProximity: (npcAId: string, npcBId: string) => void;
   onActivityStart?: (npcId: string, activityId: string, waypointName: string) => void;
   onActivityEnd?: (npcId: string, activityId: string, waypointName: string, memoryText: string) => void;
+  onItemAcquired?: (npcId: string, itemLabel: string, itemEmoji: string) => void;
+  onObserveActivity?: (observerId: string, actorId: string, activityId: string) => void;
   onTick?: () => void;
   getPhase?: () => DayPhase;
   npcStore?: NpcStore;
@@ -48,7 +50,12 @@ export class WorldSimulation {
   private onProximity: (a: string, b: string) => void;
   private onActivityStart: ((npcId: string, activityId: string, waypointName: string) => void) | null;
   private onActivityEnd: ((npcId: string, activityId: string, waypointName: string, memoryText: string) => void) | null;
+  private onItemAcquired: ((npcId: string, itemLabel: string, itemEmoji: string) => void) | null;
+  private onObserveActivity: ((observerId: string, actorId: string, activityId: string) => void) | null;
   private onTickCallback: (() => void) | null;
+  /** Track which observer→actor observations already fired to avoid spam */
+  private observationCooldowns: Map<string, number> = new Map();
+  private lastItemDecay = 0;
   private getPhase: (() => DayPhase) | null;
   private npcStore: NpcStore | null;
   private visitHistory: Map<string, Map<string, number>> = new Map();
@@ -60,6 +67,8 @@ export class WorldSimulation {
     this.onProximity = options.onProximity;
     this.onActivityStart = options.onActivityStart ?? null;
     this.onActivityEnd = options.onActivityEnd ?? null;
+    this.onItemAcquired = options.onItemAcquired ?? null;
+    this.onObserveActivity = options.onObserveActivity ?? null;
     this.onTickCallback = options.onTick ?? null;
     this.getPhase = options.getPhase ?? null;
     this.npcStore = options.npcStore ?? null;
@@ -251,6 +260,8 @@ export class WorldSimulation {
     }
 
     this.checkProximity();
+    this.checkActivityObservations();
+    this.decayItems(now);
     this.onTickCallback?.();
   }
 
@@ -468,8 +479,40 @@ export class WorldSimulation {
           Math.abs(a.position.y - b.position.y);
         if (dist <= PROXIMITY_THRESHOLD) {
           this.onProximity(a.npcId, b.npcId);
-          return;
         }
+      }
+    }
+  }
+
+  private checkActivityObservations(): void {
+    if (!this.onObserveActivity) return;
+
+    const OBSERVE_RANGE = 3;
+    const OBSERVE_COOLDOWN_MS = 45_000;
+    const now = Date.now();
+
+    const npcList = Array.from(this.npcs.values());
+    for (const actor of npcList) {
+      if (!actor.activeActivity) continue;
+
+      for (const observer of npcList) {
+        if (observer.npcId === actor.npcId) continue;
+        if (observer.frozen || observer.activeActivity) continue;
+
+        const dist =
+          Math.abs(observer.position.x - actor.position.x) +
+          Math.abs(observer.position.y - actor.position.y);
+        if (dist > OBSERVE_RANGE) continue;
+
+        const key = `${observer.npcId}:${actor.npcId}`;
+        const lastObserve = this.observationCooldowns.get(key) ?? 0;
+        if (now - lastObserve < OBSERVE_COOLDOWN_MS) continue;
+
+        // Only trigger ~20% of eligible ticks to avoid spam
+        if (Math.random() > 0.2) continue;
+
+        this.observationCooldowns.set(key, now);
+        this.onObserveActivity(observer.npcId, actor.npcId, actor.activeActivity.activityId);
       }
     }
   }
@@ -587,6 +630,15 @@ export class WorldSimulation {
 
     this.onActivityEnd?.(npc.npcId, activity.activityId, waypointName, memoryText);
 
+    // Roll for item yield
+    if (this.npcStore) {
+      const item = rollItemYield(activity.activityId);
+      if (item) {
+        this.npcStore.addItem(npc.npcId, item);
+        this.onItemAcquired?.(npc.npcId, item.label, item.emoji);
+      }
+    }
+
     npc.activeActivity = null;
     npc.idleTicksRemaining = 3;
   }
@@ -599,6 +651,21 @@ export class WorldSimulation {
 
   private randomWaypoint(): Waypoint {
     return WAYPOINTS[Math.floor(Math.random() * WAYPOINTS.length)];
+  }
+
+  private decayItems(now: number): void {
+    if (!this.npcStore) return;
+    // Check every ~30 seconds
+    if (now - this.lastItemDecay < 30_000) return;
+    this.lastItemDecay = now;
+
+    const ITEM_LIFETIME_MS = 5 * 60_000; // 5 minutes
+    for (const npc of this.npcStore.getAll()) {
+      const expired = npc.inventory.filter(i => now - i.acquiredAt > ITEM_LIFETIME_MS);
+      for (const item of expired) {
+        this.npcStore.removeItem(npc.id, item.id);
+      }
+    }
   }
 
   private randomIdleTicks(): number {

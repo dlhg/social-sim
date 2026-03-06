@@ -157,13 +157,17 @@ export function buildSystemPrompt(
         }`
       : "";
 
+  const inventoryBlock = speaker.inventory.length > 0
+    ? `\nINVENTORY (items you're carrying):\n${speaker.inventory.map(i => `- ${i.emoji} ${i.label}`).join("\n")}\nYou can reference these items in conversation — offer them, talk about how you got them, etc.`
+    : "";
+
   return `You are ${speaker.name}.
 
 PERSONALITY: ${speaker.personalityTraits.join(", ")}
 CORE DESIRES: ${speaker.coreDesires.join(", ")}
 CURRENT EMOTIONAL STATE: ${emotionSummary}
 CURRENT GOAL: ${speaker.currentGoal ?? "none"}
-${secretsBlock}
+${secretsBlock}${inventoryBlock}
 
 You are talking to ${listener.name}.
 YOUR RELATIONSHIP WITH ${listener.name}: ${relLabel} (${relationship.toFixed(2)})

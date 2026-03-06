@@ -1,4 +1,4 @@
-import type { NPC, WaypointActivity, WaypointActivityId } from "./types";
+import type { NPC, WaypointActivity, WaypointActivityId, InventoryItem } from "./types";
 
 // ── Activity Registry ───────────────────────────
 
@@ -47,6 +47,16 @@ export const ACTIVITIES: Record<WaypointActivityId, WaypointActivity> = {
     ],
     traitAffinity: ["charming", "curious", "enthusiastic"],
     emotionEffect: { joy: 0.02 },
+    itemYield: {
+      chance: 0.5,
+      category: "trinket",
+      items: [
+        { label: "carved pendant", emoji: "📿" },
+        { label: "small mirror", emoji: "🪞" },
+        { label: "colorful ribbon", emoji: "🎀" },
+        { label: "lucky coin", emoji: "🪙" },
+      ],
+    },
   },
   meditating: {
     id: "meditating",
@@ -77,6 +87,14 @@ export const ACTIVITIES: Record<WaypointActivityId, WaypointActivity> = {
     ],
     traitAffinity: ["curious", "perceptive", "tangential"],
     emotionEffect: { joy: 0.02, fear: -0.01 },
+    itemYield: {
+      chance: 0.3,
+      category: "craft",
+      items: [
+        { label: "charcoal sketch", emoji: "🖼️" },
+        { label: "portrait drawing", emoji: "🎨" },
+      ],
+    },
   },
   fishing: {
     id: "fishing",
@@ -92,6 +110,15 @@ export const ACTIVITIES: Record<WaypointActivityId, WaypointActivity> = {
     ],
     traitAffinity: ["philosophical", "kind", "sardonic"],
     emotionEffect: { anger: -0.02, fear: -0.02, joy: 0.01 },
+    itemYield: {
+      chance: 0.4,
+      category: "fish",
+      items: [
+        { label: "small trout", emoji: "🐟" },
+        { label: "silverfin", emoji: "🐠" },
+        { label: "pond bass", emoji: "🐟" },
+      ],
+    },
   },
   people_watching: {
     id: "people_watching",
@@ -152,6 +179,16 @@ export const ACTIVITIES: Record<WaypointActivityId, WaypointActivity> = {
     ],
     traitAffinity: ["curious", "enthusiastic"],
     emotionEffect: { joy: 0.02 },
+    itemYield: {
+      chance: 0.6,
+      category: "herb",
+      items: [
+        { label: "lavender sprig", emoji: "💜" },
+        { label: "wild mint", emoji: "🌿" },
+        { label: "chamomile bunch", emoji: "🌼" },
+        { label: "rosemary", emoji: "🌱" },
+      ],
+    },
   },
   training: {
     id: "training",
@@ -182,6 +219,16 @@ export const ACTIVITIES: Record<WaypointActivityId, WaypointActivity> = {
     ],
     traitAffinity: ["kind", "charming", "enthusiastic"],
     emotionEffect: { joy: 0.03, anger: -0.01 },
+    itemYield: {
+      chance: 0.7,
+      category: "food",
+      items: [
+        { label: "warm bread", emoji: "🍞" },
+        { label: "hearty stew", emoji: "🍲" },
+        { label: "grilled fish", emoji: "🐟" },
+        { label: "honey cake", emoji: "🍰" },
+      ],
+    },
   },
   writing: {
     id: "writing",
@@ -297,4 +344,23 @@ export function buildActivityMemory(
   const act = ACTIVITIES[actId];
   const flavor = act.flavorTexts[Math.floor(Math.random() * act.flavorTexts.length)];
   return act.memoryText.replace("{waypoint}", waypointName) + " " + flavor;
+}
+
+/**
+ * Roll for an item yield from completing an activity.
+ * Returns null if no item was produced.
+ */
+export function rollItemYield(actId: WaypointActivityId): InventoryItem | null {
+  const act = ACTIVITIES[actId];
+  if (!act.itemYield) return null;
+  if (Math.random() > act.itemYield.chance) return null;
+
+  const pick = act.itemYield.items[Math.floor(Math.random() * act.itemYield.items.length)];
+  return {
+    id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    label: pick.label,
+    category: act.itemYield.category,
+    emoji: pick.emoji,
+    acquiredAt: Date.now(),
+  };
 }

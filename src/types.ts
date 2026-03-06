@@ -22,6 +22,17 @@ export interface ActionData {
   detail?: string;          // gift description, rumor text, conspiracy plan, etc.
 }
 
+// ── Inventory ─────────────────────────────────
+export type ItemCategory = "food" | "herb" | "fish" | "trinket" | "book" | "craft";
+
+export interface InventoryItem {
+  id: string;
+  label: string;
+  category: ItemCategory;
+  emoji: string;
+  acquiredAt: number;
+}
+
 // ── Behavioral Overrides ──────────────────────
 export interface BehavioralOverride {
   mode: "seek" | "avoid";
@@ -75,6 +86,7 @@ export interface NPC {
   secrets: string[];
   knownSecrets: Record<string, string[]>; // npcId -> secrets learned about them
   behavioralOverride?: BehavioralOverride | null;
+  inventory: InventoryItem[];
 }
 
 // ── Promises / Plans ─────────────────────────
@@ -198,6 +210,12 @@ export type WaypointActivityId =
   | "writing"
   | "napping";
 
+export interface ItemYield {
+  chance: number;  // 0–1
+  category: ItemCategory;
+  items: { label: string; emoji: string }[];
+}
+
 export interface WaypointActivity {
   id: WaypointActivityId;
   label: string;
@@ -207,6 +225,7 @@ export interface WaypointActivity {
   flavorTexts: string[];
   traitAffinity: string[];
   emotionEffect?: Partial<EmotionalState>;
+  itemYield?: ItemYield;
 }
 
 export interface ActiveActivity {
