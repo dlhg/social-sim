@@ -47,6 +47,9 @@ function App() {
     [string, string] | null
   >(null);
   const [status, setStatus] = useState<"idle" | "running" | "paused">("idle");
+  const [language, setLanguage] = useState("English");
+  const languageRef = useRef(language);
+  languageRef.current = language;
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [dmToolsOpen, setDmToolsOpen] = useState(false);
   const [npcViewerOpen, setNpcViewerOpen] = useState(false);
@@ -288,6 +291,7 @@ function App() {
 
     managerRef.current = manager;
     manager.setWorldSimulation(world);
+    manager.setLanguage(languageRef.current);
     setStatus("running");
     manager.start();
     world.start();
@@ -445,8 +449,10 @@ function App() {
       <div className="app">
         <SetupScreen
           roster={roster}
+          language={language}
           onAddToRoster={handleAddToRoster}
           onRemoveFromRoster={handleRemoveFromRoster}
+          onLanguageChange={setLanguage}
           onStartSimulation={handleStartSimulation}
         />
       </div>

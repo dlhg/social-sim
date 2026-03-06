@@ -1406,6 +1406,36 @@
   color: #666;
 }
 
+/* ── Language Selector ─────────────────────────── */
+
+.setup-language {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.setup-language-label {
+  font-size: 13px;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.setup-language-select {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  cursor: pointer;
+}
+
+.setup-language-select:hover {
+  border-color: #555;
+}
+
 /* ── Start Area ────────────────────────────────── */
 
 .setup-start-area {

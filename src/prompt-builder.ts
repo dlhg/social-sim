@@ -50,6 +50,7 @@ export interface PromptContext {
   trajectoryContext?: string;
   locationContext?: string;
   preSortedMemories?: MemoryEntry[];
+  language?: string;
 }
 
 export function buildSystemPrompt(
@@ -178,7 +179,8 @@ RESPONSE FORMAT:
 - If the conversation is going in circles, take it in a completely new direction.
 - You can talk about other people you know. If you mention someone not in this conversation, include them in mentioned_npcs.
 - You can make promises to ${listener.name}. If you commit to something, set "promise" to what you promise.
-${RESPONSE_JSON_SCHEMA}`;
+${RESPONSE_JSON_SCHEMA}
+- You MUST write ALL text (speech, intent, everything) in ${ctx.language ?? "English"}. Never use any other language.`;
 }
 
 // ── Conversation message builder ────────────────
@@ -251,7 +253,8 @@ export function buildConversationMessages(
 export function buildReflectionMessages(
   npc: NPC,
   otherNpcName: string,
-  conversationSummary: string
+  conversationSummary: string,
+  language = "English",
 ): ChatMessage[] {
   const emotionSummary = describeEmotions(npc.emotionalState);
   return [
@@ -273,7 +276,8 @@ Respond with ONLY a single JSON object:
   "thought": "your private inner thought, 1-2 sentences"
 }
 
-Output ONLY the JSON object. No markdown, no code fences, no extra text.`,
+Output ONLY the JSON object. No markdown, no code fences, no extra text.
+You MUST write ALL text in ${language}. Never use any other language.`,
     },
   ];
 }

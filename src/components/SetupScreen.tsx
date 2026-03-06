@@ -5,17 +5,36 @@ import type { NPC } from "../types";
 
 const MAX_ROSTER = 13;
 
+const LANGUAGES = [
+  { code: "English", label: "English" },
+  { code: "Chinese", label: "Chinese" },
+  { code: "Japanese", label: "Japanese" },
+  { code: "Korean", label: "Korean" },
+  { code: "French", label: "French" },
+  { code: "Spanish", label: "Spanish" },
+  { code: "German", label: "German" },
+  { code: "Portuguese", label: "Portuguese" },
+  { code: "Russian", label: "Russian" },
+  { code: "Arabic", label: "Arabic" },
+  { code: "Italian", label: "Italian" },
+  { code: "Thai", label: "Thai" },
+];
+
 interface SetupScreenProps {
   roster: NPC[];
+  language: string;
   onAddToRoster: (npc: NPC) => void;
   onRemoveFromRoster: (npcId: string) => void;
+  onLanguageChange: (language: string) => void;
   onStartSimulation: () => void;
 }
 
 export function SetupScreen({
   roster,
+  language,
   onAddToRoster,
   onRemoveFromRoster,
+  onLanguageChange,
   onStartSimulation,
 }: SetupScreenProps) {
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -142,6 +161,24 @@ export function SetupScreen({
           </div>
         </div>
       )}
+
+      <div className="setup-language">
+        <label className="setup-language-label" htmlFor="language-select">
+          Language
+        </label>
+        <select
+          id="language-select"
+          className="setup-language-select"
+          value={language}
+          onChange={(e) => onLanguageChange(e.target.value)}
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <div className="setup-start-area">
         <button

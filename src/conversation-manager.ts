@@ -41,11 +41,16 @@ export class ConversationManager {
 
   private worldSim: WorldSimulation | null = null;
   private conversationEavesdroppers: Set<string> = new Set();
+  private language = "English";
 
   constructor(
     private store: NpcStore,
     private callbacks: ConversationManagerCallbacks
   ) {}
+
+  setLanguage(language: string): void {
+    this.language = language;
+  }
 
   setWorldSimulation(world: WorldSimulation): void {
     this.worldSim = world;
@@ -264,7 +269,7 @@ export class ConversationManager {
       currentSpeaker,
       currentListener,
       session,
-      { allNpcs, trajectoryContext, locationContext, preSortedMemories }
+      { allNpcs, trajectoryContext, locationContext, preSortedMemories, language: this.language }
     );
 
     let raw: string;
@@ -1291,7 +1296,7 @@ export class ConversationManager {
         if (!npc || !other) return;
 
         try {
-          const messages = buildReflectionMessages(npc, other.name, summary);
+          const messages = buildReflectionMessages(npc, other.name, summary, this.language);
           const raw = await accumulateChat(messages);
           const json = extractJson(raw);
           const parsed = JSON.parse(json);
