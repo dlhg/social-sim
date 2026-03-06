@@ -12,6 +12,7 @@ import type {
 } from "./types";
 import type { NpcStore } from "./npc-store";
 import type { WorldSimulation } from "./world-simulation";
+import type { DayCycle } from "./day-cycle";
 import { buildConversationMessages, buildReflectionMessages } from "./prompt-builder";
 import { accumulateChat } from "./ollama";
 import { parseLLMResponse, extractJson } from "./response-parser";
@@ -40,6 +41,7 @@ export class ConversationManager {
   private readonly MIN_TURN_DURATION_MS = 1_500;
 
   private worldSim: WorldSimulation | null = null;
+  private dayCycle: DayCycle | null = null;
   private conversationEavesdroppers: Set<string> = new Set();
   private language = "English";
 
@@ -54,6 +56,10 @@ export class ConversationManager {
 
   setWorldSimulation(world: WorldSimulation): void {
     this.worldSim = world;
+  }
+
+  setDayCycle(dayCycle: DayCycle): void {
+    this.dayCycle = dayCycle;
   }
 
   // ── Lifecycle ────────────────────────────────
@@ -265,11 +271,20 @@ export class ConversationManager {
 
     const preSortedMemories = this.store.getSortedShortTermMemory(speaker.id);
 
+    const timeOfDay = this.dayCycle?.getLabel();
+    const pendingPlans = this.store.getPromisesFor(speaker.id)
+      .filter(p => p.status === "active")
+      .map(p => {
+        const otherId = p.promiserId === speaker.id ? p.promiseeId : p.promiserId;
+        const otherNpc = this.store.get(otherId);
+        return { withName: otherNpc?.name ?? otherId, text: p.text };
+      });
+
     const messages = buildConversationMessages(
       currentSpeaker,
       currentListener,
       session,
-      { allNpcs, trajectoryContext, locationContext, preSortedMemories, language: this.language }
+      { allNpcs, trajectoryContext, locationContext, preSortedMemories, language: this.language, timeOfDay, pendingPlans }
     );
 
     let raw: string;
@@ -473,14 +488,16 @@ export class ConversationManager {
 
     // Promises
     if (response.promise) {
-      this.store.addPromise({
+      const promise = {
         id: `promise_${Date.now()}`,
         promiserId: speaker.id,
         promiseeId: listener.id,
         text: response.promise,
         madeAt: Date.now(),
-        status: "active",
-      });
+        status: "active" as const,
+      };
+      this.dayCycle?.assignResolvePhase(promise);
+      this.store.addPromise(promise);
 
       this.store.addMemory(
         speaker.id,

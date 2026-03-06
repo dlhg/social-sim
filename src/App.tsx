@@ -8,6 +8,7 @@ import { DmTools } from "./components/DmTools";
 import { NpcStore } from "./npc-store";
 import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
+import { DayCycle } from "./day-cycle";
 import type { NPC, BubbleData, FloaterData, ActionType, WaypointActivityId } from "./types";
 import { ACTIVITIES } from "./activities";
 import type { NpcSnapshot, FeedItem, PanelMode } from "./components/SidePanel";
@@ -66,6 +67,8 @@ function App() {
 
   const managerRef = useRef<ConversationManager | null>(null);
   const worldRef = useRef<WorldSimulation | null>(null);
+  const dayCycleRef = useRef<DayCycle | null>(null);
+  const [dayLabel, setDayLabel] = useState("");
 
   useEffect(() => {
     setNpcs(storeRef.current.getAll());
@@ -152,6 +155,10 @@ function App() {
           },
         }]);
       },
+      onTick: () => {
+        dayCycleRef.current?.tick();
+      },
+      getPhase: () => dayCycleRef.current?.getPhase() ?? "morning",
       npcStore: storeRef.current,
     });
 
@@ -299,8 +306,37 @@ function App() {
       },
     });
 
+    // Create day cycle
+    const dayCycle = new DayCycle({
+      npcStore: storeRef.current,
+      language: languageRef.current,
+      onPhaseChange: (state) => {
+        setDayLabel(dayCycle.getLabel());
+        setFeed(prev => [...prev, {
+          type: "activity",
+          event: {
+            timestamp: new Date(),
+            text: `-- ${state.phase.charAt(0).toUpperCase() + state.phase.slice(1)} of Day ${state.day} --`,
+          },
+        }]);
+      },
+      onPlanResolved: (promise, outcome, promiserName, promiseeName) => {
+        const kept = promise.status === "kept";
+        setFeed(prev => [...prev, {
+          type: "activity",
+          event: {
+            timestamp: new Date(),
+            text: `${kept ? "[Plan resolved]" : "[Plan fell through]"} ${promiserName} & ${promiseeName}: ${outcome}`,
+          },
+        }]);
+      },
+    });
+    dayCycleRef.current = dayCycle;
+    setDayLabel(dayCycle.getLabel());
+
     managerRef.current = manager;
     manager.setWorldSimulation(world);
+    manager.setDayCycle(dayCycle);
     manager.setLanguage(languageRef.current);
     setStatus("running");
     manager.start();
@@ -328,6 +364,8 @@ function App() {
     managerRef.current = null;
     worldRef.current?.stop();
     worldRef.current = null;
+    dayCycleRef.current = null;
+    setDayLabel("");
     setStatus("idle");
     setCurrentSpeaker(null);
     setActiveConversationPair(null);
@@ -480,6 +518,7 @@ function App() {
           onTogglePanel={handleTogglePanel}
         />
         <div className="world-panel">
+          {dayLabel && <div className="day-label">{dayLabel}</div>}
           <WorldCanvas
             getSnapshot={() =>
               worldRef.current?.getSnapshot() ?? {

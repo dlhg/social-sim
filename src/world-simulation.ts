@@ -1,4 +1,4 @@
-import type { Position, Waypoint, NpcSpatialState, WorldSnapshot, EmotionalState } from "./types";
+import type { Position, Waypoint, NpcSpatialState, WorldSnapshot, EmotionalState, DayPhase } from "./types";
 import type { NpcStore } from "./npc-store";
 import { ACTIVITIES, shouldDoActivity, pickActivity, activityDurationTicks, buildActivityMemory } from "./activities";
 
@@ -29,6 +29,8 @@ export interface WorldSimulationOptions {
   onProximity: (npcAId: string, npcBId: string) => void;
   onActivityStart?: (npcId: string, activityId: string, waypointName: string) => void;
   onActivityEnd?: (npcId: string, activityId: string, waypointName: string, memoryText: string) => void;
+  onTick?: () => void;
+  getPhase?: () => DayPhase;
   npcStore?: NpcStore;
 }
 
@@ -46,6 +48,8 @@ export class WorldSimulation {
   private onProximity: (a: string, b: string) => void;
   private onActivityStart: ((npcId: string, activityId: string, waypointName: string) => void) | null;
   private onActivityEnd: ((npcId: string, activityId: string, waypointName: string, memoryText: string) => void) | null;
+  private onTickCallback: (() => void) | null;
+  private getPhase: (() => DayPhase) | null;
   private npcStore: NpcStore | null;
   private visitHistory: Map<string, Map<string, number>> = new Map();
 
@@ -56,6 +60,8 @@ export class WorldSimulation {
     this.onProximity = options.onProximity;
     this.onActivityStart = options.onActivityStart ?? null;
     this.onActivityEnd = options.onActivityEnd ?? null;
+    this.onTickCallback = options.onTick ?? null;
+    this.getPhase = options.getPhase ?? null;
     this.npcStore = options.npcStore ?? null;
   }
 
@@ -245,6 +251,7 @@ export class WorldSimulation {
     }
 
     this.checkProximity();
+    this.onTickCallback?.();
   }
 
   private pickDestination(npc: NpcSpatialState): Waypoint {
@@ -331,7 +338,25 @@ export class WorldSimulation {
           score += 2;
       }
 
-      // 5. Recency penalty: avoid just-visited waypoints
+      // 5. Time-of-day preferences
+      const phase = this.getPhase?.();
+      if (phase && wp.mood) {
+        if (phase === "morning") {
+          // Morning: prefer reflective, peaceful spots
+          if (wp.mood === "reflective") score += 1.5;
+          if (wp.mood === "gathering") score -= 0.5;
+        } else if (phase === "afternoon") {
+          // Afternoon: prefer social, busy spots
+          if (wp.mood === "social" || wp.mood === "gathering") score += 1;
+        } else if (phase === "evening") {
+          // Evening: prefer intimate, social spots (tavern, bench)
+          if (wp.mood === "intimate") score += 1.5;
+          if (wp.mood === "social") score += 1;
+          if (wp.mood === "mysterious") score += 1;
+        }
+      }
+
+      // 6. Recency penalty: avoid just-visited waypoints
       const lastVisit =
         this.visitHistory.get(npc.npcId)?.get(wp.id) ?? 0;
       const secsSinceVisit = (Date.now() - lastVisit) / 1000;

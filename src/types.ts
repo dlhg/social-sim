@@ -77,7 +77,7 @@ export interface NPC {
   behavioralOverride?: BehavioralOverride | null;
 }
 
-// ── Promises ─────────────────────────────────
+// ── Promises / Plans ─────────────────────────
 export interface NpcPromise {
   id: string;
   promiserId: string;
@@ -85,6 +85,17 @@ export interface NpcPromise {
   text: string;
   madeAt: number;
   status: "active" | "kept" | "broken";
+  resolveAtPhase?: number; // phase index when this plan should resolve
+}
+
+// ── Day Cycle ────────────────────────────────
+export type DayPhase = "morning" | "afternoon" | "evening";
+
+export interface DayCycleState {
+  day: number;
+  phase: DayPhase;
+  phaseIndex: number;       // absolute phase counter (day * 3 + phaseOrdinal)
+  ticksIntoPhase: number;
 }
 
 // ── LLM Structured Response ───────────────────

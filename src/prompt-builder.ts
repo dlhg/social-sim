@@ -51,6 +51,8 @@ export interface PromptContext {
   locationContext?: string;
   preSortedMemories?: MemoryEntry[];
   language?: string;
+  timeOfDay?: string;
+  pendingPlans?: Array<{ withName: string; text: string }>;
 }
 
 export function buildSystemPrompt(
@@ -137,6 +139,15 @@ export function buildSystemPrompt(
     ? `\nLOCATION: You are at ${ctx.locationContext}`
     : "";
 
+  const timeBlock = ctx.timeOfDay
+    ? `\nTIME: It is currently ${ctx.timeOfDay}`
+    : "";
+
+  const pendingPlans = ctx.pendingPlans ?? [];
+  const plansBlock = pendingPlans.length > 0
+    ? `\nPENDING PLANS (things you've committed to that haven't happened yet):\n${pendingPlans.map(p => `- With ${p.withName}: "${p.text}"`).join("\n")}`
+    : "";
+
   const secretsBlock =
     speaker.secrets.length > 0
       ? `\nYOUR SECRETS (only you know these — reveal ONLY if you deeply trust someone):\n${speaker.secrets.map((s) => `- ${s}`).join("\n")}\n${
@@ -158,6 +169,8 @@ You are talking to ${listener.name}.
 YOUR RELATIONSHIP WITH ${listener.name}: ${relLabel} (${relationship.toFixed(2)})
 ${trajectoryBlock}
 ${locationBlock}
+${timeBlock}
+${plansBlock}
 
 RECENT MEMORIES OF ${listener.name}:
 ${relevantMemories || "(none)"}
