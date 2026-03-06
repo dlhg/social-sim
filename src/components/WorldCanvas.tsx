@@ -263,58 +263,61 @@ export function WorldCanvas({
       const envAlpha = 1 - cam.dimAmount * 0.6;
       ctx.globalAlpha = envAlpha;
 
-      // Subtle grid lines
+      // Subtle grid lines — single batched path
       ctx.strokeStyle = "rgba(255, 255, 255, 0.025)";
       ctx.lineWidth = 1;
+      ctx.beginPath();
       for (let x = 0; x <= GRID_WIDTH; x++) {
-        ctx.beginPath();
-        ctx.moveTo(offsetX + x * tileSize, offsetY);
-        ctx.lineTo(offsetX + x * tileSize, offsetY + GRID_HEIGHT * tileSize);
-        ctx.stroke();
+        const gx = offsetX + x * tileSize;
+        ctx.moveTo(gx, offsetY);
+        ctx.lineTo(gx, offsetY + GRID_HEIGHT * tileSize);
       }
       for (let y = 0; y <= GRID_HEIGHT; y++) {
-        ctx.beginPath();
-        ctx.moveTo(offsetX, offsetY + y * tileSize);
-        ctx.lineTo(offsetX + GRID_WIDTH * tileSize, offsetY + y * tileSize);
-        ctx.stroke();
+        const gy = offsetY + y * tileSize;
+        ctx.moveTo(offsetX, gy);
+        ctx.lineTo(offsetX + GRID_WIDTH * tileSize, gy);
       }
+      ctx.stroke();
 
-      // Ambient particles
+      // Ambient particles — batched by alpha bucket to reduce fillStyle changes
       if (particlesRef.current.length === 0 && width > 0) {
         particlesRef.current = createParticles(40, width, height);
       }
       const isEvening = dayPhaseRef.current === "evening";
       const particleColor = isEvening ? "180, 200, 255" : "255, 240, 200";
+      const alphaMult = (isEvening ? 1.5 : 0.8) * envAlpha;
+      // Group particles into ~5 alpha buckets to batch draws
+      const buckets: Particle[][] = [[], [], [], [], []];
       for (const p of particlesRef.current) {
         p.x += p.vx;
         p.y += p.vy;
         p.phase += p.alphaSpeed;
-        const pAlpha = (0.15 + 0.2 * Math.sin(p.phase)) * (isEvening ? 1.5 : 0.8);
-
-        // Wrap around
-        if (p.x < 0) p.x = width;
-        if (p.x > width) p.x = 0;
-        if (p.y < 0) p.y = height;
-        if (p.y > height) p.y = 0;
-
+        if (p.x < 0) p.x = width; else if (p.x > width) p.x = 0;
+        if (p.y < 0) p.y = height; else if (p.y > height) p.y = 0;
+        const pAlpha = (0.15 + 0.2 * Math.sin(p.phase)) * alphaMult;
+        const bucket = Math.min(4, Math.floor(pAlpha * 14));
+        buckets[bucket].push(p);
+      }
+      for (let b = 0; b < 5; b++) {
+        if (buckets[b].length === 0) continue;
+        const a = ((b + 1) / 14).toFixed(3);
+        ctx.fillStyle = `rgba(${particleColor},${a})`;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${particleColor}, ${pAlpha * envAlpha})`;
+        for (const p of buckets[b]) {
+          ctx.moveTo(p.x + p.size, p.y);
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        }
         ctx.fill();
       }
 
       // Waypoints
+      const wpFont = `500 ${Math.max(9, tileSize * 0.28)}px "Inter", -apple-system, sans-serif`;
+      ctx.font = wpFont;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
       for (const wp of snap.waypoints) {
         const wx = offsetX + (wp.position.x + 0.5) * tileSize;
         const wy = offsetY + (wp.position.y + 0.5) * tileSize;
-
-        // Soft glow behind waypoint
-        const glowRadius = tileSize * 0.5;
-        const glowGrad = ctx.createRadialGradient(wx, wy, 0, wx, wy, glowRadius);
-        glowGrad.addColorStop(0, "rgba(255, 255, 255, 0.04)");
-        glowGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
-        ctx.fillStyle = glowGrad;
-        ctx.fillRect(wx - glowRadius, wy - glowRadius, glowRadius * 2, glowRadius * 2);
 
         // Small diamond marker
         const s = tileSize * 0.12;
@@ -329,9 +332,6 @@ export function WorldCanvas({
 
         // Label
         ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
-        ctx.font = `500 ${Math.max(9, tileSize * 0.28)}px "Inter", -apple-system, sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "top";
         ctx.fillText(wp.name, wx, wy + s + 5);
       }
 

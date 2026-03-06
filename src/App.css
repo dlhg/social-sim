@@ -76,9 +76,7 @@
   min-width: 320px;
   display: flex;
   flex-direction: column;
-  background: rgba(22, 22, 34, 0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--bg-base);
   border-right: 1px solid var(--border-subtle);
 }
 
