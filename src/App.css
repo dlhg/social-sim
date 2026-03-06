@@ -373,6 +373,28 @@
   background: var(--accent-info-dim);
 }
 
+.btn-tts-off {
+  border-color: var(--text-faint);
+  color: var(--text-faint);
+  opacity: 0.6;
+}
+
+.btn-tts-off:hover {
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.btn-tts-on {
+  border-color: var(--accent-caution);
+  color: var(--accent-caution);
+  background: var(--accent-caution-dim);
+}
+
+.btn-tts-on:hover {
+  background: rgba(224, 168, 76, 0.2);
+}
+
 /* ── NPC Viewer Modal ────────────────────────── */
 
 .npc-viewer-modal {

@@ -13,6 +13,7 @@ import { DayCycle } from "./day-cycle";
 import type { NPC, BubbleData, FloaterData, ActionType, WaypointActivityId, DayPhase } from "./types";
 import { ACTIVITIES } from "./activities";
 import { pickInteraction, executeInteraction } from "./interactions";
+import { TTSService } from "./tts-service";
 import type { NpcSnapshot, FeedItem } from "./components/SidePanel";
 import "./App.css";
 
@@ -71,6 +72,8 @@ function App() {
   const dayCycleRef = useRef<DayCycle | null>(null);
   const [dayLabel, setDayLabel] = useState("");
   const [dayPhase, setDayPhase] = useState<DayPhase>("morning");
+  const ttsRef = useRef(new TTSService({ volume: 0.7, speed: 1.1, enabled: false }));
+  const [ttsEnabled, setTtsEnabled] = useState(false);
 
   useEffect(() => {
     setNpcs(storeRef.current.getAll());
@@ -382,6 +385,9 @@ function App() {
         setFeed((prev) => [...prev, { type: "chat", msg, timestamp: Date.now() }]);
         setStreamingText((prev) => ({ ...prev, [msg.npcId]: "" }));
 
+        // Fire-and-forget TTS — don't block the conversation flow
+        ttsRef.current.speak(msg.npcId, msg.text);
+
         // Mark speech bubble as completed, schedule removal
         setBubbles(prev => prev.map(b =>
           b.npcId === msg.npcId && b.type === "speech"
@@ -534,6 +540,12 @@ function App() {
     manager.setWorldSimulation(world);
     manager.setDayCycle(dayCycle);
     manager.setLanguage(languageRef.current);
+
+    // Pre-assign TTS voices to all NPCs
+    for (const npc of allNpcs) {
+      ttsRef.current.assignVoice(npc.id);
+    }
+
     setStatus("running");
     manager.start();
     world.start();
@@ -555,6 +567,7 @@ function App() {
   }, [status]);
 
   const handleStop = useCallback(() => {
+    ttsRef.current.stop();
     setRoster(storeRef.current.getAll());
     managerRef.current?.stop();
     managerRef.current = null;
@@ -757,6 +770,31 @@ function App() {
           className="btn btn-create"
         >
           + NPC
+        </button>
+        <button
+          onClick={() => {
+            const next = !ttsEnabled;
+            setTtsEnabled(next);
+            ttsRef.current.setOptions({ enabled: next });
+            if (next) {
+              // Warm up AudioContext during user gesture
+              ttsRef.current.warmUp();
+              // Check server availability on enable
+              ttsRef.current.checkServer().then((ok) => {
+                if (!ok) {
+                  console.warn("[tts] Server not available at localhost:8787");
+                  setTtsEnabled(false);
+                  ttsRef.current.setOptions({ enabled: false });
+                }
+              });
+            } else {
+              ttsRef.current.stop();
+            }
+          }}
+          className={`btn ${ttsEnabled ? "btn-tts-on" : "btn-tts-off"}`}
+          title={ttsEnabled ? "Disable TTS" : "Enable TTS (requires tts-server)"}
+        >
+          {ttsEnabled ? "TTS On" : "TTS Off"}
         </button>
       </div>
       {creatorOpen && (

@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# TTS server
+tts-server/.tts-cache/
+tts-server/.venv/
