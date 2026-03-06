@@ -1055,7 +1055,7 @@ export class ConversationManager {
       floaterText,
       isPositive ? "#f48fb1" : "#78909c",
       "relationship",
-      { delay: 200, directionX: awayDir, offsetY: -8, driftScale: 1.1 },
+      { delay: 2000, directionX: awayDir, offsetY: -8, driftScale: 1.1 },
     );
   }
 
