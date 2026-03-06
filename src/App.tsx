@@ -12,7 +12,7 @@ import { DayCycle } from "./day-cycle";
 import type { NPC, BubbleData, FloaterData, ActionType, WaypointActivityId } from "./types";
 import { ACTIVITIES } from "./activities";
 import { pickInteraction, executeInteraction } from "./interactions";
-import type { NpcSnapshot, FeedItem, PanelMode } from "./components/SidePanel";
+import type { NpcSnapshot, FeedItem } from "./components/SidePanel";
 import "./App.css";
 
 /** Extract the "speech" value from a partial JSON stream, stripping JSON syntax. */
@@ -57,7 +57,6 @@ function App() {
   const [npcViewerOpen, setNpcViewerOpen] = useState(false);
 
   // Panel state
-  const [panelMode, setPanelMode] = useState<PanelMode>("partial");
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
   const [npcHistory, setNpcHistory] = useState<Record<string, NpcSnapshot[]>>(
     {}
@@ -644,13 +643,6 @@ function App() {
     managerRef.current?.forceConversation(aId, bId);
   }, []);
 
-  const handleTogglePanel = useCallback(() => {
-    setPanelMode((prev) => {
-      if (prev === "collapsed") return "partial";
-      if (prev === "partial") return "expanded";
-      return "collapsed";
-    });
-  }, []);
 
   const handlePlantRumor = useCallback(
     (npcId: string, aboutNpcId: string, rumor: string) => {
@@ -708,8 +700,6 @@ function App() {
           npcs={npcs}
           feed={feed}
           currentSpeaker={currentSpeaker}
-          panelMode={panelMode}
-          onTogglePanel={handleTogglePanel}
         />
         <div className="world-panel">
           {dayLabel && <div className="day-label">{dayLabel}</div>}

@@ -11,8 +11,6 @@ export type FeedItem =
   | { type: "chat"; msg: ConversationMessage; timestamp: number }
   | { type: "activity"; event: ActivityEvent };
 
-export type PanelMode = "collapsed" | "partial" | "expanded";
-
 type FilterKey = "chat" | ActivityType | "system";
 
 const FILTER_LABELS: Record<FilterKey, string> = {
@@ -46,8 +44,6 @@ interface FeedPanelProps {
   npcs: NPC[];
   feed: FeedItem[];
   currentSpeaker: string | null;
-  panelMode: PanelMode;
-  onTogglePanel: () => void;
 }
 
 function formatTime(date: Date) {
@@ -62,20 +58,19 @@ export function FeedPanel({
   npcs,
   feed,
   currentSpeaker,
-  panelMode,
-  onTogglePanel,
 }: FeedPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(
     () => new Set(ALL_FILTERS)
   );
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
 
   useEffect(() => {
-    if (panelMode !== "collapsed") {
+    if (autoScroll) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [feed, currentSpeaker, panelMode]);
+  }, [feed, currentSpeaker, autoScroll]);
 
   const toggleFilter = (key: FilterKey) => {
     setActiveFilters((prev) => {
@@ -94,14 +89,17 @@ export function FeedPanel({
         <span className="feed-label">Feed</span>
         <div className="feed-header-buttons">
           <button
+            className={`feed-autoscroll-pill ${autoScroll ? "active" : ""}`}
+            onClick={() => setAutoScroll((v) => !v)}
+          >
+            {autoScroll ? "Disable autoscroll" : "Enable autoscroll"}
+          </button>
+          <button
             className={`feed-filter-toggle ${filtersOpen ? "active" : ""}`}
             onClick={() => setFiltersOpen((v) => !v)}
             title="Filter feed"
           >
             ⚙
-          </button>
-          <button className="panel-toggle" onClick={onTogglePanel}>
-            {panelMode === "expanded" ? "▴" : "▾"}
           </button>
         </div>
       </div>
@@ -124,7 +122,7 @@ export function FeedPanel({
         </div>
       )}
 
-      <div className={`feed-content ${panelMode}`}>
+      <div className="feed-content">
         {feed.map((item, i) => {
           const visible = activeFilters.has(getFilterKey(item));
           if (item.type === "chat") {

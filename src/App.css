@@ -85,6 +85,31 @@
   gap: 2px;
 }
 
+.feed-autoscroll-pill {
+  font-family: inherit;
+  font-size: 9px;
+  padding: 2px 0;
+  width: 116px;
+  text-align: center;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: none;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.feed-autoscroll-pill:hover {
+  color: #aaa;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.feed-autoscroll-pill.active {
+  color: #888;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
 .feed-filter-toggle {
   display: flex;
   align-items: center;
@@ -94,7 +119,7 @@
   border: none;
   cursor: pointer;
   color: #555;
-  font-size: 13px;
+  font-size: 17px;
   transition: color 0.15s ease;
 }
 
@@ -157,34 +182,7 @@
   line-height: 1.6;
 }
 
-.feed-content.collapsed {
-  display: none;
-}
 
-.feed-content.partial,
-.feed-content.expanded {
-  display: block;
-}
-
-/* ── Panel Toggle Handle ────────────────────── */
-
-.panel-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 8px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #666;
-  font-size: 14px;
-  transition: color 0.15s ease;
-  pointer-events: auto;
-}
-
-.panel-toggle:hover {
-  color: #ccc;
-}
 
 /* ── Controls ───────────────────────────────── */
 
