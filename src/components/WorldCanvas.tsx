@@ -304,10 +304,23 @@ export function WorldCanvas({
         ctx.globalAlpha = npcAlpha;
 
         // Movement detection for sprite animation
-        const moveDx = spatial.position.x - spatial.previousPosition.x;
-        const moveDy = spatial.position.y - spatial.previousPosition.y;
+        let moveDx = spatial.position.x - spatial.previousPosition.x;
+        let moveDy = spatial.position.y - spatial.previousPosition.y;
         const t = lerpFactor(spatial, now, snap.tickIntervalMs);
         const isMoving = (moveDx !== 0 || moveDy !== 0) && !isFrozen && t < 1.0;
+
+        // Face conversation partner when in a conversation
+        if (isInConversation && pair) {
+          const partnerId = spatial.npcId === pair[0] ? pair[1] : pair[0];
+          const partnerSpatial = snap.npcs.find((n) => n.npcId === partnerId);
+          if (partnerSpatial) {
+            const faceDx = partnerSpatial.position.x - spatial.position.x;
+            const faceDy = partnerSpatial.position.y - spatial.position.y;
+            // Pass facing delta so the sprite system updates direction
+            moveDx = faceDx;
+            moveDy = faceDy;
+          }
+        }
 
         // Sprite dimensions (1 tile wide, 2 tiles tall, 1:2 aspect)
         const sprW = tileSize * 1.0;
