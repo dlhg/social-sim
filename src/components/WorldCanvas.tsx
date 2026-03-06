@@ -51,6 +51,25 @@ function lerpY(
   );
 }
 
+// ── Camera state for smooth pan/zoom ──────────
+interface CameraState {
+  // Current interpolated values
+  cx: number;  // center X in grid coords
+  cy: number;  // center Y in grid coords
+  zoom: number;
+  // Targets
+  targetCx: number;
+  targetCy: number;
+  targetZoom: number;
+  // Dimming
+  dimAmount: number;       // 0 = no dim, 1 = full dim
+  targetDimAmount: number;
+}
+
+const CAMERA_LERP_SPEED = 0.03;  // per frame (~60fps)
+const FOCUS_ZOOM = 2.0;
+const DIM_OPACITY = 0.35;
+
 export function WorldCanvas({
   getSnapshot,
   getNpc,
@@ -80,6 +99,17 @@ export function WorldCanvas({
   pairRef.current = activeConversationPair;
   bubblesRef.current = bubbles;
   floatersRef.current = floaters;
+
+  const cameraRef = useRef<CameraState>({
+    cx: GRID_WIDTH / 2,
+    cy: GRID_HEIGHT / 2,
+    zoom: 1,
+    targetCx: GRID_WIDTH / 2,
+    targetCy: GRID_HEIGHT / 2,
+    targetZoom: 1,
+    dimAmount: 0,
+    targetDimAmount: 0,
+  });
 
   useEffect(() => {
     spritesRef.current.load(); // fire-and-forget; draw loop checks .ready
@@ -114,15 +144,52 @@ export function WorldCanvas({
       const snap = getSnapshotRef.current();
       const speaker = speakerRef.current;
       const pair = pairRef.current;
+      const cam = cameraRef.current;
+
+      // ── Update camera target ──────────────────
+      if (pair) {
+        const aSpatial = snap.npcs.find((n) => n.npcId === pair[0]);
+        const bSpatial = snap.npcs.find((n) => n.npcId === pair[1]);
+        if (aSpatial && bSpatial) {
+          const ax = lerpX(aSpatial, now, snap.tickIntervalMs);
+          const ay = lerpY(aSpatial, now, snap.tickIntervalMs);
+          const bx = lerpX(bSpatial, now, snap.tickIntervalMs);
+          const by = lerpY(bSpatial, now, snap.tickIntervalMs);
+          cam.targetCx = (ax + bx) / 2 + 0.5;
+          cam.targetCy = (ay + by) / 2 + 0.5;
+          // Zoom more when NPCs are close, less when far apart
+          const dist = Math.hypot(bx - ax, by - ay);
+          const zoomForDist = Math.max(1.5, FOCUS_ZOOM - dist * 0.03);
+          cam.targetZoom = zoomForDist;
+          cam.targetDimAmount = 1;
+        }
+      } else {
+        cam.targetCx = GRID_WIDTH / 2;
+        cam.targetCy = GRID_HEIGHT / 2;
+        cam.targetZoom = 1;
+        cam.targetDimAmount = 0;
+      }
+
+      // ── Smoothly interpolate camera ───────────
+      cam.cx += (cam.targetCx - cam.cx) * CAMERA_LERP_SPEED;
+      cam.cy += (cam.targetCy - cam.cy) * CAMERA_LERP_SPEED;
+      cam.zoom += (cam.targetZoom - cam.zoom) * CAMERA_LERP_SPEED;
+      cam.dimAmount += (cam.targetDimAmount - cam.dimAmount) * CAMERA_LERP_SPEED;
 
       ctx.clearRect(0, 0, width, height);
 
-      // Compute tile size (square tiles, centered)
+      // Compute tile size (square tiles, centered) at zoom=1
       const tileW = width / GRID_WIDTH;
       const tileH = height / GRID_HEIGHT;
-      const tileSize = Math.min(tileW, tileH);
-      const offsetX = (width - tileSize * GRID_WIDTH) / 2;
-      const offsetY = (height - tileSize * GRID_HEIGHT) / 2;
+      const baseTileSize = Math.min(tileW, tileH);
+
+      // Apply camera transform
+      const tileSize = baseTileSize * cam.zoom;
+      // Camera center in pixel space (where cam.cx,cam.cy should map to screen center)
+      const camPixelX = cam.cx * tileSize;
+      const camPixelY = cam.cy * tileSize;
+      const offsetX = width / 2 - camPixelX;
+      const offsetY = height / 2 - camPixelY;
 
       // Background
       ctx.fillStyle = "#0f1923";
@@ -136,6 +203,10 @@ export function WorldCanvas({
         tileSize * GRID_WIDTH,
         tileSize * GRID_HEIGHT
       );
+
+      // Dim the environment during conversations
+      const envAlpha = 1 - cam.dimAmount * 0.6;
+      ctx.globalAlpha = envAlpha;
 
       // Subtle grid lines
       ctx.strokeStyle = "rgba(255, 255, 255, 0.03)";
@@ -176,6 +247,8 @@ export function WorldCanvas({
         ctx.textBaseline = "top";
         ctx.fillText(wp.name, wx, wy + s + 4);
       }
+
+      ctx.globalAlpha = 1;
 
       // Conversation line between pair
       if (pair) {
@@ -222,6 +295,13 @@ export function WorldCanvas({
 
         const isSpeaking = speaker === spatial.npcId;
         const isFrozen = spatial.frozen;
+
+        // Dim non-conversing NPCs when a conversation is active
+        const isInConversation = pair && (spatial.npcId === pair[0] || spatial.npcId === pair[1]);
+        const npcAlpha = isInConversation || cam.dimAmount < 0.01
+          ? 1
+          : 1 - cam.dimAmount * (1 - DIM_OPACITY);
+        ctx.globalAlpha = npcAlpha;
 
         // Movement detection for sprite animation
         const moveDx = spatial.position.x - spatial.previousPosition.x;
@@ -294,6 +374,7 @@ export function WorldCanvas({
           }
           const depthZ = Math.floor(lerpY(spatial, now, snap.tickIntervalMs) * 10);
           bubbleEl.style.zIndex = String(isSpeaking ? 10000 : depthZ);
+          bubbleEl.style.opacity = String(npcAlpha);
         }
 
         // Destination indicator
@@ -314,6 +395,8 @@ export function WorldCanvas({
           ctx.stroke();
           ctx.setLineDash([]);
         }
+
+        ctx.globalAlpha = 1;
       }
 
       // Position floater elements at NPC's side, drifting outward
