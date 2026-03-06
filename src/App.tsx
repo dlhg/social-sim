@@ -472,6 +472,13 @@ function App() {
   return (
     <div className="app">
       <div className="main-content">
+        <FeedPanel
+          npcs={npcs}
+          feed={feed}
+          currentSpeaker={currentSpeaker}
+          panelMode={panelMode}
+          onTogglePanel={handleTogglePanel}
+        />
         <div className="world-panel">
           <WorldCanvas
             getSnapshot={() =>
@@ -486,13 +493,6 @@ function App() {
             activeConversationPair={activeConversationPair}
             bubbles={bubbles}
             floaters={floaters}
-          />
-          <FeedPanel
-            npcs={npcs}
-            feed={feed}
-            currentSpeaker={currentSpeaker}
-            panelMode={panelMode}
-            onTogglePanel={handleTogglePanel}
           />
         </div>
       </div>
