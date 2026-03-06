@@ -470,13 +470,17 @@ export function WorldCanvas({
         if (bubbleEl) {
           const aboveAnchorY = feetY - sprH - 8;
           const bubbleHeight = bubbleEl.offsetHeight || 60;
+          const bubbleWidth = bubbleEl.offsetWidth || 200;
+          // Clamp x so the bubble stays within the canvas bounds
+          const halfBubble = bubbleWidth / 2;
+          const clampedPx = Math.max(halfBubble, Math.min(width - halfBubble, px));
           // If the bubble would be clipped at the top, flip it below the NPC
           if (aboveAnchorY - bubbleHeight < 0) {
             const belowAnchorY = feetY + 20;
-            bubbleEl.style.transform = `translate(${px}px, ${belowAnchorY}px) translate(-50%, 0%)`;
+            bubbleEl.style.transform = `translate(${clampedPx}px, ${belowAnchorY}px) translate(-50%, 0%)`;
             bubbleEl.classList.add("bubble-flipped");
           } else {
-            bubbleEl.style.transform = `translate(${px}px, ${aboveAnchorY}px) translate(-50%, -100%)`;
+            bubbleEl.style.transform = `translate(${clampedPx}px, ${aboveAnchorY}px) translate(-50%, -100%)`;
             bubbleEl.classList.remove("bubble-flipped");
           }
           const depthZ = Math.floor(lerpY(spatial, now, snap.tickIntervalMs) * 10);
@@ -521,8 +525,10 @@ export function WorldCanvas({
         const fx = offsetX + (lerpX(spatial, now, snap.tickIntervalMs) + 0.5) * tileSize;
         const fy = offsetY + (lerpY(spatial, now, snap.tickIntervalMs) + 0.5) * tileSize;
         // Start at the sprite's side, roughly shoulder height
-        const startX = fx + floater.directionX * tileSize * 0.5;
+        let startX = fx + floater.directionX * tileSize * 0.5;
         const startY = fy - tileSize * 0.3 + floater.offsetY;
+        // Clamp so floaters stay within canvas bounds
+        startX = Math.max(0, Math.min(width, startX));
         floaterEl.style.transform = `translate(${startX}px, ${startY}px)`;
       }
 
