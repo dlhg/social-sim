@@ -294,8 +294,8 @@ export function WorldCanvas({
         p.phase += p.alphaSpeed;
         if (p.x < 0) p.x = width; else if (p.x > width) p.x = 0;
         if (p.y < 0) p.y = height; else if (p.y > height) p.y = 0;
-        const pAlpha = (0.15 + 0.2 * Math.sin(p.phase)) * alphaMult;
-        const bucket = Math.min(4, Math.floor(pAlpha * 14));
+        const pAlpha = Math.max(0, (0.15 + 0.2 * Math.sin(p.phase)) * alphaMult);
+        const bucket = Math.min(4, Math.max(0, Math.floor(pAlpha * 14)));
         buckets[bucket].push(p);
       }
       for (let b = 0; b < 5; b++) {
