@@ -886,7 +886,7 @@
 }
 
 .bubble-text {
-  display: block;
+  display: inline;
 }
 
 @keyframes bubble-appear {

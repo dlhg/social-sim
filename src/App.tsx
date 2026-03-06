@@ -21,7 +21,7 @@ function extractSpeechFromStream(raw: string): string {
   let text = match[1];
   // Unescape JSON string escapes
   text = text.replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
-  return text;
+  return text.trimEnd();
 }
 
 const ACTION_LABELS: Record<ActionType, string> = {
