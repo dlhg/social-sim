@@ -217,7 +217,7 @@ export class WorldSimulation {
       // Pick the first candidate that doesn't crowd another NPC
       let moved = false;
       for (const candidate of candidates) {
-        if (!this.isTooCloseToOthers(candidate, npc.npcId)) {
+        if (!this.isTooCloseToOthers(candidate, npc)) {
           npc.position.x = candidate.x;
           npc.position.y = candidate.y;
           moved = true;
@@ -438,11 +438,14 @@ export class WorldSimulation {
 
   // ── Collision avoidance ────────────────────
 
-  private isTooCloseToOthers(pos: Position, excludeNpcId: string): boolean {
+  private isTooCloseToOthers(pos: Position, npc: NpcSpatialState): boolean {
     for (const other of this.npcs.values()) {
-      if (other.npcId === excludeNpcId) continue;
-      const dist = Math.abs(pos.x - other.position.x) + Math.abs(pos.y - other.position.y);
-      if (dist <= 1) return true;
+      if (other.npcId === npc.npcId) continue;
+      const newDist = Math.abs(pos.x - other.position.x) + Math.abs(pos.y - other.position.y);
+      if (newDist > 1) continue;
+      // Only block if this move doesn't increase distance (allow separating)
+      const curDist = Math.abs(npc.position.x - other.position.x) + Math.abs(npc.position.y - other.position.y);
+      if (newDist <= curDist) return true;
     }
     return false;
   }
