@@ -125,6 +125,16 @@ export function SetupScreen({
                   >
                     {npc.name}
                   </span>
+                  <span className="premade-card-traits">
+                    {npc.personalityTraits.slice(0, 2).map((t) => (
+                      <span key={t} className="trait-chip">{t}</span>
+                    ))}
+                  </span>
+                  {npc.coreDesires[0] && (
+                    <span className="premade-card-desire">
+                      {npc.coreDesires[0]}
+                    </span>
+                  )}
                   {added && <span className="premade-card-badge">Added</span>}
                 </button>
               );
