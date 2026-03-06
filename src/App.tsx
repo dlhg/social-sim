@@ -282,7 +282,7 @@ function App() {
         setFloaters(prev => [...prev, floater]);
         setTimeout(() => {
           setFloaters(prev => prev.filter(f => f.id !== floater.id));
-        }, 2200 + floater.delay);
+        }, 4700 + floater.delay);
       },
     });
 
