@@ -41,7 +41,18 @@ export interface InventoryItem {
   category: ItemCategory;
   emoji: string;
   acquiredAt: number;
+  lifetimeMs: number;
 }
+
+/** Per-category item lifetimes (ms). More perishable = shorter. */
+export const ITEM_LIFETIME_BY_CATEGORY: Record<ItemCategory, number> = {
+  fish:    2 * 60_000,   // 2 min – very perishable
+  food:    3 * 60_000,   // 3 min
+  herb:    5 * 60_000,   // 5 min
+  craft:   8 * 60_000,   // 8 min
+  trinket: 10 * 60_000,  // 10 min
+  book:    12 * 60_000,  // 12 min
+};
 
 // ── Behavioral Overrides ──────────────────────
 export interface BehavioralOverride {

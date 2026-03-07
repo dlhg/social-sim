@@ -1,4 +1,5 @@
 import type { NPC, EmotionalState, InventoryItem, ItemCategory } from "./types";
+import { ITEM_LIFETIME_BY_CATEGORY } from "./types";
 
 export const COLOR_SWATCHES = [
   "#6ec6ff",
@@ -117,6 +118,7 @@ export function randomizeInventory(): InventoryItem[] {
     category: item.category,
     emoji: item.emoji,
     acquiredAt: Date.now(),
+    lifetimeMs: ITEM_LIFETIME_BY_CATEGORY[item.category],
   }));
 }
 

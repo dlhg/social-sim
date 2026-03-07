@@ -763,9 +763,8 @@ export class WorldSimulation {
     if (now - this.lastItemDecay < 30_000) return;
     this.lastItemDecay = now;
 
-    const ITEM_LIFETIME_MS = 5 * 60_000; // 5 minutes
     for (const npc of this.npcStore.getAll()) {
-      const expired = npc.inventory.filter(i => now - i.acquiredAt > ITEM_LIFETIME_MS);
+      const expired = npc.inventory.filter(i => now - i.acquiredAt > (i.lifetimeMs ?? 5 * 60_000));
       for (const item of expired) {
         this.npcStore.removeItem(npc.id, item.id);
       }

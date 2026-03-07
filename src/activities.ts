@@ -1,4 +1,5 @@
 import type { NPC, WaypointActivity, WaypointActivityId, InventoryItem } from "./types";
+import { ITEM_LIFETIME_BY_CATEGORY } from "./types";
 
 // ── Activity Registry ───────────────────────────
 
@@ -360,11 +361,13 @@ export function rollItemYield(actId: WaypointActivityId): InventoryItem | null {
   if (Math.random() > act.itemYield.chance) return null;
 
   const pick = act.itemYield.items[Math.floor(Math.random() * act.itemYield.items.length)];
+  const category = act.itemYield.category;
   return {
     id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     label: pick.label,
-    category: act.itemYield.category,
+    category,
     emoji: pick.emoji,
     acquiredAt: Date.now(),
+    lifetimeMs: ITEM_LIFETIME_BY_CATEGORY[category],
   };
 }

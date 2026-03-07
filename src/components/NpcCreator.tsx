@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createNpc, randomizeFields, AVATAR_OPTIONS, COLOR_SWATCHES, RANDOM_ITEMS } from "../npcs";
 import type { NPC, InventoryItem, ItemCategory } from "../types";
+import { ITEM_LIFETIME_BY_CATEGORY } from "../types";
 
 interface NpcCreatorProps {
   onClose: () => void;
@@ -58,6 +59,7 @@ export function NpcCreator({
         category: item.category,
         emoji: item.emoji,
         acquiredAt: Date.now(),
+        lifetimeMs: ITEM_LIFETIME_BY_CATEGORY[item.category],
       },
     ]);
   }

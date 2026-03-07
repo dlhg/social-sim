@@ -2,8 +2,6 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import type { NPC, InventoryItem } from "../types";
 import type { NpcSnapshot } from "./SidePanel";
 
-const ITEM_LIFETIME_MS = 5 * 60_000;
-
 const CATEGORY_COLORS: Record<string, string> = {
   food: "#e0a84c",
   herb: "#5cb87a",
@@ -15,7 +13,8 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 function timeRemaining(item: InventoryItem): string {
   const elapsed = Date.now() - item.acquiredAt;
-  const remaining = Math.max(0, ITEM_LIFETIME_MS - elapsed);
+  const lifetime = item.lifetimeMs ?? 5 * 60_000;
+  const remaining = Math.max(0, lifetime - elapsed);
   const secs = Math.ceil(remaining / 1000);
   if (secs <= 0) return "expiring";
   const m = Math.floor(secs / 60);
@@ -288,23 +287,25 @@ export function CharacterViewer({
             ) : (
               <div className="inventory-list">
                 {selected.inventory.map((item) => (
-                  <span
+                  <div
                     key={item.id}
                     className="inventory-item"
                     style={{
                       borderColor: CATEGORY_COLORS[item.category] ?? "rgba(255,255,255,0.1)",
                     }}
                   >
-                    <span className="inv-emoji">{item.emoji}</span>
-                    <span className="inv-label">{item.label}</span>
-                    <span
-                      className="inv-category"
+                    <div className="inv-row-name">
+                      <span className="inv-emoji">{item.emoji}</span>
+                      <span className="inv-label">{item.label}</span>
+                    </div>
+                    <div
+                      className="inv-row-category"
                       style={{ color: CATEGORY_COLORS[item.category] }}
                     >
                       {item.category}
-                    </span>
-                    <span className="inv-timer">{timeRemaining(item)}</span>
-                  </span>
+                    </div>
+                    <div className="inv-row-timer">{timeRemaining(item)}</div>
+                  </div>
                 ))}
               </div>
             )}
