@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { NPC, BubbleData, FloaterData, DayPhase } from "../types";
 import type { WorldSnapshot, NpcSpatialState } from "../types";
 import { SpriteSystem } from "../sprite-system";
+import { TilemapRenderer } from "../tilemap-renderer";
 
 interface WorldCanvasProps {
   getSnapshot: () => WorldSnapshot;
@@ -122,6 +123,7 @@ export function WorldCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const spritesRef = useRef(new SpriteSystem());
+  const tilemapRef = useRef(new TilemapRenderer());
   const bubbleRefsMap = useRef(new Map<string, HTMLDivElement>());
   const floaterRefsMap = useRef(new Map<string, HTMLDivElement>());
   const particlesRef = useRef<Particle[]>([]);
@@ -159,6 +161,7 @@ export function WorldCanvas({
 
   useEffect(() => {
     spritesRef.current.load(); // fire-and-forget; draw loop checks .ready
+    tilemapRef.current.load("/assets/levels/testmap.tmj"); // fire-and-forget; draw loop checks .ready
 
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
@@ -244,18 +247,25 @@ export function WorldCanvas({
       ctx.fillStyle = phaseTint.bg;
       ctx.fillRect(0, 0, width, height);
 
-      // Grid area background
-      ctx.fillStyle = phaseTint.grid;
-      ctx.fillRect(
-        offsetX,
-        offsetY,
-        tileSize * GRID_WIDTH,
-        tileSize * GRID_HEIGHT
-      );
+      const tilemap = tilemapRef.current;
+      if (tilemap.ready) {
+        // Tilemap replaces the flat grid background
+        tilemap.drawGround(ctx, offsetX, offsetY, tileSize);
+        tilemap.drawObjects(ctx, offsetX, offsetY, tileSize);
 
-      // Phase tint overlay
-      if (phaseTint.tintAlpha > 0) {
-        ctx.fillStyle = `rgba(${phaseTint.tintColor}, ${phaseTint.tintAlpha})`;
+        // Phase tint overlay on top of tilemap
+        if (phaseTint.tintAlpha > 0) {
+          ctx.fillStyle = `rgba(${phaseTint.tintColor}, ${phaseTint.tintAlpha})`;
+          ctx.fillRect(
+            offsetX,
+            offsetY,
+            tileSize * GRID_WIDTH,
+            tileSize * GRID_HEIGHT
+          );
+        }
+      } else {
+        // Fallback: flat grid while tilemap loads
+        ctx.fillStyle = phaseTint.grid;
         ctx.fillRect(
           offsetX,
           offsetY,
@@ -267,22 +277,6 @@ export function WorldCanvas({
       // Dim the environment during conversations
       const envAlpha = 1 - cam.dimAmount * 0.6;
       ctx.globalAlpha = envAlpha;
-
-      // Subtle grid lines — single batched path
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.025)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let x = 0; x <= GRID_WIDTH; x++) {
-        const gx = offsetX + x * tileSize;
-        ctx.moveTo(gx, offsetY);
-        ctx.lineTo(gx, offsetY + GRID_HEIGHT * tileSize);
-      }
-      for (let y = 0; y <= GRID_HEIGHT; y++) {
-        const gy = offsetY + y * tileSize;
-        ctx.moveTo(offsetX, gy);
-        ctx.lineTo(offsetX + GRID_WIDTH * tileSize, gy);
-      }
-      ctx.stroke();
 
       // Ambient particles — batched by alpha bucket to reduce fillStyle changes
       if (particlesRef.current.length === 0 && width > 0) {
