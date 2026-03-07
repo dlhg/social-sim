@@ -296,6 +296,9 @@ export class ConversationManager {
       this.memory.decayAllRecency();
     });
 
+    // Store a single summary memory per NPC for the whole conversation
+    this.storeConversationSummaryMemory(npcAId, npcBId, session);
+
     // Log post-conversation summary
     this.logConversationSummary(npcAId, npcBId);
 
@@ -543,59 +546,9 @@ export class ConversationManager {
       listenerAffDelta
     );
 
-    const emotionMagnitude =
-      Math.abs(response.emotion_delta.anger) +
-      Math.abs(response.emotion_delta.trust) +
-      Math.abs(response.emotion_delta.fear) +
-      Math.abs(response.emotion_delta.joy) +
-      Math.abs(response.emotion_delta.sadness) +
-      Math.abs(response.emotion_delta.curiosity) +
-      Math.abs(response.emotion_delta.disgust) +
-      Math.abs(response.emotion_delta.guilt);
-
-    const speakerMemory = `I said to ${listener.name}: "${response.speech}"`;
-    const listenerMemory = `${speaker.name} said to me: "${response.speech}"`;
-
-    const sentimentValue =
-      response.relationship_delta > 0
-        ? 0.3
-        : response.relationship_delta < 0
-          ? -0.3
-          : 0;
-
-    // Speaker memory
-    this.memory.add(
-      speaker.id,
-      {
-        text: speakerMemory,
-        importance: Math.min(1, Math.abs(response.relationship_delta) * 10),
-        recency: 1,
-        emotionalWeight: Math.min(1, emotionMagnitude),
-        involvedNpcIds: [listener.id],
-        timestamp: Date.now(),
-        type: "conversation",
-        aboutNpcIds: [],
-        sentiment: sentimentValue,
-      },
-      "shortTermMemory"
-    );
-
-    // Listener memory
-    this.memory.add(
-      listener.id,
-      {
-        text: listenerMemory,
-        importance: Math.min(1, Math.abs(response.relationship_delta) * 10),
-        recency: 1,
-        emotionalWeight: Math.min(1, emotionMagnitude * 0.5),
-        involvedNpcIds: [speaker.id],
-        timestamp: Date.now(),
-        type: "conversation",
-        aboutNpcIds: [],
-        sentiment: sentimentValue,
-      },
-      "shortTermMemory"
-    );
+    // Per-turn memories are only stored for significant events (secrets, promises,
+    // gossip, actions). Routine dialogue gets a single summary memory post-conversation
+    // via storeConversationSummaryMemory() to avoid flooding short-term memory.
 
     // Secret reveals
     if (response.secret_revealed) {
@@ -723,10 +676,6 @@ export class ConversationManager {
       this.processAction(speaker, listener, response.action);
     }
 
-    // Log memory formation
-    const speakerMems = this.store.get(speaker.id)?.shortTermMemory.length ?? 0;
-    const listenerMems = this.store.get(listener.id)?.shortTermMemory.length ?? 0;
-    this.log(`Memory stored for ${speaker.name} (${speakerMems} memories) and ${listener.name} (${listenerMems} memories)`);
   }
 
   // ── Action Processing ───────────────────────
@@ -1287,6 +1236,97 @@ export class ConversationManager {
     if (value > -0.2) return "neutral";
     if (value > -0.5) return "tense";
     return "hostile";
+  }
+
+  /**
+   * Store one summary memory per NPC for the whole conversation,
+   * instead of one per line of dialogue. Captures the emotional arc,
+   * topics, and key moments.
+   */
+  private storeConversationSummaryMemory(
+    npcAId: string,
+    npcBId: string,
+    session: ConversationSession
+  ): void {
+    const npcA = this.store.get(npcAId);
+    const npcB = this.store.get(npcBId);
+    if (!npcA || !npcB) return;
+
+    // Calculate net emotional shift from the conversation
+    let totalRelDelta = 0;
+    let hadAction = false;
+    const topics: string[] = [];
+
+    for (const msg of session.messages) {
+      const r = msg.rawResponse;
+      if (!r) continue;
+      totalRelDelta += r.relationship_delta;
+      if (r.action) hadAction = true;
+      // Grab a few key speech snippets for topic summary (first, mid, last)
+    }
+
+    const avgSentiment = totalRelDelta / Math.max(1, session.messages.length);
+    const toneWord =
+      avgSentiment > 0.03 ? "warm" :
+      avgSentiment < -0.03 ? "tense" :
+      "neutral";
+
+    // Pick 1-2 representative quotes (first speaker line + last line)
+    const firstMsg = session.messages[0];
+    const lastMsg = session.messages[session.messages.length - 1];
+
+    const buildSummary = (selfId: string, otherName: string) => {
+      const myMsgs = session.messages.filter(m => m.npcId === selfId);
+      const theirMsgs = session.messages.filter(m => m.npcId !== selfId);
+      const myLastSpeech = myMsgs[myMsgs.length - 1]?.text;
+      const theirLastSpeech = theirMsgs[theirMsgs.length - 1]?.text;
+
+      let summary = `I had a ${toneWord} conversation with ${otherName} (${session.turnCount} turns).`;
+      if (theirLastSpeech) {
+        const truncated = theirLastSpeech.length > 80
+          ? theirLastSpeech.slice(0, 77) + "..."
+          : theirLastSpeech;
+        summary += ` They said: "${truncated}"`;
+      }
+      if (hadAction) summary += " Something significant happened.";
+      return summary;
+    };
+
+    const importance = Math.min(1, Math.abs(totalRelDelta) * 3 + (hadAction ? 0.3 : 0) + 0.2);
+
+    // NPC A's memory
+    this.memory.add(
+      npcAId,
+      {
+        text: buildSummary(npcAId, npcB.name),
+        importance,
+        recency: 1,
+        emotionalWeight: Math.min(1, Math.abs(totalRelDelta) * 5),
+        involvedNpcIds: [npcBId],
+        timestamp: Date.now(),
+        type: "conversation",
+        aboutNpcIds: [],
+        sentiment: avgSentiment > 0 ? 0.3 : avgSentiment < 0 ? -0.3 : 0,
+      },
+      "shortTermMemory"
+    );
+
+    // NPC B's memory
+    this.memory.add(
+      npcBId,
+      {
+        text: buildSummary(npcBId, npcA.name),
+        importance,
+        recency: 1,
+        emotionalWeight: Math.min(1, Math.abs(totalRelDelta) * 5),
+        involvedNpcIds: [npcAId],
+        timestamp: Date.now(),
+        type: "conversation",
+        aboutNpcIds: [],
+        sentiment: avgSentiment > 0 ? 0.3 : avgSentiment < 0 ? -0.3 : 0,
+      },
+      "shortTermMemory"
+    );
   }
 
   private logConversationSummary(npcAId: string, npcBId: string): void {
