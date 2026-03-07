@@ -19,14 +19,14 @@ import type { NpcSnapshot, FeedItem } from "./components/SidePanel";
 import "./App.css";
 
 /** Extract the "speech" value from a partial JSON stream, stripping JSON syntax. */
-function extractSpeechFromStream(raw: string): string {
+function extractSpeechFromStream(raw: string): { text: string; complete: boolean } {
   // Match "speech": "..." or "speech":"..."
   const match = raw.match(/"speech"\s*:\s*"((?:[^"\\]|\\.)*)("?)/s);
-  if (!match) return "";
+  if (!match) return { text: "", complete: false };
   let text = match[1];
   // Unescape JSON string escapes
   text = text.replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
-  return text.trimEnd();
+  return { text: text.trimEnd(), complete: match[2] === '"' };
 }
 
 const ACTION_LABELS: Record<ActionType, string> = {
@@ -75,6 +75,7 @@ function App() {
   const [dayLabel, setDayLabel] = useState("");
   const [dayPhase, setDayPhase] = useState<DayPhase>("morning");
   const ttsRef = useRef(new TTSService({ volume: 0.7, speed: 1.1, enabled: false }));
+  const earlyTtsRef = useRef(new Set<string>());
   const [ttsEnabled, setTtsEnabled] = useState(false);
 
   useEffect(() => {
@@ -372,7 +373,7 @@ function App() {
     const manager = new ConversationManager(storeRef.current, memoryRef.current, {
       onStreamToken: (npcId, fullText) => {
         setStreamingText((prev) => ({ ...prev, [npcId]: fullText }));
-        const speechText = extractSpeechFromStream(fullText);
+        const { text: speechText, complete } = extractSpeechFromStream(fullText);
         if (speechText) {
           setBubbles((prev) => {
             const idx = prev.findIndex(b => b.npcId === npcId && b.type === "speech");
@@ -383,14 +384,21 @@ function App() {
             }
             return [...prev, { npcId, text: speechText, type: "speech", startedAt: Date.now() }];
           });
+          // Fire TTS as soon as the speech field closes, don't wait for full JSON
+          if (complete && !earlyTtsRef.current.has(npcId)) {
+            earlyTtsRef.current.add(npcId);
+            ttsRef.current.speak(npcId, speechText);
+          }
         }
       },
       onTurnComplete: (msg) => {
         setFeed((prev) => [...prev, { type: "chat", msg, timestamp: Date.now() }]);
         setStreamingText((prev) => ({ ...prev, [msg.npcId]: "" }));
 
-        // Fire-and-forget TTS — don't block the conversation flow
-        ttsRef.current.speak(msg.npcId, msg.text);
+        // Fire TTS only if not already triggered early during streaming
+        if (!earlyTtsRef.current.delete(msg.npcId)) {
+          ttsRef.current.speak(msg.npcId, msg.text);
+        }
 
         // Mark speech bubble as completed, schedule removal
         setBubbles(prev => prev.map(b =>
