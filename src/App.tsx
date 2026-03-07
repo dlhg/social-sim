@@ -784,6 +784,7 @@ function App() {
           selectedNpcId={selectedNpcId}
           npcHistory={npcHistory}
           dayLabel={dayLabel}
+          onSelectNpc={setSelectedNpcId}
         />
       </div>
       <div className="controls">

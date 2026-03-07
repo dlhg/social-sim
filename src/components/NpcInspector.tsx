@@ -2,6 +2,60 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import type { NPC, InventoryItem } from "../types";
 import type { NpcSnapshot } from "./SidePanel";
 
+// Must match sprite-system.ts
+const SPRITE_NAMES = ["Adam", "Alex", "Amelia", "Bob"] as const;
+type SpriteName = (typeof SPRITE_NAMES)[number];
+const NPC_SPRITE_MAP: Record<string, SpriteName> = {
+  alice: "Amelia",
+  bob: "Bob",
+  victor: "Adam",
+  mara: "Alex",
+};
+
+function resolveSprite(npcId: string, pool: Map<string, SpriteName>): SpriteName {
+  const explicit = NPC_SPRITE_MAP[npcId];
+  if (explicit) return explicit;
+  let assigned = pool.get(npcId);
+  if (!assigned) {
+    assigned = SPRITE_NAMES[pool.size % SPRITE_NAMES.length];
+    pool.set(npcId, assigned);
+  }
+  return assigned;
+}
+
+const spritePool = new Map<string, SpriteName>();
+
+function NpcSpriteIcon({ npcId, size = 32 }: { npcId: string; size?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const spriteName = resolveSprite(npcId, spritePool);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const img = new Image();
+    img.onload = () => {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = size * dpr;
+      canvas.height = size * dpr;
+      ctx.scale(dpr, dpr);
+      ctx.imageSmoothingEnabled = false;
+      // Frame 0 of Down direction (forward-facing) = sx 0, sy 0, 16x32
+      ctx.drawImage(img, 0, 0, 16, 32, 0, 0, size, size);
+    };
+    img.src = `/assets/Modern%20tiles_Free/Characters_free/${spriteName}_idle_anim_16x16.png`;
+  }, [spriteName, size]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ width: size, height: size, display: "block" }}
+    />
+  );
+}
+
 const CATEGORY_COLORS: Record<string, string> = {
   food: "#e0a84c",
   herb: "#5cb87a",
@@ -112,6 +166,7 @@ interface NpcInspectorProps {
   selectedNpcId: string | null;
   npcHistory: Record<string, NpcSnapshot[]>;
   dayLabel: string;
+  onSelectNpc?: (npcId: string) => void;
 }
 
 export function NpcInspector({
@@ -119,7 +174,9 @@ export function NpcInspector({
   selectedNpcId,
   npcHistory,
   dayLabel,
+  onSelectNpc,
 }: NpcInspectorProps) {
+  const [selectorOpen, setSelectorOpen] = useState(true);
   const npcMap = Object.fromEntries(npcs.map((n) => [n.id, n]));
   const selected = selectedNpcId ? npcMap[selectedNpcId] : null;
   const history = selectedNpcId ? npcHistory[selectedNpcId] ?? [] : [];
@@ -137,6 +194,32 @@ export function NpcInspector({
     <div className="inspector-panel">
       <div className="inspector-header">
         <span className="inspector-day-label">{dayLabel || "---"}</span>
+      </div>
+
+      <div className="npc-selector-section">
+        <button
+          className="npc-selector-toggle"
+          onClick={() => setSelectorOpen((v) => !v)}
+        >
+          <span className={`npc-selector-arrow${selectorOpen ? " open" : ""}`}>▶</span>
+          NPCs
+        </button>
+        {selectorOpen && (
+          <div className="npc-selector-row">
+            {npcs.map((npc) => (
+              <button
+                key={npc.id}
+                className={`npc-selector-btn${selectedNpcId === npc.id ? " selected" : ""}`}
+                style={{ borderColor: selectedNpcId === npc.id ? npc.color : "transparent" }}
+                onClick={() => onSelectNpc?.(npc.id)}
+                title={npc.name}
+              >
+                <NpcSpriteIcon npcId={npc.id} size={36} />
+                <span className="npc-selector-name">{npc.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="inspector-body">

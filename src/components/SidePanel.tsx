@@ -68,6 +68,7 @@ export function FeedPanel({
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
   const [openPrompts, setOpenPrompts] = useState<Set<number>>(() => new Set());
+  const [copiedPrompt, setCopiedPrompt] = useState<number | null>(null);
 
   useEffect(() => {
     if (autoScroll) {
@@ -180,11 +181,14 @@ export function FeedPanel({
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          navigator.clipboard.writeText(item.msg.systemPrompt!);
+                          navigator.clipboard.writeText(item.msg.systemPrompt!).then(() => {
+                            setCopiedPrompt(i);
+                            setTimeout(() => setCopiedPrompt(null), 1500);
+                          });
                         }}
                         title="Copy prompt"
                       >
-                        copy
+                        {copiedPrompt === i ? "copied!" : "copy"}
                       </button>
                     </summary>
                     <pre className="feed-prompt-content">{item.msg.systemPrompt}</pre>
