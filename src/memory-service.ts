@@ -6,9 +6,9 @@ import type { NpcStore } from "./npc-store";
 export interface RetrievalContext {
   partnerId?: string;       // who we're talking to (filter by involvedNpcIds)
   excludeAbout?: string;    // exclude gossip about this NPC
-  maxDirect?: number;       // max memories involving partner (default 5)
-  maxGossip?: number;       // max gossip memories (default 2)
-  maxAboutPartner?: number; // max gossip specifically about partner (default 1)
+  maxDirect?: number;       // max memories involving partner (default 8)
+  maxGossip?: number;       // max gossip memories (default 3)
+  maxAboutPartner?: number; // max gossip specifically about partner (default 2)
 }
 
 export interface RetrievedMemories {
@@ -38,7 +38,7 @@ export class MemoryService {
     const npc = this.store.get(npcId);
     if (!npc) return;
     npc[slot].push(entry);
-    if (slot === "shortTermMemory" && npc.shortTermMemory.length > 20) {
+    if (slot === "shortTermMemory" && npc.shortTermMemory.length > 40) {
       // Evict the least valuable memory (lowest recency * importance)
       let minIdx = 0;
       let minScore = Infinity;
@@ -79,9 +79,9 @@ export class MemoryService {
 
   retrieve(npcId: string, ctx: RetrievalContext = {}): RetrievedMemories {
     const sorted = this.getSorted(npcId);
-    const maxDirect = ctx.maxDirect ?? 5;
-    const maxGossip = ctx.maxGossip ?? 2;
-    const maxAboutPartner = ctx.maxAboutPartner ?? 1;
+    const maxDirect = ctx.maxDirect ?? 8;
+    const maxGossip = ctx.maxGossip ?? 3;
+    const maxAboutPartner = ctx.maxAboutPartner ?? 2;
 
     // Memories involving the conversation partner
     const direct = ctx.partnerId
