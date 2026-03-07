@@ -736,9 +736,21 @@
 
 .memory-entry {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
   font-size: 11px;
   line-height: 1.4;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.memory-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
 }
 
 .memory-time {
@@ -746,9 +758,10 @@
   white-space: nowrap;
   flex-shrink: 0;
   font-family: var(--font-mono);
+  font-size: 10px;
 }
 
-.memory-text {
+.memory-row-text {
   color: var(--text-secondary);
 }
 

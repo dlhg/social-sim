@@ -322,20 +322,22 @@ export function CharacterViewer({
                 .reverse()
                 .map((mem, i) => (
                   <div key={i} className="memory-entry">
-                    {mem.type && (
-                      <span className={`memory-type-badge memory-type-${mem.type}`}>
-                        {mem.type}
+                    <div className="memory-row-meta">
+                      {mem.type && (
+                        <span className={`memory-type-badge memory-type-${mem.type}`}>
+                          {mem.type}
+                        </span>
+                      )}
+                      <span className="memory-time">
+                        {new Date(mem.timestamp).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </span>
-                    )}
-                    <span className="memory-time">
-                      {new Date(mem.timestamp).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    <span className="memory-text">
+                    </div>
+                    <div className="memory-row-text">
                       {mem.text.length > 120 ? mem.text.slice(0, 120) + "..." : mem.text}
-                    </span>
+                    </div>
                   </div>
                 ))}
             </div>
