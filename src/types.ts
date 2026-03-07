@@ -167,6 +167,7 @@ export interface ConversationMessage {
   text: string;
   intent: string;
   rawResponse?: LLMResponse;
+  systemPrompt?: string;
 }
 
 export interface ConversationSession {

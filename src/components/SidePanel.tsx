@@ -11,7 +11,7 @@ export type FeedItem =
   | { type: "chat"; msg: ConversationMessage; timestamp: number }
   | { type: "activity"; event: ActivityEvent };
 
-type FilterKey = "chat" | ActivityType | "system";
+type FilterKey = "chat" | ActivityType | "system" | "prompt";
 
 const FILTER_LABELS: Record<FilterKey, string> = {
   chat: "Chat",
@@ -21,6 +21,7 @@ const FILTER_LABELS: Record<FilterKey, string> = {
   dm: "DMs",
   action: "Actions",
   system: "System",
+  prompt: "Prompts",
 };
 
 const FILTER_COLORS: Record<FilterKey, string> = {
@@ -31,9 +32,10 @@ const FILTER_COLORS: Record<FilterKey, string> = {
   dm: "#5cb87a",
   action: "#e0a84c",
   system: "#9896a8",
+  prompt: "#6ca6d9",
 };
 
-const ALL_FILTERS: FilterKey[] = ["chat", "thought", "gossip", "eavesdrop", "dm", "action", "system"];
+const ALL_FILTERS: FilterKey[] = ["chat", "thought", "gossip", "eavesdrop", "dm", "action", "system", "prompt"];
 
 function getFilterKey(item: FeedItem): FilterKey {
   if (item.type === "chat") return "chat";
@@ -61,10 +63,11 @@ export function FeedPanel({
 }: FeedPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(
-    () => new Set(ALL_FILTERS)
+    () => new Set(ALL_FILTERS.filter(k => k !== "prompt"))
   );
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [openPrompts, setOpenPrompts] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
     if (autoScroll) {
@@ -149,12 +152,44 @@ export function FeedPanel({
           const visible = activeFilters.has(getFilterKey(item));
           if (item.type === "chat") {
             const npc = npcMap[item.msg.npcId];
+            const showPrompt = activeFilters.has("prompt") && item.msg.systemPrompt;
+            const promptOpen = openPrompts.has(i);
             return (
-              <div key={i} className={`chat-entry feed-item ${visible ? "feed-item-visible" : "feed-item-hidden"}`}>
+              <div key={i} className={`chat-entry feed-item ${visible ? "feed-item-visible" : "feed-item-hidden"}${promptOpen ? " feed-item-prompt-open" : ""}`}>
                 <span className="chat-name" style={{ color: npc?.color }}>
                   {item.msg.npcName}:
                 </span>{" "}
                 <span className="chat-text">{item.msg.text}</span>
+                {showPrompt && (
+                  <details
+                    className="feed-prompt-details"
+                    onToggle={(e) => {
+                      const open = (e.target as HTMLDetailsElement).open;
+                      setOpenPrompts((prev) => {
+                        const next = new Set(prev);
+                        if (open) next.add(i);
+                        else next.delete(i);
+                        return next;
+                      });
+                    }}
+                  >
+                    <summary className="feed-prompt-summary">
+                      prompt for {item.msg.npcName}
+                      <button
+                        className="feed-prompt-copy"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(item.msg.systemPrompt!);
+                        }}
+                        title="Copy prompt"
+                      >
+                        copy
+                      </button>
+                    </summary>
+                    <pre className="feed-prompt-content">{item.msg.systemPrompt}</pre>
+                  </details>
+                )}
               </div>
             );
           }

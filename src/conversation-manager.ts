@@ -458,12 +458,14 @@ export class ConversationManager {
       response.conversation_end = true;
     }
 
+    const systemMsg = messages.find(m => m.role === "system");
     const msg: ConversationMessage = {
       npcId: speaker.id,
       npcName: speaker.name,
       text: response.speech,
       intent: response.intent,
       rawResponse: response,
+      systemPrompt: systemMsg?.content,
     };
 
     session.messages.push(msg);
