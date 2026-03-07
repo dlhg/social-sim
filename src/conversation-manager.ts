@@ -29,6 +29,26 @@ export interface ConversationManagerCallbacks {
   onEavesdropReaction?: (eavesdropperId: string, text: string) => void;
 }
 
+// Per-conversation caps on cumulative relationship change
+const RELATIONSHIP_CAPS: Record<ConversationType, number> = {
+  casual: 0.15,
+  confrontation: 0.30,
+  reconciliation: 0.20,
+  confession: 0.25,
+  alliance_forming: 0.20,
+  gossip_session: 0.15,
+};
+
+// Turn limits by conversation type [min, max]
+const TURN_LIMITS: Record<ConversationType, [number, number]> = {
+  casual: [4, 8],
+  confrontation: [4, 10],
+  reconciliation: [5, 8],
+  confession: [4, 8],
+  alliance_forming: [5, 10],
+  gossip_session: [5, 10],
+};
+
 export class ConversationManager {
   private running = false;
   private paused = false;
@@ -42,6 +62,12 @@ export class ConversationManager {
   private readonly COOLDOWN_MS = 30_000;
   private readonly GLOBAL_COOLDOWN_MS = 5_000;
   private readonly MIN_TURN_DURATION_MS = 1_500;
+
+  // Frozen relationship snapshots for current conversation (prevents feedback loop)
+  private frozenRelationships: Map<string, { regard: number; affection: number }> = new Map();
+  // Cumulative relationship deltas for current conversation (for capping)
+  private cumulativeRelDeltas: Map<string, number> = new Map();
+  private activeConvType: ConversationType = "casual";
 
   private worldSim: WorldSimulation | null = null;
   private dayCycle: DayCycle | null = null;
@@ -127,6 +153,33 @@ export class ConversationManager {
     return [a, b].sort().join(":");
   }
 
+  /**
+   * Simple word-overlap similarity check to detect repetitive speech.
+   * Returns true if the new speech shares too many words with recent messages.
+   */
+  private isTooSimilar(newSpeech: string, session: ConversationSession): boolean {
+    const normalize = (s: string) =>
+      s.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(w => w.length > 3);
+
+    const newWords = new Set(normalize(newSpeech));
+    if (newWords.size < 3) return false; // too short to judge
+
+    // Check against last 4 messages
+    const recentMessages = session.messages.slice(-4);
+    for (const msg of recentMessages) {
+      const oldWords = normalize(msg.text);
+      if (oldWords.length < 3) continue;
+
+      let overlap = 0;
+      for (const w of oldWords) {
+        if (newWords.has(w)) overlap++;
+      }
+      const similarity = overlap / Math.max(newWords.size, oldWords.length);
+      if (similarity > 0.6) return true;
+    }
+    return false;
+  }
+
   // ── Conversation ─────────────────────────────
 
   private async runConversation(
@@ -139,20 +192,38 @@ export class ConversationManager {
 
     this.abortController = new AbortController();
 
+    this.store.recordRelationshipSnapshot(npcAId, npcBId);
+    const convType = this.classifyConversationType(npcA, npcB);
+    this.activeConvType = convType;
+
+    // Freeze relationship state at conversation start (prevents per-turn feedback loop)
+    this.frozenRelationships.clear();
+    this.cumulativeRelDeltas.clear();
+    const relAtoB = npcA.relationships[npcBId];
+    const relBtoA = npcB.relationships[npcAId];
+    this.frozenRelationships.set(`${npcAId}->${npcBId}`, {
+      regard: relAtoB?.regard ?? 0,
+      affection: relAtoB?.affection ?? 0,
+    });
+    this.frozenRelationships.set(`${npcBId}->${npcAId}`, {
+      regard: relBtoA?.regard ?? 0,
+      affection: relBtoA?.affection ?? 0,
+    });
+    this.cumulativeRelDeltas.set(`${npcAId}->${npcBId}`, 0);
+    this.cumulativeRelDeltas.set(`${npcBId}->${npcAId}`, 0);
+
     const session: ConversationSession = {
       id: `conv_${Date.now()}`,
       participantIds: [npcAId, npcBId],
       messages: [],
       turnCount: 0,
-      maxTurns: this.rollMaxTurns(),
+      maxTurns: this.rollMaxTurns(convType),
       status: "active",
       startedAt: Date.now(),
     };
 
     this.activeSession = session;
     this.conversationEavesdroppers.clear();
-    this.store.recordRelationshipSnapshot(npcAId, npcBId);
-    const convType = this.classifyConversationType(npcA, npcB);
     this.callbacks.onConversationStart(session);
     this.log(`Conversation started between ${npcA.name} and ${npcB.name} [${convType}, max ${session.maxTurns} turns]`);
 
@@ -208,6 +279,8 @@ export class ConversationManager {
     session.status = "completed";
     this.store.recordRelationshipSnapshot(npcAId, npcBId);
     this.activeSession = null;
+    this.frozenRelationships.clear();
+    this.cumulativeRelDeltas.clear();
     this.lastConversationEnd = Date.now();
     this.cooldowns.set(this.pairKey(npcAId, npcBId), Date.now());
     this.callbacks.onSpeakerChange(null);
@@ -288,11 +361,26 @@ export class ConversationManager {
         return { withName: otherNpc?.name ?? otherId, text: p.text };
       });
 
+    // Use frozen relationship snapshot so the prompt doesn't amplify within a conversation
+    const frozenKey = `${speaker.id}->${listener.id}`;
+    const frozen = this.frozenRelationships.get(frozenKey);
+
     const messages = buildConversationMessages(
       currentSpeaker,
       currentListener,
       session,
-      { allNpcs, trajectoryContext, locationContext, retrievedMemories, language: this.language, timeOfDay, pendingPlans }
+      {
+        allNpcs,
+        trajectoryContext,
+        locationContext,
+        retrievedMemories,
+        language: this.language,
+        timeOfDay,
+        pendingPlans,
+        conversationType: this.activeConvType,
+        frozenRegard: frozen?.regard,
+        frozenAffection: frozen?.affection,
+      }
     );
 
     let raw: string;
@@ -334,6 +422,26 @@ export class ConversationManager {
       } catch {
         this.log(`Retry failed for ${speaker.name}. Skipping turn.`);
         return null;
+      }
+    }
+
+    // Check for repetition — if speech is too similar to a recent message, retry once
+    if (session.messages.length >= 2 && this.isTooSimilar(response.speech, session)) {
+      this.log(`${speaker.name} repeated themselves, requesting redirect...`);
+      messages.push({ role: "assistant", content: raw });
+      messages.push({
+        role: "user",
+        content: `You just said something too similar to what was already said in this conversation. Say something COMPLETELY DIFFERENT — a new topic, a question, a reaction to your surroundings, or bring up another person. Respond with ONLY a JSON object.`,
+      });
+      try {
+        const redirectRaw = await accumulateChat(
+          messages,
+          undefined,
+          this.abortController!.signal
+        );
+        response = parseLLMResponse(redirectRaw);
+      } catch {
+        // Use the original response if redirect fails
       }
     }
 
@@ -384,19 +492,55 @@ export class ConversationManager {
   ): void {
     this.store.applyEmotionDelta(speaker.id, response.emotion_delta);
 
+    // Cap cumulative relationship change per conversation
+    const cap = RELATIONSHIP_CAPS[this.activeConvType];
+    const speakerKey = `${speaker.id}->${listener.id}`;
+    const listenerKey = `${listener.id}->${speaker.id}`;
+
+    let speakerDelta = response.relationship_delta;
+    let listenerDelta = response.relationship_delta * 0.5;
+    let speakerAffDelta = response.affection_delta;
+    let listenerAffDelta = response.affection_delta * 0.3;
+
+    // Clamp speaker's delta if cumulative would exceed cap
+    const speakerCumulative = this.cumulativeRelDeltas.get(speakerKey) ?? 0;
+    if (Math.abs(speakerCumulative + speakerDelta) > cap) {
+      const remaining = cap - Math.abs(speakerCumulative);
+      if (remaining <= 0) {
+        speakerDelta = 0;
+        speakerAffDelta = 0;
+      } else {
+        speakerDelta = Math.sign(speakerDelta) * Math.min(Math.abs(speakerDelta), remaining);
+      }
+    }
+    this.cumulativeRelDeltas.set(speakerKey, speakerCumulative + speakerDelta);
+
+    // Clamp listener's mirror delta
+    const listenerCumulative = this.cumulativeRelDeltas.get(listenerKey) ?? 0;
+    if (Math.abs(listenerCumulative + listenerDelta) > cap) {
+      const remaining = cap - Math.abs(listenerCumulative);
+      if (remaining <= 0) {
+        listenerDelta = 0;
+        listenerAffDelta = 0;
+      } else {
+        listenerDelta = Math.sign(listenerDelta) * Math.min(Math.abs(listenerDelta), remaining);
+      }
+    }
+    this.cumulativeRelDeltas.set(listenerKey, listenerCumulative + listenerDelta);
+
     this.store.applyRelationshipDelta(
       speaker.id,
       listener.id,
-      response.relationship_delta,
-      response.affection_delta
+      speakerDelta,
+      speakerAffDelta
     );
 
     // Listener gets dampened mirror of relationship delta
     this.store.applyRelationshipDelta(
       listener.id,
       speaker.id,
-      response.relationship_delta * 0.5,
-      response.affection_delta * 0.3
+      listenerDelta,
+      listenerAffDelta
     );
 
     const emotionMagnitude =
@@ -1109,19 +1253,31 @@ export class ConversationManager {
   private describeMood(npc: NPC): string {
     const s = npc.emotionalState;
     const parts: string[] = [];
-    if (s.joy > 0.7) parts.push("very happy");
-    else if (s.joy > 0.5) parts.push("pleased");
+
+    // Negative emotions take priority over positive (prevents "+disgust → now pleased")
     if (s.anger > 0.6) parts.push("angry");
     else if (s.anger > 0.3) parts.push("irritated");
     if (s.fear > 0.6) parts.push("fearful");
     else if (s.fear > 0.3) parts.push("uneasy");
-    if (s.trust > 0.7) parts.push("very trusting");
-    else if (s.trust < 0.3) parts.push("wary");
+    if (s.disgust > 0.5) parts.push("repulsed");
+    else if (s.disgust > 0.25) parts.push("unsettled");
+    if (s.guilt > 0.5) parts.push("guilt-ridden");
     if (s.sadness > 0.6) parts.push("melancholy");
     else if (s.sadness > 0.3) parts.push("downcast");
-    if (s.curiosity > 0.7) parts.push("very curious");
-    if (s.disgust > 0.5) parts.push("repulsed");
-    if (s.guilt > 0.5) parts.push("guilt-ridden");
+    if (s.trust < 0.3) parts.push("wary");
+
+    // Only show positive mood if no significant negative emotions are present
+    const hasNegative = parts.length > 0;
+    if (!hasNegative) {
+      if (s.joy > 0.7) parts.push("very happy");
+      else if (s.joy > 0.5) parts.push("pleased");
+      if (s.trust > 0.7) parts.push("very trusting");
+      if (s.curiosity > 0.7) parts.push("very curious");
+    } else {
+      // Even with negative emotions, very high joy can show as mixed
+      if (s.joy > 0.7) parts.push("but upbeat");
+    }
+
     return parts.length > 0 ? parts.join(", ") : "calm";
   }
 
@@ -1238,16 +1394,15 @@ export class ConversationManager {
   }
 
   /**
-   * Weighted random turn count: most conversations land 6-10,
-   * short ones (3-5) and long ones (11-18) are rarer.
+   * Weighted random turn count based on conversation type.
+   * Uses triangular distribution biased toward the middle of the range.
    */
-  private rollMaxTurns(): number {
-    // Sum of two dice-style rolls biased toward the middle
-    const base = this.MIN_TURNS;
-    const range = this.MAX_TURNS - this.MIN_TURNS; // 15
-    // Average of two uniform randoms → triangular-ish distribution centered at ~10
+  private rollMaxTurns(convType: ConversationType = "casual"): number {
+    const [min, max] = TURN_LIMITS[convType] ?? [this.MIN_TURNS, this.MAX_TURNS];
+    const range = max - min;
+    // Average of two uniform randoms → triangular-ish distribution centered in range
     const r = (Math.random() + Math.random()) / 2;
-    return base + Math.round(r * range);
+    return min + Math.round(r * range);
   }
 
   private classifyConversationType(a: NPC, b: NPC): ConversationType {

@@ -61,6 +61,9 @@ export class WorldSimulation {
   private onTickCallback: (() => void) | null;
   /** Track which observer→actor observations already fired to avoid spam */
   private observationCooldowns: Map<string, number> = new Map();
+  /** Per-NPC per-activity cooldowns to prevent repetitive actions (e.g., cooking 8 meals) */
+  private activityCooldowns: Map<string, number> = new Map();
+  private readonly ACTIVITY_COOLDOWN_MS = 300_000; // 5 minutes before repeating same activity
   private lastItemDecay = 0;
   private getPhase: (() => DayPhase) | null;
   private npcStore: NpcStore | null;
@@ -517,7 +520,7 @@ export class WorldSimulation {
     if (!this.onObserveActivity) return;
 
     const OBSERVE_RANGE = 6;
-    const OBSERVE_COOLDOWN_MS = 120_000;
+    const OBSERVE_COOLDOWN_MS = 180_000; // 3 minutes between observations of same pair
     const now = Date.now();
 
     const npcList = Array.from(this.npcs.values());
@@ -537,8 +540,23 @@ export class WorldSimulation {
         const lastObserve = this.observationCooldowns.get(key) ?? 0;
         if (now - lastObserve < OBSERVE_COOLDOWN_MS) continue;
 
-        // Only trigger ~5% of eligible ticks to avoid spam
-        if (Math.random() > 0.05) continue;
+        // Filter: only observe if socially relevant
+        let relevant = false;
+        if (this.npcStore) {
+          const observerNpc = this.npcStore.get(observer.npcId);
+          const actorNpc = this.npcStore.get(actor.npcId);
+          if (observerNpc && actorNpc) {
+            const rel = observerNpc.relationships[actor.npcId]?.regard ?? 0;
+            // Relevant if: they have a relationship (positive or negative), or observer is perceptive/curious/suspicious
+            const curiousTraits = ["perceptive", "suspicious", "curious", "calculating", "nosy"];
+            const hasCuriousTrait = observerNpc.personalityTraits.some(t => curiousTraits.includes(t.toLowerCase()));
+            relevant = Math.abs(rel) > 0.15 || hasCuriousTrait;
+          }
+        }
+        if (!relevant) continue;
+
+        // Reduced trigger rate: ~3% of eligible ticks
+        if (Math.random() > 0.03) continue;
 
         this.observationCooldowns.set(key, now);
         this.onObserveActivity(observer.npcId, actor.npcId, actor.activeActivity.activityId);
@@ -604,20 +622,32 @@ export class WorldSimulation {
     const npcData = this.npcStore.get(npc.npcId);
     if (!npcData) return false;
 
-    const activityId = pickActivity(waypoint.id, npcData);
-    if (!activityId) return false;
+    // Try up to 3 times to find a non-cooldown activity
+    const now = Date.now();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const activityId = pickActivity(waypoint.id, npcData);
+      if (!activityId) return false;
 
-    const duration = activityDurationTicks(activityId);
-    npc.activeActivity = {
-      activityId,
-      waypointId: waypoint.id,
-      ticksRemaining: duration,
-      totalTicks: duration,
-      startedAt: Date.now(),
-    };
+      // Check per-NPC per-activity cooldown
+      const cooldownKey = `${npc.npcId}:${activityId}`;
+      const lastDone = this.activityCooldowns.get(cooldownKey) ?? 0;
+      if (now - lastDone < this.ACTIVITY_COOLDOWN_MS) continue;
 
-    this.onActivityStart?.(npc.npcId, activityId, waypoint.name);
-    return true;
+      const duration = activityDurationTicks(activityId);
+      npc.activeActivity = {
+        activityId,
+        waypointId: waypoint.id,
+        ticksRemaining: duration,
+        totalTicks: duration,
+        startedAt: now,
+      };
+
+      this.activityCooldowns.set(cooldownKey, now);
+      this.onActivityStart?.(npc.npcId, activityId, waypoint.name);
+      return true;
+    }
+
+    return false;
   }
 
   private completeActivity(npc: NpcSpatialState): void {

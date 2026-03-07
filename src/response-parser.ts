@@ -14,6 +14,14 @@ export function parseLLMResponse(raw: string): LLMResponse {
 export function extractJson(raw: string): string {
   let s = raw.trim();
 
+  // Strip model control tokens (qwen2.5, llama, etc.)
+  s = s.replace(/<\|im_start\|>.*?(?:<\|im_end\|>|$)/gs, "");
+  s = s.replace(/<\|(?:im_start|im_end|endoftext|end|assistant|user|system)\|>/g, "");
+  s = s.replace(/<tool_call>/g, "");
+  s = s.replace(/<\/tool_call>/g, "");
+  s = s.replace(/<\/?s>/g, "");
+  s = s.trim();
+
   // Strip markdown code fences (handle preamble text before fences)
   s = s.replace(/.*```(?:json)?\s*/is, "").replace(/\s*```\s*$/s, "");
   s = s.trim();

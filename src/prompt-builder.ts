@@ -1,15 +1,49 @@
-import type { NPC, EmotionalState, ConversationSession } from "./types";
+import type { NPC, EmotionalState, ConversationSession, ConversationType } from "./types";
 import type { RetrievedMemories } from "./memory-service";
 import type { ChatMessage } from "./ollama";
 
-// ── Anti-agreeableness preamble ─────────────────
+// ── Conversation-type-specific behavioral preambles ─────────────────
 
-const CONFLICT_PREAMBLE = `IMPORTANT BEHAVIORAL RULES:
-- Do NOT default to agreement or politeness. If your personality, emotions, or relationship suggest you would push back, argue, be cold, or be hostile — DO THAT.
-- Conflict is natural. Characters with high anger should be confrontational. Characters with low trust should be suspicious. Characters who dislike someone should show it.
-- Never say something like "That's a great point!" or "I understand where you're coming from" if your character would actually be annoyed, dismissive, or hostile.
-- Your personality traits are not decorative. If you are "blunt" — be blunt. If you are "suspicious" — be suspicious. If you are "competitive" — try to one-up the other person.
-- Emotional reactions should be proportional to your emotional state, not suppressed for politeness.`;
+const PREAMBLES: Record<ConversationType, string> = {
+  casual: `BEHAVIORAL RULES:
+- Be authentic to your personality. Don't manufacture conflict, but don't suppress genuine friction either.
+- Let the conversation flow naturally. It's okay for interactions to be pleasant, mundane, humorous, or even a little boring.
+- Your personality traits matter. If you are "blunt" — be blunt. If you are "playful" — be playful. But don't force drama where there is none.
+- If you dislike this person, you can be cool or distant — but you don't need to escalate unprovoked.
+- Emotional reactions should be proportional to what's actually happening, not invented.`,
+
+  confrontation: `IMPORTANT BEHAVIORAL RULES:
+- Do NOT default to agreement or politeness. You have real grievances — express them.
+- Be confrontational, cutting, and direct. Push back hard. Challenge what the other person says.
+- Never say something like "That's a great point!" or "I understand where you're coming from" — you are here to fight, not to make peace.
+- Your personality traits are not decorative. If you are "blunt" — be blunt. If you are "vindictive" — be vindictive.
+- Emotional reactions should be raw and unfiltered. Let anger, disgust, or distrust drive your words.`,
+
+  reconciliation: `IMPORTANT BEHAVIORAL RULES:
+- You are encountering someone you've had friction with. There is an opportunity to repair things.
+- Lead with vulnerability, curiosity, or an olive branch — not more hostility. You don't have to forgive, but be open to it.
+- Acknowledge what went wrong. Ask genuine questions. Listen to what they say instead of attacking.
+- If you feel defensive, you can show that — but try to move past it rather than digging in.
+- Progress is small steps: a moment of honesty, a shared memory, an admission of fault. Don't rush to "all better."`,
+
+  confession: `IMPORTANT BEHAVIORAL RULES:
+- Something is weighing on you. You feel the pull to be honest — maybe about a secret, a mistake, or hidden feelings.
+- Build toward the confession naturally. You might test the waters, hint at it, or blurt it out.
+- Be authentic to your personality — a blunt character confesses directly, a cautious one circles around it.
+- The other person's reaction matters. Pay attention and respond to it, don't just monologue.`,
+
+  alliance_forming: `IMPORTANT BEHAVIORAL RULES:
+- You see a potential ally in this person. Be warm, conspiratorial, and engaged.
+- Find common ground — shared opinions about others, mutual goals, or complementary strengths.
+- Be genuine but strategic. You can be friendly AND have an agenda.
+- Trust is being built here. Share a little more than usual, but don't overcommit.`,
+
+  gossip_session: `IMPORTANT BEHAVIORAL RULES:
+- You have information worth sharing, or you're hungry for it. Lean into the social intrigue.
+- Trade information — offer something juicy to get something back.
+- Be personality-authentic: a kind character gossips gently, a manipulative one weaponizes information.
+- Gossip can be bonding or divisive. Let your relationship with this person guide which direction it goes.`,
+};
 
 const RESPONSE_JSON_SCHEMA = `- Your response MUST be a single JSON object with exactly these fields:
 {
@@ -56,6 +90,9 @@ export interface PromptContext {
   language?: string;
   timeOfDay?: string;
   pendingPlans?: Array<{ withName: string; text: string }>;
+  conversationType?: ConversationType;
+  frozenRegard?: number;
+  frozenAffection?: number;
 }
 
 export function buildSystemPrompt(
@@ -66,8 +103,8 @@ export function buildSystemPrompt(
   ctx: PromptContext = {}
 ): string {
   const relState = speaker.relationships[listener.id];
-  const relationship = relState?.regard ?? 0;
-  const affection = relState?.affection ?? 0;
+  const relationship = ctx.frozenRegard ?? relState?.regard ?? 0;
+  const affection = ctx.frozenAffection ?? relState?.affection ?? 0;
   const relLabel = relationshipLabel(relationship);
   const emotionSummary = describeEmotions(speaker.emotionalState);
 
@@ -166,18 +203,18 @@ ${aboutListenerBlock}
 ${gossipBlock}
 ${otherNpcsBlock}
 
-${CONFLICT_PREAMBLE}
+${PREAMBLES[ctx.conversationType ?? "casual"]}
 ${behavioralBlock}
 ${actionHints}
 
 CONVERSATION PROGRESS: Turn ${turnNumber + 1} of ${maxTurns}.
-${turnNumber >= maxTurns - 2 ? "The conversation is wrapping up soon. Consider bringing it to a natural close." : ""}${turnNumber > 0 && turnNumber >= Math.floor(maxTurns * 0.6) && turnNumber < maxTurns - 2 ? " You can set conversation_end to true if this feels like a natural stopping point." : ""}
+${buildEscalationDirective(turnNumber, maxTurns, ctx.conversationType ?? "casual", speaker, listener)}
 
 RESPONSE FORMAT:
 - Stay in character. Vary your message length naturally — sometimes just a word or two ("Yeah." / "No way."), sometimes a full paragraph. Match the energy: quick banter should be short, emotional or story-heavy moments can be longer. Don't always write the same amount.
-- NEVER repeat or paraphrase what was already said. Always move the conversation forward.
+- CRITICAL: NEVER repeat, rephrase, or circle back to something already discussed. If a topic has been covered, it is DONE. Move to something completely different.
+- Each response must introduce NEW information, a new question, a new emotion, or a new topic. Restating your position on the same subject is not allowed.
 - React to what ${listener.name} actually said. Ask follow-up questions, share new thoughts, change the subject, disagree, joke — anything but echo.
-- If the conversation is going in circles, take it in a completely new direction.
 - You can talk about other people you know. If you mention someone not in this conversation, include them in mentioned_npcs.
 - You can make promises to ${listener.name}. If you commit to something, set "promise" to what you promise.
 ${RESPONSE_JSON_SCHEMA}
@@ -241,7 +278,7 @@ export function buildConversationMessages(
   }
 
   if (session.messages.length === 0) {
-    const rel = speaker.relationships[listener.id]?.regard ?? 0;
+    const rel = ctx.frozenRegard ?? speaker.relationships[listener.id]?.regard ?? 0;
     const mem = ctx.retrievedMemories;
     const hasMemories = (mem?.direct.length ?? 0) > 0;
     const hasGossip = (mem?.gossip.length ?? 0) > 0;
@@ -258,10 +295,15 @@ export function buildConversationMessages(
       ? ` Draw from ${groundingSuggestions.join(", ")}, or whatever feels natural.`
       : "";
 
+    // Scene-setting grounded in location rather than interrogating presence
+    const locationSeed = ctx.locationContext
+      ? ` You're both near ${ctx.locationContext}.`
+      : "";
+
     const relationshipFraming =
-      rel <= -0.3 ? `You notice ${listener.name} nearby. You're not thrilled about it.`
-      : rel >= 0.5 ? `You spot ${listener.name} — someone you're glad to see.`
-      : `You notice ${listener.name} nearby.`;
+      rel <= -0.3 ? `You notice ${listener.name} nearby. You're not thrilled about it.${locationSeed}`
+      : rel >= 0.5 ? `You spot ${listener.name} — someone you're glad to see.${locationSeed}`
+      : `You notice ${listener.name} nearby.${locationSeed}`;
 
     msgs.push({
       role: "user",
@@ -304,6 +346,60 @@ Output ONLY the JSON object. No markdown, no code fences, no extra text.
 You MUST write ALL text in ${language}. Never use any other language.`,
     },
   ];
+}
+
+// ── Escalation directives (anti-stagnation) ─────
+
+function buildEscalationDirective(
+  turnNumber: number,
+  maxTurns: number,
+  convType: ConversationType,
+  speaker: NPC,
+  listener: NPC,
+): string {
+  const progress = turnNumber / maxTurns;
+
+  // Final turns: wrap up
+  if (turnNumber >= maxTurns - 2) {
+    return "The conversation is wrapping up soon. Bring it to a natural close — a parting thought, a lingering question, or a definitive statement.";
+  }
+
+  // Mid-conversation: can exit if natural
+  if (progress >= 0.6) {
+    const escalation = getEscalationHint(convType, speaker, listener);
+    return `The conversation has been going for a while. You MUST move it forward now. ${escalation} You can also set conversation_end to true if this feels like a natural stopping point.`;
+  }
+
+  // Early-mid: gentle nudge after turn 3
+  if (turnNumber >= 3) {
+    return "If the current topic feels exhausted, shift to something new — a memory, a question about someone else, your surroundings, or whatever your personality gravitates toward.";
+  }
+
+  return "";
+}
+
+function getEscalationHint(convType: ConversationType, speaker: NPC, listener: NPC): string {
+  const hasSecrets = speaker.secrets.length > 0;
+  const hasTrust = speaker.emotionalState.trust >= 0.7;
+
+  switch (convType) {
+    case "casual":
+      return "Introduce something new: bring up another person you know, share a personal opinion, reference a memory, ask about their plans, or react to your surroundings.";
+    case "confrontation":
+      return "Escalate or resolve: take an action (mock, threaten, storm off), reveal something cutting, bring a third person into the argument, or make an ultimatum.";
+    case "reconciliation":
+      return "Make progress: admit something specific you did wrong, ask a genuine question about their feelings, propose a way to move forward, or acknowledge the awkwardness directly.";
+    case "confession":
+      return hasSecrets && hasTrust
+        ? "The moment is right. Consider revealing what's been weighing on you, or build toward it more directly."
+        : "Build toward honesty. Hint more strongly at what's on your mind, or shift to what's really bothering you.";
+    case "alliance_forming":
+      return "Deepen the bond: propose a specific plan, identify a shared concern about someone, or offer something of value (information, help, a promise).";
+    case "gossip_session":
+      return "Share something specific: name a person, reveal a detail you've heard, connect dots between people, or ask a pointed question about someone's behavior.";
+    default:
+      return "Take the conversation somewhere new.";
+  }
 }
 
 // ── Action guidance ──────────────────────────────
