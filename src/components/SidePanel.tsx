@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { NPC, ConversationMessage, ActivityEvent, EmotionalState, ActivityType } from "../types";
 
 export interface NpcSnapshot {
@@ -81,13 +81,35 @@ export function FeedPanel({
     });
   };
 
+  const [copied, setCopied] = useState(false);
   const npcMap = Object.fromEntries(npcs.map((n) => [n.id, n]));
+
+  const copyLog = useCallback(() => {
+    const lines = feed
+      .filter((item) => activeFilters.has(getFilterKey(item)))
+      .map((item) => {
+        if (item.type === "chat") {
+          return `${item.msg.npcName}: ${item.msg.text}`;
+        }
+        return `[${formatTime(item.event.timestamp)}] ${item.event.text}`;
+      });
+    navigator.clipboard.writeText(lines.join("\n")).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [feed, activeFilters]);
 
   return (
     <div className="feed-overlay">
       <div className="feed-header">
         <span className="feed-label">Feed</span>
         <div className="feed-header-buttons">
+          <button
+            className="feed-copy-pill"
+            onClick={copyLog}
+          >
+            {copied ? "Copied!" : "Copy log"}
+          </button>
           <button
             className={`feed-autoscroll-pill ${autoScroll ? "active" : ""}`}
             onClick={() => setAutoScroll((v) => !v)}

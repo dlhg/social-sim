@@ -162,6 +162,27 @@
   gap: 4px;
 }
 
+.feed-copy-pill {
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 500;
+  padding: 3px 0;
+  width: 70px;
+  text-align: center;
+  border-radius: 10px;
+  border: 1px solid var(--border-default);
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all var(--duration-fast) var(--ease-in-out);
+  white-space: nowrap;
+}
+
+.feed-copy-pill:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}
+
 .feed-autoscroll-pill {
   font-family: var(--font-ui);
   font-size: 9px;
