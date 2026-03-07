@@ -212,6 +212,7 @@ ${buildEscalationDirective(turnNumber, maxTurns, ctx.conversationType ?? "casual
 
 RESPONSE FORMAT:
 - Stay in character. Vary your message length naturally — sometimes just a word or two ("Yeah." / "No way."), sometimes a full paragraph. Match the energy: quick banter should be short, emotional or story-heavy moments can be longer. Don't always write the same amount.
+- Use punctuation expressively to convey emotion: ellipses for hesitation or trailing off ("I don't know..."), exclamation marks for strong feeling, em-dashes for interrupting yourself or changing tack mid-sentence ("I was going to — actually, never mind"), commas and periods for natural breathing rhythm. Your speech will be read aloud, so punctuation shapes how it sounds.
 - CRITICAL: NEVER repeat, rephrase, or circle back to something already discussed. If a topic has been covered, it is DONE. Move to something completely different.
 - Each response must introduce NEW information, a new question, a new emotion, or a new topic. Restating your position on the same subject is not allowed.
 - React to what ${listener.name} actually said. Ask follow-up questions, share new thoughts, change the subject, disagree, joke — anything but echo.

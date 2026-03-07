@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "npm run tts & npm run dev",
+    "tts": "tts-server/.venv/bin/python tts-server/server.py",
+    "tts:restart": "pkill -f 'tts-server/server.py' 2>/dev/null; rm -rf tts-server/.tts-cache && npm run tts",
+    "tts:clear": "rm -rf tts-server/.tts-cache && echo 'TTS cache cleared'",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"

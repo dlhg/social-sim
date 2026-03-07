@@ -2,8 +2,11 @@
  * TTS Service — talks to the local Kokoro TTS server.
  *
  * Handles voice assignment per NPC, audio queuing, and playback
- * through the Web Audio API.
+ * through the Web Audio API. Passes NPC emotional state to the server
+ * for emotion-aware speed modulation and voice blending.
  */
+
+import type { EmotionalState } from "./types";
 
 const TTS_BASE = "http://localhost:8787";
 
@@ -44,7 +47,7 @@ export class TTSService {
   private gainNode: GainNode | null = null;
   private voiceMap = new Map<string, string>(); // npcId -> voice
   private voiceIndex = 0;
-  private queue: { npcId: string; text: string; resolve: () => void }[] = [];
+  private queue: { npcId: string; text: string; emotions?: EmotionalState; resolve: () => void }[] = [];
   private playing = false;
   private options: TTSOptions;
   private serverAvailable: boolean | null = null; // null = unknown
@@ -96,8 +99,8 @@ export class TTSService {
     this.ensureAudioContext();
   }
 
-  /** Speak a line of text for an NPC. Returns when audio starts playing. */
-  async speak(npcId: string, text: string): Promise<void> {
+  /** Speak a line of text for an NPC. Optionally pass emotional state for expressive synthesis. */
+  async speak(npcId: string, text: string, emotions?: EmotionalState): Promise<void> {
     if (!this.options.enabled || this.serverAvailable === false) return;
 
     // Lazy check server on first call
@@ -107,7 +110,7 @@ export class TTSService {
     }
 
     return new Promise<void>((resolve) => {
-      this.queue.push({ npcId, text, resolve });
+      this.queue.push({ npcId, text, emotions, resolve });
       this.processQueue();
     });
   }
@@ -154,7 +157,7 @@ export class TTSService {
     const voice = this.assignVoice(item.npcId);
 
     try {
-      const wavBytes = await this.fetchSpeech(item.text, voice);
+      const wavBytes = await this.fetchSpeech(item.text, voice, item.emotions);
       if (wavBytes) {
         await this.playAudio(wavBytes);
       }
@@ -173,7 +176,8 @@ export class TTSService {
 
   private async fetchSpeech(
     text: string,
-    voice: string
+    voice: string,
+    emotions?: EmotionalState
   ): Promise<ArrayBuffer | null> {
     try {
       const res = await fetch(`${TTS_BASE}/speak`, {
@@ -183,6 +187,7 @@ export class TTSService {
           text,
           voice,
           speed: this.options.speed,
+          emotions: emotions ?? undefined,
         }),
         signal: AbortSignal.timeout(60000),
       });

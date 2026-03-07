@@ -59,6 +59,107 @@ VOICE_POOL = [
     "af_nicole",      # smooth female
 ]
 
+# ── Emotion → speech speed mapping ────────────────
+# Returns a speed multiplier based on the dominant emotional state.
+# Base speed comes from the request; this applies a modifier on top.
+
+def compute_emotion_speed(emotions: dict) -> float:
+    """Map emotional state to a speed modifier (0.85 – 1.25)."""
+    if not emotions:
+        return 1.0
+
+    anger = emotions.get("anger", 0)
+    joy = emotions.get("joy", 0)
+    sadness = emotions.get("sadness", 0)
+    fear = emotions.get("fear", 0)
+    curiosity = emotions.get("curiosity", 0)
+    disgust = emotions.get("disgust", 0)
+    guilt = emotions.get("guilt", 0)
+
+    # Weighted contribution: each emotion pulls speed in a direction
+    # Positive = faster, negative = slower
+    speed_delta = 0.0
+    speed_delta += anger * 0.20       # anger → faster, clipped
+    speed_delta += joy * 0.15         # joy → slightly faster, upbeat
+    speed_delta += fear * 0.18        # fear → faster, nervous
+    speed_delta += curiosity * 0.05   # curiosity → very slightly faster
+    speed_delta -= sadness * 0.20     # sadness → slower, heavy
+    speed_delta -= guilt * 0.15       # guilt → slower, hesitant
+    speed_delta -= disgust * 0.10     # disgust → slower, deliberate
+
+    # Clamp to reasonable range
+    return max(0.85, min(1.25, 1.0 + speed_delta))
+
+
+# ── Emotion → voice blending ─────────────────────
+# Slightly blend the NPC's base voice toward an "emotional modifier"
+# voice to shift the tonal quality.
+
+# Modifier voices: chosen for their tonal character
+EMOTION_VOICE_MODIFIERS = {
+    "intense": "am_fenrir",     # deep, intense → anger, confrontation
+    "bright": "af_bella",       # energetic, bright → joy, excitement
+    "soft": "bf_isabella",      # soft, gentle → sadness, vulnerability
+    "nervous": "af_sky",        # bright, quick → fear, anxiety
+}
+
+
+def compute_voice_blend(base_voice: str, emotions: dict):
+    """
+    Return (voice_spec, blend_key) where voice_spec is either:
+    - the base voice name (no blending needed)
+    - a pre-blended tensor (needs to be passed directly)
+    blend_key is a string for cache keying.
+    """
+    if not emotions:
+        return base_voice, base_voice
+
+    # Find dominant emotion (excluding trust/curiosity which don't need voice shifts)
+    emotion_scores = {
+        "intense": max(emotions.get("anger", 0), emotions.get("disgust", 0) * 0.6),
+        "bright": emotions.get("joy", 0),
+        "soft": max(emotions.get("sadness", 0), emotions.get("guilt", 0) * 0.7),
+        "nervous": emotions.get("fear", 0),
+    }
+
+    dominant = max(emotion_scores, key=emotion_scores.get)
+    strength = emotion_scores[dominant]
+
+    # Only blend if the emotion is meaningfully strong
+    if strength < 0.35:
+        return base_voice, base_voice
+
+    modifier_voice = EMOTION_VOICE_MODIFIERS[dominant]
+
+    # Don't blend a voice with itself
+    if modifier_voice == base_voice:
+        return base_voice, base_voice
+
+    # Blend weight: scales from 0 at threshold to 0.25 at max
+    blend_weight = min(0.25, (strength - 0.35) * 0.38)
+    blend_key = f"{base_voice}+{modifier_voice}@{blend_weight:.2f}"
+
+    return (base_voice, modifier_voice, blend_weight), blend_key
+
+
+def resolve_voice_pack(pipeline, voice_spec):
+    """
+    Given a voice_spec from compute_voice_blend, return a voice tensor.
+    voice_spec is either a string (plain voice name) or a tuple
+    (base, modifier, weight) for blending.
+    """
+    import torch
+
+    if isinstance(voice_spec, str):
+        return pipeline.load_voice(voice_spec)
+
+    base_name, modifier_name, weight = voice_spec
+    base_pack = pipeline.load_single_voice(base_name)
+    modifier_pack = pipeline.load_single_voice(modifier_name)
+    # Weighted interpolation
+    blended = (1.0 - weight) * base_pack + weight * modifier_pack
+    return blended.to(base_pack.device)
+
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -77,7 +178,8 @@ def speak():
     Synthesize speech and return WAV audio.
 
     JSON body:
-      { "text": "Hello world", "voice": "af_heart", "speed": 1.0 }
+      { "text": "Hello world", "voice": "af_heart", "speed": 1.0,
+        "emotions": {"anger": 0, "joy": 0.5, ...} }
 
     Returns: audio/wav
     """
@@ -85,12 +187,18 @@ def speak():
     text = data.get("text", "").strip()
     voice = data.get("voice", "af_heart")
     speed = float(data.get("speed", 1.0))
+    emotions = data.get("emotions")
 
     if not text:
         return Response("No text provided", status=400)
 
-    # Check cache
-    cache_key = hashlib.sha256(f"{voice}:{speed}:{text}".encode()).hexdigest()[:16]
+    # Compute emotion-aware speed and voice blend
+    emotion_speed = compute_emotion_speed(emotions)
+    final_speed = speed * emotion_speed
+    voice_spec, blend_key = compute_voice_blend(voice, emotions)
+
+    # Check cache (keyed on blended voice + emotion-adjusted speed + text)
+    cache_key = hashlib.sha256(f"{blend_key}:{final_speed:.3f}:{text}".encode()).hexdigest()[:16]
     cache_path = CACHE_DIR / f"{cache_key}.wav"
 
     if cache_path.exists():
@@ -102,11 +210,12 @@ def speak():
 
     # Synthesize
     pipeline = get_pipeline()
+    voice_pack = resolve_voice_pack(pipeline, voice_spec)
 
     # Kokoro returns generator of (graphemes, phonemes, audio) tuples
     # Collect all audio chunks and concatenate
     audio_chunks = []
-    for _gs, _ps, audio in pipeline(text, voice=voice, speed=speed):
+    for _gs, _ps, audio in pipeline(text, voice=voice_pack, speed=final_speed):
         audio_chunks.append(audio)
 
     if not audio_chunks:
@@ -143,16 +252,22 @@ def speak_stream():
     text = data.get("text", "").strip()
     voice = data.get("voice", "af_heart")
     speed = float(data.get("speed", 1.0))
+    emotions = data.get("emotions")
 
     if not text:
         return Response("No text provided", status=400)
 
+    emotion_speed = compute_emotion_speed(emotions)
+    final_speed = speed * emotion_speed
+    voice_spec, _blend_key = compute_voice_blend(voice, emotions)
+
     pipeline = get_pipeline()
+    voice_pack = resolve_voice_pack(pipeline, voice_spec)
 
     def generate():
         import numpy as np
         chunks = []
-        for _gs, _ps, audio in pipeline(text, voice=voice, speed=speed):
+        for _gs, _ps, audio in pipeline(text, voice=voice_pack, speed=final_speed):
             chunks.append(audio)
 
         if chunks:
@@ -169,5 +284,6 @@ if __name__ == "__main__":
     print(f"[tts] Starting Kokoro TTS server on http://localhost:{port}")
     print(f"[tts] Cache dir: {CACHE_DIR}")
     print(f"[tts] Voice pool: {len(VOICE_POOL)} voices")
+    print(f"[tts] Emotion-aware speed & voice blending enabled")
     print(f"[tts] Model will load on first request...")
     app.run(host="127.0.0.1", port=port, threaded=True)
