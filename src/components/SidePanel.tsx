@@ -63,7 +63,7 @@ export function FeedPanel({
   const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(
     () => new Set(ALL_FILTERS)
   );
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
 
   useEffect(() => {
