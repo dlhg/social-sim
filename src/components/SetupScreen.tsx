@@ -50,54 +50,6 @@ export function SetupScreen({
         <p className="setup-subtitle">Assemble your cast</p>
       </div>
 
-      <div className="roster-section">
-        <div className="roster-header">
-          <span className="roster-label">Roster</span>
-          <span className="roster-count">
-            {roster.length}/{MAX_ROSTER}
-          </span>
-        </div>
-
-        {roster.length === 0 ? (
-          <div className="roster-empty">
-            Add characters to get started
-          </div>
-        ) : (
-          <div className="roster-grid">
-            {roster.map((npc) => (
-              <div key={npc.id} className="roster-card">
-                <button
-                  className="roster-card-remove"
-                  onClick={() => onRemoveFromRoster(npc.id)}
-                  title="Remove"
-                >
-                  ×
-                </button>
-                <div className="roster-card-avatar">{npc.avatar}</div>
-                <div
-                  className="roster-card-name"
-                  style={{ color: npc.color }}
-                >
-                  {npc.name}
-                </div>
-                <div className="roster-card-traits">
-                  {npc.personalityTraits.slice(0, 2).map((t) => (
-                    <span key={t} className="trait-chip">
-                      {t}
-                    </span>
-                  ))}
-                </div>
-                {npc.coreDesires[0] && (
-                  <div className="roster-card-desire">
-                    {npc.coreDesires[0]}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       <div className="setup-actions">
         <button
           className="btn btn-premade"
@@ -190,6 +142,54 @@ export function SetupScreen({
         </button>
         {roster.length < 2 && (
           <p className="setup-start-hint">Add at least 2 characters</p>
+        )}
+      </div>
+
+      <div className="roster-section">
+        <div className="roster-header">
+          <span className="roster-label">Roster</span>
+          <span className="roster-count">
+            {roster.length}/{MAX_ROSTER}
+          </span>
+        </div>
+
+        {roster.length === 0 ? (
+          <div className="roster-empty">
+            Add characters to get started
+          </div>
+        ) : (
+          <div className="roster-grid">
+            {roster.map((npc) => (
+              <div key={npc.id} className="roster-card">
+                <button
+                  className="roster-card-remove"
+                  onClick={() => onRemoveFromRoster(npc.id)}
+                  title="Remove"
+                >
+                  ×
+                </button>
+                <div className="roster-card-avatar">{npc.avatar}</div>
+                <div
+                  className="roster-card-name"
+                  style={{ color: npc.color }}
+                >
+                  {npc.name}
+                </div>
+                <div className="roster-card-traits">
+                  {npc.personalityTraits.slice(0, 2).map((t) => (
+                    <span key={t} className="trait-chip">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+                {npc.coreDesires[0] && (
+                  <div className="roster-card-desire">
+                    {npc.coreDesires[0]}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
