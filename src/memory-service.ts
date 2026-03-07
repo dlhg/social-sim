@@ -39,7 +39,22 @@ export class MemoryService {
     if (!npc) return;
     npc[slot].push(entry);
     if (slot === "shortTermMemory" && npc.shortTermMemory.length > 20) {
-      npc.shortTermMemory.shift();
+      // Evict the least valuable memory (lowest recency * importance)
+      let minIdx = 0;
+      let minScore = Infinity;
+      for (let i = 0; i < npc.shortTermMemory.length; i++) {
+        const m = npc.shortTermMemory[i];
+        const score = m.recency * m.importance;
+        if (score < minScore) {
+          minScore = score;
+          minIdx = i;
+        }
+      }
+      const [evicted] = npc.shortTermMemory.splice(minIdx, 1);
+      // Promote important memories to long-term instead of discarding
+      if (evicted.importance >= 7) {
+        npc.longTermMemory.push(evicted);
+      }
     }
     this._memoryVersion++;
     this.store.notifyChange();
