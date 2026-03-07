@@ -241,9 +241,31 @@ export function buildConversationMessages(
   }
 
   if (session.messages.length === 0) {
+    const rel = speaker.relationships[listener.id]?.regard ?? 0;
+    const mem = ctx.retrievedMemories;
+    const hasMemories = (mem?.direct.length ?? 0) > 0;
+    const hasGossip = (mem?.gossip.length ?? 0) > 0;
+    const hasPlans = (ctx.pendingPlans?.length ?? 0) > 0;
+
+    const groundingSuggestions: string[] = [];
+    if (hasMemories) groundingSuggestions.push("your shared history");
+    if (hasGossip) groundingSuggestions.push("gossip you've heard");
+    if (hasPlans) groundingSuggestions.push("plans you've made together");
+    if (speaker.currentGoal) groundingSuggestions.push("your current goal");
+    if (ctx.locationContext) groundingSuggestions.push("your surroundings");
+
+    const groundingHint = groundingSuggestions.length > 0
+      ? ` Draw from ${groundingSuggestions.join(", ")}, or whatever feels natural.`
+      : "";
+
+    const relationshipFraming =
+      rel <= -0.3 ? `You notice ${listener.name} nearby. You're not thrilled about it.`
+      : rel >= 0.5 ? `You spot ${listener.name} — someone you're glad to see.`
+      : `You notice ${listener.name} nearby.`;
+
     msgs.push({
       role: "user",
-      content: `You notice ${listener.name} nearby. Start a conversation with something specific and interesting — not just a generic greeting. Respond with ONLY a JSON object.`,
+      content: `${relationshipFraming}${groundingHint} Be specific — no generic greetings. Respond with ONLY a JSON object.`,
     });
   }
 
