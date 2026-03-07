@@ -191,8 +191,8 @@ function App() {
 
     // Create world simulation
     const world = new WorldSimulation({
-      gridWidth: 24,
-      gridHeight: 16,
+      gridWidth: 72,
+      gridHeight: 48,
       tickIntervalMs: 285,
       onProximity: (aId, bId) => {
         const started = managerRef.current?.triggerConversation(aId, bId);

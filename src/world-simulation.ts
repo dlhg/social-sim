@@ -4,22 +4,25 @@ import type { MemoryService } from "./memory-service";
 import { ACTIVITIES, shouldDoActivity, pickActivity, activityDurationTicks, buildActivityMemory, rollItemYield } from "./activities";
 
 export const WAYPOINTS: Waypoint[] = [
-  { id: "fountain", name: "Fountain", position: { x: 12, y: 8 }, mood: "gathering", description: "the central fountain, a busy gathering place" },
-  { id: "bench", name: "Park Bench", position: { x: 4, y: 12 }, mood: "intimate", description: "a secluded park bench, good for private talks" },
-  { id: "tree", name: "Old Tree", position: { x: 20, y: 4 }, mood: "reflective", description: "an ancient tree, a quiet spot for contemplation" },
-  { id: "garden", name: "Garden", position: { x: 7, y: 3 }, mood: "reflective", description: "a peaceful garden with winding paths" },
-  { id: "market", name: "Market", position: { x: 18, y: 13 }, mood: "social", description: "the bustling market square" },
-  { id: "well", name: "Well", position: { x: 3, y: 7 }, mood: "mysterious", description: "an old well at the edge of town, rumored to grant wishes" },
-  { id: "bridge", name: "Bridge", position: { x: 15, y: 10 }, mood: "social", description: "a stone bridge, a natural meeting point" },
-  { id: "chapel", name: "Chapel", position: { x: 1, y: 2 }, mood: "reflective", description: "a small stone chapel, hushed and reverent" },
-  { id: "training_yard", name: "Training Yard", position: { x: 22, y: 9 }, mood: "gathering", description: "a dusty training yard with wooden dummies" },
-  { id: "library_ruins", name: "Library Ruins", position: { x: 10, y: 1 }, mood: "mysterious", description: "crumbling library ruins, books still scattered among the stones" },
-  { id: "tavern_porch", name: "Tavern Porch", position: { x: 8, y: 14 }, mood: "social", description: "the porch of a weathered tavern, smelling of bread and ale" },
-  { id: "hilltop", name: "Hilltop", position: { x: 21, y: 1 }, mood: "reflective", description: "a windswept hilltop with a view of the whole town" },
-  { id: "pond", name: "Pond", position: { x: 14, y: 5 }, mood: "intimate", description: "a quiet pond surrounded by reeds" },
+  { id: "fountain", name: "Fountain", position: { x: 36, y: 24 }, mood: "gathering", description: "the central fountain, a busy gathering place" },
+  { id: "bench", name: "Park Bench", position: { x: 12, y: 36 }, mood: "intimate", description: "a secluded park bench, good for private talks" },
+  { id: "tree", name: "Old Tree", position: { x: 60, y: 12 }, mood: "reflective", description: "an ancient tree, a quiet spot for contemplation" },
+  { id: "garden", name: "Garden", position: { x: 21, y: 9 }, mood: "reflective", description: "a peaceful garden with winding paths" },
+  { id: "market", name: "Market", position: { x: 54, y: 39 }, mood: "social", description: "the bustling market square" },
+  { id: "well", name: "Well", position: { x: 9, y: 21 }, mood: "mysterious", description: "an old well at the edge of town, rumored to grant wishes" },
+  { id: "bridge", name: "Bridge", position: { x: 45, y: 30 }, mood: "social", description: "a stone bridge, a natural meeting point" },
+  { id: "chapel", name: "Chapel", position: { x: 3, y: 6 }, mood: "reflective", description: "a small stone chapel, hushed and reverent" },
+  { id: "training_yard", name: "Training Yard", position: { x: 66, y: 27 }, mood: "gathering", description: "a dusty training yard with wooden dummies" },
+  { id: "library_ruins", name: "Library Ruins", position: { x: 30, y: 3 }, mood: "mysterious", description: "crumbling library ruins, books still scattered among the stones" },
+  { id: "tavern_porch", name: "Tavern Porch", position: { x: 24, y: 42 }, mood: "social", description: "the porch of a weathered tavern, smelling of bread and ale" },
+  { id: "hilltop", name: "Hilltop", position: { x: 63, y: 3 }, mood: "reflective", description: "a windswept hilltop with a view of the whole town" },
+  { id: "pond", name: "Pond", position: { x: 42, y: 15 }, mood: "intimate", description: "a quiet pond surrounded by reeds" },
 ];
 
-const PROXIMITY_THRESHOLD = 2;
+const PROXIMITY_THRESHOLD = 5;
+const ARRIVAL_RADIUS = 2;
+const STEPS_PER_TICK = 3;
+const STUCK_THRESHOLD = 8;
 const IDLE_TICKS_MIN = 5;
 const IDLE_TICKS_MAX = 25;
 
@@ -44,6 +47,7 @@ export class WorldSimulation {
   private running = false;
   private paused = false;
   private slowNpcIds: Set<string> = new Set();
+  private stuckTicks: Map<string, number> = new Map();
 
   readonly gridWidth: number;
   readonly gridHeight: number;
@@ -193,12 +197,14 @@ export class WorldSimulation {
       }
 
       const dest = npc.destination.position;
-      if (npc.position.x === dest.x && npc.position.y === dest.y) {
+      const distToDest = Math.abs(npc.position.x - dest.x) + Math.abs(npc.position.y - dest.y);
+      if (distToDest <= ARRIVAL_RADIUS) {
         // Record visit for recency tracking
         if (!this.visitHistory.has(npc.npcId)) {
           this.visitHistory.set(npc.npcId, new Map());
         }
         this.visitHistory.get(npc.npcId)!.set(npc.destination.id, Date.now());
+        this.stuckTicks.delete(npc.npcId);
 
         // Try to start an activity at this waypoint
         const arrivedWaypoint = npc.destination;
@@ -211,57 +217,73 @@ export class WorldSimulation {
         continue;
       }
 
-      // Save previous position for lerp
+      // Save previous position for lerp (before all steps this tick)
       npc.previousPosition = { ...npc.position };
       npc.lastTickTime = now;
 
-      // Step one tile toward destination, avoiding other NPCs
-      const dx = dest.x - npc.position.x;
-      const dy = dest.y - npc.position.y;
+      // Take multiple steps per tick to maintain visual speed on the larger grid
+      let movedThisTick = false;
+      for (let step = 0; step < STEPS_PER_TICK; step++) {
+        const dx = dest.x - npc.position.x;
+        const dy = dest.y - npc.position.y;
+        if (dx === 0 && dy === 0) break;
 
-      // Build list of candidate moves: direct moves first, then perpendicular detours
-      const candidates: Position[] = [];
-      const { x, y } = npc.position;
-      if (dx !== 0 && dy !== 0) {
-        // Diagonal: both direct moves, then neither is a detour since both help
-        if (Math.random() < 0.5) {
+        // Build candidate moves: direct first, perpendicular detours, then backward
+        const candidates: Position[] = [];
+        const { x, y } = npc.position;
+        if (dx !== 0 && dy !== 0) {
+          if (Math.random() < 0.5) {
+            candidates.push({ x: x + Math.sign(dx), y });
+            candidates.push({ x, y: y + Math.sign(dy) });
+          } else {
+            candidates.push({ x, y: y + Math.sign(dy) });
+            candidates.push({ x: x + Math.sign(dx), y });
+          }
+          // Backward as last resort
+          candidates.push({ x: x - Math.sign(dx), y });
+          candidates.push({ x, y: y - Math.sign(dy) });
+        } else if (dx !== 0) {
           candidates.push({ x: x + Math.sign(dx), y });
-          candidates.push({ x, y: y + Math.sign(dy) });
+          const perpDir = Math.random() < 0.5 ? 1 : -1;
+          candidates.push({ x, y: y + perpDir });
+          candidates.push({ x, y: y - perpDir });
+          candidates.push({ x: x - Math.sign(dx), y });
         } else {
           candidates.push({ x, y: y + Math.sign(dy) });
-          candidates.push({ x: x + Math.sign(dx), y });
+          const perpDir = Math.random() < 0.5 ? 1 : -1;
+          candidates.push({ x: x + perpDir, y });
+          candidates.push({ x: x - perpDir, y });
+          candidates.push({ x, y: y - Math.sign(dy) });
         }
-      } else if (dx !== 0) {
-        candidates.push({ x: x + Math.sign(dx), y });
-        // Perpendicular detours when moving along x-axis
-        const perpDir = Math.random() < 0.5 ? 1 : -1;
-        candidates.push({ x, y: y + perpDir });
-        candidates.push({ x, y: y - perpDir });
-      } else {
-        candidates.push({ x, y: y + Math.sign(dy) });
-        // Perpendicular detours when moving along y-axis
-        const perpDir = Math.random() < 0.5 ? 1 : -1;
-        candidates.push({ x: x + perpDir, y });
-        candidates.push({ x: x - perpDir, y });
+
+        const inBounds = candidates.filter(
+          c => c.x >= 0 && c.x < this.gridWidth && c.y >= 0 && c.y < this.gridHeight
+        );
+        let moved = false;
+        for (const candidate of inBounds) {
+          if (!this.isTooCloseToOthers(candidate, npc)) {
+            npc.position.x = candidate.x;
+            npc.position.y = candidate.y;
+            moved = true;
+            movedThisTick = true;
+            break;
+          }
+        }
+        if (!moved) break; // blocked, stop stepping
       }
 
-      // Filter to in-bounds candidates, then pick first that doesn't crowd another NPC
-      const inBounds = candidates.filter(
-        c => c.x >= 0 && c.x < this.gridWidth && c.y >= 0 && c.y < this.gridHeight
-      );
-      let moved = false;
-      for (const candidate of inBounds) {
-        if (!this.isTooCloseToOthers(candidate, npc)) {
-          npc.position.x = candidate.x;
-          npc.position.y = candidate.y;
-          moved = true;
-          break;
-        }
-      }
-
-      // If all moves are blocked, stay put this tick
-      if (!moved) {
+      // Stuck detection: if blocked too long, pick a new destination
+      if (!movedThisTick) {
         npc.previousPosition = { ...npc.position };
+        const stuck = (this.stuckTicks.get(npc.npcId) ?? 0) + 1;
+        this.stuckTicks.set(npc.npcId, stuck);
+        if (stuck >= STUCK_THRESHOLD) {
+          npc.destination = null;
+          npc.idleTicksRemaining = 2;
+          this.stuckTicks.delete(npc.npcId);
+        }
+      } else {
+        this.stuckTicks.delete(npc.npcId);
       }
     }
 
@@ -306,7 +328,7 @@ export class WorldSimulation {
         const distToWp =
           Math.abs(otherSpatial.position.x - wp.position.x) +
           Math.abs(otherSpatial.position.y - wp.position.y);
-        if (distToWp <= 3) {
+        if (distToWp <= 9) {
           const rel = npcData.relationships[otherSpatial.npcId]?.regard ?? 0;
           const isAggressive = npcData.personalityTraits.some((t) =>
             ["competitive", "aggressive", "confrontational", "contrarian"].includes(
@@ -450,7 +472,7 @@ export class WorldSimulation {
       const dist =
         Math.abs(npc.position.x - wp.position.x) +
         Math.abs(npc.position.y - wp.position.y);
-      if (dist <= 2) count++;
+      if (dist <= 6) count++;
     }
     return count;
   }
@@ -494,8 +516,8 @@ export class WorldSimulation {
   private checkActivityObservations(): void {
     if (!this.onObserveActivity) return;
 
-    const OBSERVE_RANGE = 3;
-    const OBSERVE_COOLDOWN_MS = 45_000;
+    const OBSERVE_RANGE = 6;
+    const OBSERVE_COOLDOWN_MS = 120_000;
     const now = Date.now();
 
     const npcList = Array.from(this.npcs.values());
@@ -515,8 +537,8 @@ export class WorldSimulation {
         const lastObserve = this.observationCooldowns.get(key) ?? 0;
         if (now - lastObserve < OBSERVE_COOLDOWN_MS) continue;
 
-        // Only trigger ~20% of eligible ticks to avoid spam
-        if (Math.random() > 0.2) continue;
+        // Only trigger ~5% of eligible ticks to avoid spam
+        if (Math.random() > 0.05) continue;
 
         this.observationCooldowns.set(key, now);
         this.onObserveActivity(observer.npcId, actor.npcId, actor.activeActivity.activityId);
@@ -529,11 +551,7 @@ export class WorldSimulation {
   private isTooCloseToOthers(pos: Position, npc: NpcSpatialState): boolean {
     for (const other of this.npcs.values()) {
       if (other.npcId === npc.npcId) continue;
-      const newDist = Math.abs(pos.x - other.position.x) + Math.abs(pos.y - other.position.y);
-      if (newDist > 1) continue;
-      // Only block if this move doesn't increase distance (allow separating)
-      const curDist = Math.abs(npc.position.x - other.position.x) + Math.abs(npc.position.y - other.position.y);
-      if (newDist <= curDist) return true;
+      if (pos.x === other.position.x && pos.y === other.position.y) return true;
     }
     return false;
   }
@@ -574,7 +592,7 @@ export class WorldSimulation {
         best = wp;
       }
     }
-    return bestDist <= 3 ? best : undefined;
+    return bestDist <= 9 ? best : undefined;
   }
 
   // ── Activities ─────────────────────────────────

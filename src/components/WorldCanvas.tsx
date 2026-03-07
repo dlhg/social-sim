@@ -50,8 +50,8 @@ function createParticles(count: number, w: number, h: number): Particle[] {
   return particles;
 }
 
-const GRID_WIDTH = 24;
-const GRID_HEIGHT = 16;
+const GRID_WIDTH = 72;
+const GRID_HEIGHT = 48;
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
