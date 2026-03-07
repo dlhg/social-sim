@@ -75,7 +75,8 @@ function App() {
   const [dayLabel, setDayLabel] = useState("");
   const [dayPhase, setDayPhase] = useState<DayPhase>("morning");
   const ttsRef = useRef(new TTSService({ volume: 0.7, speed: 1.1, enabled: false }));
-  const earlyTtsRef = useRef(new Set<string>());
+  const ttsStreamedRef = useRef(new Set<string>());
+  const ttsSentIndexRef = useRef(new Map<string, number>());
   const [ttsEnabled, setTtsEnabled] = useState(false);
 
   useEffect(() => {
@@ -384,10 +385,32 @@ function App() {
             }
             return [...prev, { npcId, text: speechText, type: "speech", startedAt: Date.now() }];
           });
-          // Fire TTS as soon as the speech field closes, don't wait for full JSON
-          if (complete && !earlyTtsRef.current.has(npcId)) {
-            earlyTtsRef.current.add(npcId);
-            ttsRef.current.speak(npcId, speechText);
+          // Stream TTS sentence-by-sentence as they complete
+          const cursor = ttsSentIndexRef.current.get(npcId) ?? 0;
+          const boundaryRegex = /[.!?]\s+/g;
+          boundaryRegex.lastIndex = cursor;
+          let newCursor = cursor;
+          let match: RegExpExecArray | null;
+          while ((match = boundaryRegex.exec(speechText)) !== null) {
+            const sentEnd = match.index + 1; // include punctuation
+            const sentence = speechText.slice(newCursor, sentEnd).trim();
+            if (sentence) {
+              ttsStreamedRef.current.add(npcId);
+              ttsRef.current.speak(npcId, sentence);
+            }
+            newCursor = match.index + match[0].length;
+          }
+          ttsSentIndexRef.current.set(npcId, newCursor);
+          // When speech field closes, dispatch any remaining text
+          if (complete) {
+            const remaining = speechText.slice(newCursor).trim();
+            if (remaining) {
+              ttsStreamedRef.current.add(npcId);
+              ttsRef.current.speak(npcId, remaining);
+            }
+            // Set cursor to end so subsequent calls (as remaining JSON streams)
+            // don't re-dispatch. Cleaned up in onTurnComplete.
+            ttsSentIndexRef.current.set(npcId, speechText.length);
           }
         }
       },
@@ -395,10 +418,11 @@ function App() {
         setFeed((prev) => [...prev, { type: "chat", msg, timestamp: Date.now() }]);
         setStreamingText((prev) => ({ ...prev, [msg.npcId]: "" }));
 
-        // Fire TTS only if not already triggered early during streaming
-        if (!earlyTtsRef.current.delete(msg.npcId)) {
+        // Fire TTS only if not already streamed sentence-by-sentence
+        if (!ttsStreamedRef.current.delete(msg.npcId)) {
           ttsRef.current.speak(msg.npcId, msg.text);
         }
+        ttsSentIndexRef.current.delete(msg.npcId);
 
         // Mark speech bubble as completed, schedule removal
         setBubbles(prev => prev.map(b =>
