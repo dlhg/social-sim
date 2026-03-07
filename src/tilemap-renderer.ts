@@ -33,9 +33,13 @@ export class TilemapRenderer {
   private tileset: TiledTileset | null = null;
   ready = false;
 
+  /** Pre-rendered layer canvases (rendered once at native tile size). */
+  private groundCanvas: OffscreenCanvas | null = null;
+  private objectCanvas: OffscreenCanvas | null = null;
+
   /** Layers to render as ground (behind everything). */
   private groundLayers: TiledLayer[] = [];
-  /** Layers to render as objects (on top of ground, name contains "collision" or "object"). */
+  /** Layers to render as objects (on top of ground). */
   private objectLayers: TiledLayer[] = [];
   /** Collision grid — true = blocked. */
   collisionGrid: boolean[] = [];
@@ -64,7 +68,6 @@ export class TilemapRenderer {
       const lower = layer.name.toLowerCase();
       if (lower.includes("collis") || lower.includes("object")) {
         this.objectLayers.push(layer);
-        // Build collision grid from any non-zero tile
         if (this.collisionGrid.length === 0) {
           this.collisionGrid = layer.data.map(id => id !== 0);
         }
@@ -73,68 +76,71 @@ export class TilemapRenderer {
       }
     }
 
+    // Pre-render layers to offscreen canvases
+    this.groundCanvas = this.prerenderLayers(this.groundLayers);
+    this.objectCanvas = this.prerenderLayers(this.objectLayers);
+
     this.ready = true;
   }
 
   get mapWidth() { return this.map?.width ?? 0; }
   get mapHeight() { return this.map?.height ?? 0; }
 
-  /** Draw ground layers (call before NPCs). */
-  drawGround(ctx: CanvasRenderingContext2D, offsetX: number, offsetY: number, tileSize: number) {
-    for (const layer of this.groundLayers) {
-      this.drawLayer(ctx, layer, offsetX, offsetY, tileSize);
-    }
-  }
-
-  /** Draw object layers (call before NPCs — depth interleaving can come later). */
-  drawObjects(ctx: CanvasRenderingContext2D, offsetX: number, offsetY: number, tileSize: number) {
-    for (const layer of this.objectLayers) {
-      this.drawLayer(ctx, layer, offsetX, offsetY, tileSize);
-    }
-  }
-
-  private drawLayer(
-    ctx: CanvasRenderingContext2D,
-    layer: TiledLayer,
-    offsetX: number,
-    offsetY: number,
-    tileSize: number,
-  ) {
-    if (!this.tilesetImage || !this.tileset || !this.map) return;
+  private prerenderLayers(layers: TiledLayer[]): OffscreenCanvas | null {
+    if (!this.tilesetImage || !this.tileset || !this.map || layers.length === 0) return null;
 
     const { columns, firstgid, tilewidth, tileheight } = this.tileset;
     const mapW = this.map.width;
     const mapH = this.map.height;
 
-    // Viewport culling — determine visible tile range
-    const startCol = Math.max(0, Math.floor(-offsetX / tileSize));
-    const startRow = Math.max(0, Math.floor(-offsetY / tileSize));
-    const endCol = Math.min(mapW, Math.ceil((-offsetX + ctx.canvas.width / (window.devicePixelRatio || 1)) / tileSize));
-    const endRow = Math.min(mapH, Math.ceil((-offsetY + ctx.canvas.height / (window.devicePixelRatio || 1)) / tileSize));
-
-    // Crisp pixel art
+    const canvas = new OffscreenCanvas(mapW * tilewidth, mapH * tileheight);
+    const ctx = canvas.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
 
-    for (let row = startRow; row < endRow; row++) {
-      for (let col = startCol; col < endCol; col++) {
-        const tileId = layer.data[row * mapW + col];
-        if (tileId === 0) continue;
+    for (const layer of layers) {
+      for (let row = 0; row < mapH; row++) {
+        for (let col = 0; col < mapW; col++) {
+          const tileId = layer.data[row * mapW + col];
+          if (tileId === 0) continue;
 
-        const localId = tileId - firstgid;
-        const srcCol = localId % columns;
-        const srcRow = Math.floor(localId / columns);
-        const sx = srcCol * tilewidth;
-        const sy = srcRow * tileheight;
+          const localId = tileId - firstgid;
+          const srcCol = localId % columns;
+          const srcRow = Math.floor(localId / columns);
 
-        const dx = offsetX + col * tileSize;
-        const dy = offsetY + row * tileSize;
-
-        ctx.drawImage(
-          this.tilesetImage,
-          sx, sy, tilewidth, tileheight,
-          dx, dy, tileSize, tileSize,
-        );
+          ctx.drawImage(
+            this.tilesetImage!,
+            srcCol * tilewidth, srcRow * tileheight, tilewidth, tileheight,
+            col * tilewidth, row * tileheight, tilewidth, tileheight,
+          );
+        }
       }
     }
+
+    return canvas;
+  }
+
+  /** Draw ground layers (call before NPCs). */
+  drawGround(ctx: CanvasRenderingContext2D, offsetX: number, offsetY: number, tileSize: number) {
+    this.drawCached(ctx, this.groundCanvas, offsetX, offsetY, tileSize);
+  }
+
+  /** Draw object layers (call before NPCs). */
+  drawObjects(ctx: CanvasRenderingContext2D, offsetX: number, offsetY: number, tileSize: number) {
+    this.drawCached(ctx, this.objectCanvas, offsetX, offsetY, tileSize);
+  }
+
+  private drawCached(
+    ctx: CanvasRenderingContext2D,
+    cached: OffscreenCanvas | null,
+    offsetX: number,
+    offsetY: number,
+    tileSize: number,
+  ) {
+    if (!cached || !this.map) return;
+
+    ctx.imageSmoothingEnabled = false;
+    const destW = this.map.width * tileSize;
+    const destH = this.map.height * tileSize;
+    ctx.drawImage(cached, offsetX, offsetY, destW, destH);
   }
 }
