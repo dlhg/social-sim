@@ -82,7 +82,8 @@ export class WorldSimulation {
   }
 
   addNpc(npcId: string, startPosition?: Position): void {
-    const pos = startPosition ?? this.randomWaypoint().position;
+    const preferred = startPosition ?? this.randomWaypoint().position;
+    const pos = this.findOpenTileNear(preferred);
     // Stagger initial social timers so NPCs don't all get lonely at once
     this.lastInteractionTime.set(npcId, Date.now() + Math.random() * 60_000);
     this.npcs.set(npcId, {
@@ -95,6 +96,34 @@ export class WorldSimulation {
       frozen: false,
       activeActivity: null,
     });
+  }
+
+  /** Find the nearest open (non-collision, non-occupied) tile via spiral search. */
+  private findOpenTileNear(pos: Position): Position {
+    for (let radius = 0; radius <= 10; radius++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue; // only check perimeter
+          const candidate = { x: pos.x + dx, y: pos.y + dy };
+          if (candidate.x < 0 || candidate.x >= this.gridWidth) continue;
+          if (candidate.y < 0 || candidate.y >= this.gridHeight) continue;
+          // Check collision grid
+          if (this.collisionGrid.length > 0) {
+            if (this.collisionGrid[candidate.y * this.gridWidth + candidate.x]) continue;
+          }
+          // Check NPC overlap
+          let occupied = false;
+          for (const other of this.npcs.values()) {
+            if (other.position.x === candidate.x && other.position.y === candidate.y) {
+              occupied = true;
+              break;
+            }
+          }
+          if (!occupied) return candidate;
+        }
+      }
+    }
+    return pos; // fallback
   }
 
   // ── Lifecycle ────────────────────────────────
@@ -192,7 +221,9 @@ export class WorldSimulation {
       }
 
       if (!npc.destination) {
-        npc.destination = this.pickDestination(npc);
+        npc.destination = Math.random() < 0.25
+          ? this.pickWanderTarget(npc)
+          : this.pickDestination(npc);
       }
 
       const dest = npc.destination.position;
@@ -709,6 +740,22 @@ export class WorldSimulation {
   }
 
   // ── Helpers ──────────────────────────────────
+
+  /** Pick a random walkable tile 5-15 tiles away for an idle stroll. */
+  private pickWanderTarget(npc: NpcSpatialState): Waypoint {
+    const range = 5 + Math.floor(Math.random() * 11);
+    for (let attempt = 0; attempt < 15; attempt++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = range * (0.5 + Math.random() * 0.5);
+      const tx = Math.round(npc.position.x + Math.cos(angle) * dist);
+      const ty = Math.round(npc.position.y + Math.sin(angle) * dist);
+      if (tx < 1 || tx >= this.gridWidth - 1 || ty < 1 || ty >= this.gridHeight - 1) continue;
+      if (this.collisionGrid.length > 0 && this.collisionGrid[ty * this.gridWidth + tx]) continue;
+      return { id: "_wander", name: "strolling", position: { x: tx, y: ty } };
+    }
+    // Fallback to a real waypoint
+    return this.pickDestination(npc);
+  }
 
   private randomWaypoint(): Waypoint {
     return this.waypoints[Math.floor(Math.random() * this.waypoints.length)];
