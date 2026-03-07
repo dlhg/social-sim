@@ -23,21 +23,57 @@ import soundfile as sf
 app = Flask(__name__)
 CORS(app)
 
-# Lazy-init so the server starts fast
-_pipeline = None
-
 # On-disk cache to avoid re-synthesizing identical lines
 CACHE_DIR = Path(__file__).parent / ".tts-cache"
 CACHE_DIR.mkdir(exist_ok=True)
 
+# ── Multi-language pipeline management ───────────
+# One KPipeline per language, lazily initialized. They share one KModel.
 
-def get_pipeline():
-    global _pipeline
-    if _pipeline is None:
-        from kokoro import KPipeline
-        _pipeline = KPipeline(lang_code="a")  # American English
-        print("[tts] Kokoro pipeline loaded")
-    return _pipeline
+# Map app language names → Kokoro lang codes
+LANGUAGE_TO_LANG_CODE = {
+    "english": "a",
+    "british english": "b",
+    "spanish": "e",
+    "french": "f",
+    "hindi": "h",
+    "italian": "i",
+    "portuguese": "p",
+    "brazilian portuguese": "p",
+    "japanese": "j",
+    "chinese": "z",
+    "mandarin": "z",
+}
+
+_pipelines: dict = {}  # lang_code -> KPipeline
+_model = None  # shared KModel instance
+
+
+def get_pipeline(lang_code: str = "a"):
+    global _model
+    from kokoro import KPipeline
+
+    if lang_code in _pipelines:
+        return _pipelines[lang_code]
+
+    # Reuse one model across all pipelines
+    if _model is None:
+        pipeline = KPipeline(lang_code=lang_code)
+        _model = pipeline.model
+        print(f"[tts] Kokoro model loaded, first pipeline: {lang_code}")
+    else:
+        pipeline = KPipeline(lang_code=lang_code, model=_model)
+        print(f"[tts] Added pipeline for lang_code={lang_code}")
+
+    _pipelines[lang_code] = pipeline
+    return pipeline
+
+
+def resolve_lang_code(language: str | None) -> str | None:
+    """Map a language name from the app to a Kokoro lang code, or None if unsupported."""
+    if not language:
+        return "a"
+    return LANGUAGE_TO_LANG_CODE.get(language.lower().strip())
 
 
 # ── Available voice pool ──────────────────────────
@@ -163,7 +199,11 @@ def resolve_voice_pack(pipeline, voice_spec):
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "engine": "kokoro"})
+    return jsonify({
+        "status": "ok",
+        "engine": "kokoro",
+        "languages": list(LANGUAGE_TO_LANG_CODE.keys()),
+    })
 
 
 @app.route("/voices", methods=["GET"])
@@ -179,7 +219,8 @@ def speak():
 
     JSON body:
       { "text": "Hello world", "voice": "af_heart", "speed": 1.0,
-        "emotions": {"anger": 0, "joy": 0.5, ...} }
+        "emotions": {"anger": 0, "joy": 0.5, ...},
+        "language": "English" }
 
     Returns: audio/wav
     """
@@ -188,17 +229,20 @@ def speak():
     voice = data.get("voice", "af_heart")
     speed = float(data.get("speed", 1.0))
     emotions = data.get("emotions")
+    lang_code = resolve_lang_code(data.get("language"))
 
     if not text:
         return Response("No text provided", status=400)
+    if lang_code is None:
+        return Response(f"Language not supported for TTS: {data.get('language')}", status=400)
 
     # Compute emotion-aware speed and voice blend
     emotion_speed = compute_emotion_speed(emotions)
     final_speed = speed * emotion_speed
     voice_spec, blend_key = compute_voice_blend(voice, emotions)
 
-    # Check cache (keyed on blended voice + emotion-adjusted speed + text)
-    cache_key = hashlib.sha256(f"{blend_key}:{final_speed:.3f}:{text}".encode()).hexdigest()[:16]
+    # Check cache (keyed on language + blended voice + emotion-adjusted speed + text)
+    cache_key = hashlib.sha256(f"{lang_code}:{blend_key}:{final_speed:.3f}:{text}".encode()).hexdigest()[:16]
     cache_path = CACHE_DIR / f"{cache_key}.wav"
 
     if cache_path.exists():
@@ -208,8 +252,12 @@ def speak():
             headers={"X-TTS-Cached": "true"},
         )
 
-    # Synthesize
-    pipeline = get_pipeline()
+    # Synthesize with language-appropriate pipeline
+    try:
+        pipeline = get_pipeline(lang_code)
+    except Exception as e:
+        print(f"[tts] Failed to load pipeline for lang_code={lang_code}: {e}")
+        return Response(f"Language not supported: {lang_code}", status=400)
     voice_pack = resolve_voice_pack(pipeline, voice_spec)
 
     # Kokoro returns generator of (graphemes, phonemes, audio) tuples
@@ -253,15 +301,22 @@ def speak_stream():
     voice = data.get("voice", "af_heart")
     speed = float(data.get("speed", 1.0))
     emotions = data.get("emotions")
+    lang_code = resolve_lang_code(data.get("language"))
 
     if not text:
         return Response("No text provided", status=400)
+    if lang_code is None:
+        return Response(f"Language not supported for TTS: {data.get('language')}", status=400)
 
     emotion_speed = compute_emotion_speed(emotions)
     final_speed = speed * emotion_speed
     voice_spec, _blend_key = compute_voice_blend(voice, emotions)
 
-    pipeline = get_pipeline()
+    try:
+        pipeline = get_pipeline(lang_code)
+    except Exception as e:
+        print(f"[tts] Failed to load pipeline for lang_code={lang_code}: {e}")
+        return Response(f"Language not supported: {lang_code}", status=400)
     voice_pack = resolve_voice_pack(pipeline, voice_spec)
 
     def generate():
@@ -285,5 +340,6 @@ if __name__ == "__main__":
     print(f"[tts] Cache dir: {CACHE_DIR}")
     print(f"[tts] Voice pool: {len(VOICE_POOL)} voices")
     print(f"[tts] Emotion-aware speed & voice blending enabled")
+    print(f"[tts] Supported languages: {', '.join(LANGUAGE_TO_LANG_CODE.keys())}")
     print(f"[tts] Model will load on first request...")
     app.run(host="127.0.0.1", port=port, threaded=True)

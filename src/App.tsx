@@ -401,7 +401,7 @@ function App() {
             const sentence = speechText.slice(newCursor, sentEnd).trim();
             if (sentence) {
               ttsStreamedRef.current.add(npcId);
-              ttsRef.current.speak(npcId, sentence, ttsEmotions);
+              ttsRef.current.speak(npcId, sentence, ttsEmotions, languageRef.current);
             }
             newCursor = match.index + match[0].length;
           }
@@ -411,7 +411,7 @@ function App() {
             const remaining = speechText.slice(newCursor).trim();
             if (remaining) {
               ttsStreamedRef.current.add(npcId);
-              ttsRef.current.speak(npcId, remaining, ttsEmotions);
+              ttsRef.current.speak(npcId, remaining, ttsEmotions, languageRef.current);
             }
             // Set cursor to end so subsequent calls (as remaining JSON streams)
             // don't re-dispatch. Cleaned up in onTurnComplete.
@@ -426,7 +426,7 @@ function App() {
         // Fire TTS only if not already streamed sentence-by-sentence
         if (!ttsStreamedRef.current.delete(msg.npcId)) {
           const emo = storeRef.current.get(msg.npcId)?.emotionalState;
-          ttsRef.current.speak(msg.npcId, msg.text, emo);
+          ttsRef.current.speak(msg.npcId, msg.text, emo, languageRef.current);
         }
         ttsSentIndexRef.current.delete(msg.npcId);
 

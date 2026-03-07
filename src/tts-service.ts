@@ -47,7 +47,7 @@ export class TTSService {
   private gainNode: GainNode | null = null;
   private voiceMap = new Map<string, string>(); // npcId -> voice
   private voiceIndex = 0;
-  private queue: { npcId: string; text: string; emotions?: EmotionalState; resolve: () => void }[] = [];
+  private queue: { npcId: string; text: string; emotions?: EmotionalState; language?: string; resolve: () => void }[] = [];
   private playing = false;
   private options: TTSOptions;
   private serverAvailable: boolean | null = null; // null = unknown
@@ -100,7 +100,7 @@ export class TTSService {
   }
 
   /** Speak a line of text for an NPC. Optionally pass emotional state for expressive synthesis. */
-  async speak(npcId: string, text: string, emotions?: EmotionalState): Promise<void> {
+  async speak(npcId: string, text: string, emotions?: EmotionalState, language?: string): Promise<void> {
     if (!this.options.enabled || this.serverAvailable === false) return;
 
     // Lazy check server on first call
@@ -110,7 +110,7 @@ export class TTSService {
     }
 
     return new Promise<void>((resolve) => {
-      this.queue.push({ npcId, text, emotions, resolve });
+      this.queue.push({ npcId, text, emotions, language, resolve });
       this.processQueue();
     });
   }
@@ -157,7 +157,7 @@ export class TTSService {
     const voice = this.assignVoice(item.npcId);
 
     try {
-      const wavBytes = await this.fetchSpeech(item.text, voice, item.emotions);
+      const wavBytes = await this.fetchSpeech(item.text, voice, item.emotions, item.language);
       if (wavBytes) {
         await this.playAudio(wavBytes);
       }
@@ -177,7 +177,8 @@ export class TTSService {
   private async fetchSpeech(
     text: string,
     voice: string,
-    emotions?: EmotionalState
+    emotions?: EmotionalState,
+    language?: string,
   ): Promise<ArrayBuffer | null> {
     try {
       const res = await fetch(`${TTS_BASE}/speak`, {
@@ -188,6 +189,7 @@ export class TTSService {
           voice,
           speed: this.options.speed,
           emotions: emotions ?? undefined,
+          language: language ?? undefined,
         }),
         signal: AbortSignal.timeout(60000),
       });
