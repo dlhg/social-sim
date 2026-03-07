@@ -200,8 +200,8 @@ function App() {
 
     // Create world simulation
     const world = new WorldSimulation({
-      gridWidth: 72,
-      gridHeight: 48,
+      gridWidth: tilemap.mapWidth,
+      gridHeight: tilemap.mapHeight,
       tickIntervalMs: 285,
       waypoints: tilemap.waypoints,
       collisionGrid: tilemap.collisionGrid,

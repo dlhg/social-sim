@@ -52,9 +52,6 @@ function createParticles(count: number, w: number, h: number): Particle[] {
   return particles;
 }
 
-const GRID_WIDTH = 72;
-const GRID_HEIGHT = 48;
-
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -152,11 +149,11 @@ export function WorldCanvas({
   tilemapRef.current = tilemap;
 
   const cameraRef = useRef<CameraState>({
-    cx: GRID_WIDTH / 2,
-    cy: GRID_HEIGHT / 2,
+    cx: tilemap.mapWidth / 2,
+    cy: tilemap.mapHeight / 2,
     zoom: 1,
-    targetCx: GRID_WIDTH / 2,
-    targetCy: GRID_HEIGHT / 2,
+    targetCx: tilemap.mapWidth / 2,
+    targetCy: tilemap.mapHeight / 2,
     targetZoom: 1,
     dimAmount: 0,
     targetDimAmount: 0,
@@ -215,8 +212,8 @@ export function WorldCanvas({
           cam.targetDimAmount = 1;
         }
       } else {
-        cam.targetCx = GRID_WIDTH / 2;
-        cam.targetCy = GRID_HEIGHT / 2;
+        cam.targetCx = tilemapRef.current.mapWidth / 2;
+        cam.targetCy = tilemapRef.current.mapHeight / 2;
         cam.targetZoom = 1;
         cam.targetDimAmount = 0;
       }
@@ -230,8 +227,10 @@ export function WorldCanvas({
       ctx.clearRect(0, 0, width, height);
 
       // Compute tile size (square tiles, centered) at zoom=1
-      const tileW = width / GRID_WIDTH;
-      const tileH = height / GRID_HEIGHT;
+      const gridW = tilemap.mapWidth || 72;
+      const gridH = tilemap.mapHeight || 48;
+      const tileW = width / gridW;
+      const tileH = height / gridH;
       const baseTileSize = Math.min(tileW, tileH);
 
       // Apply camera transform
@@ -249,12 +248,12 @@ export function WorldCanvas({
       ctx.fillStyle = phaseTint.bg;
       ctx.fillRect(0, 0, width, height);
 
-      const tilemap = tilemapRef.current;
+      const tm = tilemapRef.current;
 
-      if (tilemap.ready) {
+      if (tm.ready) {
         // Tilemap replaces the flat grid background
-        tilemap.drawGround(ctx, offsetX, offsetY, tileSize);
-        tilemap.drawObjects(ctx, offsetX, offsetY, tileSize);
+        tm.drawGround(ctx, offsetX, offsetY, tileSize);
+        tm.drawObjects(ctx, offsetX, offsetY, tileSize);
 
         // Phase tint overlay on top of tilemap
         if (phaseTint.tintAlpha > 0) {
@@ -262,8 +261,8 @@ export function WorldCanvas({
           ctx.fillRect(
             offsetX,
             offsetY,
-            tileSize * GRID_WIDTH,
-            tileSize * GRID_HEIGHT
+            tileSize * gridW,
+            tileSize * gridH
           );
         }
       } else {
@@ -272,8 +271,8 @@ export function WorldCanvas({
         ctx.fillRect(
           offsetX,
           offsetY,
-          tileSize * GRID_WIDTH,
-          tileSize * GRID_HEIGHT
+          tileSize * gridW,
+          tileSize * gridH
         );
       }
 

@@ -11,10 +11,10 @@ const FRAME_H = 32;
 const FRAMES_PER_DIR = 6;
 
 // Direction → frame offset multiplier
-const DIR_DOWN = 0;
+const DIR_DOWN = 3;
 const DIR_UP = 1;
 const DIR_LEFT = 2;
-const DIR_RIGHT = 3;
+const DIR_RIGHT = 0;
 
 const IDLE_FRAME_MS = 180;
 const RUN_FRAME_MS = 100;

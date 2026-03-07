@@ -6,8 +6,6 @@ interface MapTestModeProps {
   onExit: () => void;
 }
 
-const GRID_WIDTH = 72;
-const GRID_HEIGHT = 48;
 const MOVE_INTERVAL = 120; // ms between moves when holding key
 
 export function MapTestMode({ onExit }: MapTestModeProps) {
@@ -86,12 +84,14 @@ export function MapTestMode({ onExit }: MapTestModeProps) {
       const newY = p.y + dy;
 
       // Bounds check
-      if (newX < 0 || newX >= GRID_WIDTH || newY < 0 || newY >= GRID_HEIGHT) return;
+      const tilemap = tilemapRef.current;
+      const gridW = tilemap.mapWidth || 72;
+      const gridH = tilemap.mapHeight || 48;
+      if (newX < 0 || newX >= gridW || newY < 0 || newY >= gridH) return;
 
       // Collision check
-      const tilemap = tilemapRef.current;
       if (tilemap.ready && tilemap.collisionGrid.length > 0) {
-        const idx = newY * GRID_WIDTH + newX;
+        const idx = newY * gridW + newX;
         if (tilemap.collisionGrid[idx]) {
           setInfo(`Blocked at (${newX}, ${newY})`);
           p.lastDx = dx;
@@ -132,8 +132,10 @@ export function MapTestMode({ onExit }: MapTestModeProps) {
       const player = playerRef.current;
 
       // Camera follows player
-      const tileW = width / GRID_WIDTH;
-      const tileH = height / GRID_HEIGHT;
+      const gridW = tilemap.mapWidth || 72;
+      const gridH = tilemap.mapHeight || 48;
+      const tileW = width / gridW;
+      const tileH = height / gridH;
       const tileSize = Math.min(tileW, tileH) * 2.5;
 
       const camX = width / 2 - (player.x + 0.5) * tileSize;
@@ -150,9 +152,9 @@ export function MapTestMode({ onExit }: MapTestModeProps) {
         // Draw collision overlay (subtle red tint on blocked tiles)
         if (tilemap.collisionGrid.length > 0) {
           ctx.fillStyle = "rgba(255, 0, 0, 0.15)";
-          for (let row = 0; row < GRID_HEIGHT; row++) {
-            for (let col = 0; col < GRID_WIDTH; col++) {
-              if (tilemap.collisionGrid[row * GRID_WIDTH + col]) {
+          for (let row = 0; row < gridH; row++) {
+            for (let col = 0; col < gridW; col++) {
+              if (tilemap.collisionGrid[row * gridW + col]) {
                 const sx = camX + col * tileSize;
                 const sy = camY + row * tileSize;
                 // Only draw if on screen
