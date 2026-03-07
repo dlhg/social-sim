@@ -39,6 +39,8 @@ export class WorldSimulation {
   private paused = false;
   private slowNpcIds: Set<string> = new Set();
   private stuckTicks: Map<string, number> = new Map();
+  /** Recent position history per NPC to prevent oscillation. */
+  private recentPositions: Map<string, number[]> = new Map();
 
   readonly gridWidth: number;
   readonly gridHeight: number;
@@ -289,17 +291,42 @@ export class WorldSimulation {
         const inBounds = candidates.filter(
           c => c.x >= 0 && c.x < this.gridWidth && c.y >= 0 && c.y < this.gridHeight
         );
+        // Get recent positions to avoid oscillation
+        const recent = this.recentPositions.get(npc.npcId) ?? [];
         let moved = false;
+        // Prefer tiles not recently visited; fall back to any open tile
         for (const candidate of inBounds) {
-          if (!this.isBlocked(candidate, npc)) {
-            npc.position.x = candidate.x;
-            npc.position.y = candidate.y;
-            moved = true;
-            movedThisTick = true;
-            break;
+          if (this.isBlocked(candidate, npc)) continue;
+          const key = candidate.y * this.gridWidth + candidate.x;
+          if (recent.includes(key)) continue;
+          npc.position.x = candidate.x;
+          npc.position.y = candidate.y;
+          moved = true;
+          movedThisTick = true;
+          break;
+        }
+        // If all non-blocked candidates were recently visited, allow revisit
+        if (!moved) {
+          for (const candidate of inBounds) {
+            if (!this.isBlocked(candidate, npc)) {
+              npc.position.x = candidate.x;
+              npc.position.y = candidate.y;
+              moved = true;
+              movedThisTick = true;
+              break;
+            }
           }
         }
         if (!moved) break; // blocked, stop stepping
+      }
+
+      // Track recent positions (keep last 6 tiles)
+      if (movedThisTick) {
+        const posKey = npc.position.y * this.gridWidth + npc.position.x;
+        const hist = this.recentPositions.get(npc.npcId) ?? [];
+        hist.push(posKey);
+        if (hist.length > 6) hist.shift();
+        this.recentPositions.set(npc.npcId, hist);
       }
 
       // Stuck detection: if blocked too long, pick a new destination
@@ -311,6 +338,7 @@ export class WorldSimulation {
           npc.destination = null;
           npc.idleTicksRemaining = 2;
           this.stuckTicks.delete(npc.npcId);
+          this.recentPositions.delete(npc.npcId);
         }
       } else {
         this.stuckTicks.delete(npc.npcId);
