@@ -74,10 +74,10 @@ function App() {
   const dayCycleRef = useRef<DayCycle | null>(null);
   const [dayLabel, setDayLabel] = useState("");
   const [dayPhase, setDayPhase] = useState<DayPhase>("morning");
-  const ttsRef = useRef(new TTSService({ volume: 0.7, speed: 1.1, enabled: false }));
+  const ttsRef = useRef(new TTSService({ volume: 0.7, speed: 1.1, enabled: true }));
   const ttsStreamedRef = useRef(new Set<string>());
   const ttsSentIndexRef = useRef(new Map<string, number>());
-  const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(true);
 
   useEffect(() => {
     setNpcs(storeRef.current.getAll());
