@@ -3,20 +3,9 @@ import type { NpcStore } from "./npc-store";
 import type { MemoryService } from "./memory-service";
 import { ACTIVITIES, shouldDoActivity, pickActivity, activityDurationTicks, buildActivityMemory, rollItemYield } from "./activities";
 
-export const WAYPOINTS: Waypoint[] = [
-  { id: "fountain", name: "Fountain", position: { x: 36, y: 24 }, mood: "gathering", description: "the central fountain, a busy gathering place" },
-  { id: "bench", name: "Park Bench", position: { x: 12, y: 36 }, mood: "intimate", description: "a secluded park bench, good for private talks" },
-  { id: "tree", name: "Old Tree", position: { x: 60, y: 12 }, mood: "reflective", description: "an ancient tree, a quiet spot for contemplation" },
-  { id: "garden", name: "Garden", position: { x: 21, y: 9 }, mood: "reflective", description: "a peaceful garden with winding paths" },
-  { id: "market", name: "Market", position: { x: 54, y: 39 }, mood: "social", description: "the bustling market square" },
-  { id: "well", name: "Well", position: { x: 9, y: 21 }, mood: "mysterious", description: "an old well at the edge of town, rumored to grant wishes" },
-  { id: "bridge", name: "Bridge", position: { x: 45, y: 30 }, mood: "social", description: "a stone bridge, a natural meeting point" },
-  { id: "chapel", name: "Chapel", position: { x: 3, y: 6 }, mood: "reflective", description: "a small stone chapel, hushed and reverent" },
-  { id: "training_yard", name: "Training Yard", position: { x: 66, y: 27 }, mood: "gathering", description: "a dusty training yard with wooden dummies" },
-  { id: "library_ruins", name: "Library Ruins", position: { x: 30, y: 3 }, mood: "mysterious", description: "crumbling library ruins, books still scattered among the stones" },
-  { id: "tavern_porch", name: "Tavern Porch", position: { x: 24, y: 42 }, mood: "social", description: "the porch of a weathered tavern, smelling of bread and ale" },
-  { id: "hilltop", name: "Hilltop", position: { x: 63, y: 3 }, mood: "reflective", description: "a windswept hilltop with a view of the whole town" },
-  { id: "pond", name: "Pond", position: { x: 42, y: 15 }, mood: "intimate", description: "a quiet pond surrounded by reeds" },
+/** Fallback waypoints — used only if no tilemap waypoints are provided. */
+const FALLBACK_WAYPOINTS: Waypoint[] = [
+  { id: "center", name: "Center", position: { x: 36, y: 24 }, mood: "gathering", description: "the center of the map" },
 ];
 
 const PROXIMITY_THRESHOLD = 5;
@@ -39,6 +28,8 @@ export interface WorldSimulationOptions {
   getPhase?: () => DayPhase;
   npcStore?: NpcStore;
   memoryService?: MemoryService;
+  waypoints?: Waypoint[];
+  collisionGrid?: boolean[];
 }
 
 export class WorldSimulation {
@@ -52,7 +43,8 @@ export class WorldSimulation {
   readonly gridWidth: number;
   readonly gridHeight: number;
   readonly tickIntervalMs: number;
-  readonly waypoints: ReadonlyArray<Waypoint> = WAYPOINTS;
+  readonly waypoints: ReadonlyArray<Waypoint>;
+  private collisionGrid: boolean[] = [];
   private onProximity: (a: string, b: string) => void;
   private onActivityStart: ((npcId: string, activityId: string, waypointName: string) => void) | null;
   private onActivityEnd: ((npcId: string, activityId: string, waypointName: string, memoryText: string) => void) | null;
@@ -83,6 +75,10 @@ export class WorldSimulation {
     this.getPhase = options.getPhase ?? null;
     this.npcStore = options.npcStore ?? null;
     this.memoryService = options.memoryService ?? null;
+    this.waypoints = options.waypoints && options.waypoints.length > 0
+      ? options.waypoints
+      : FALLBACK_WAYPOINTS;
+    this.collisionGrid = options.collisionGrid ?? [];
   }
 
   addNpc(npcId: string, startPosition?: Position): void {
@@ -264,7 +260,7 @@ export class WorldSimulation {
         );
         let moved = false;
         for (const candidate of inBounds) {
-          if (!this.isTooCloseToOthers(candidate, npc)) {
+          if (!this.isBlocked(candidate, npc)) {
             npc.position.x = candidate.x;
             npc.position.y = candidate.y;
             moved = true;
@@ -316,11 +312,11 @@ export class WorldSimulation {
       if (overrideDest) return overrideDest;
     }
 
-    const candidates = WAYPOINTS.filter(
+    const candidates = this.waypoints.filter(
       (wp) =>
         wp.position.x !== npc.position.x || wp.position.y !== npc.position.y
     );
-    if (candidates.length === 0) return WAYPOINTS[0];
+    if (candidates.length === 0) return this.waypoints[0];
 
     const scores = candidates.map((wp) => {
       let score = 0;
@@ -431,7 +427,7 @@ export class WorldSimulation {
       return null;
     }
 
-    const candidates = WAYPOINTS.filter(
+    const candidates = this.waypoints.filter(
       (wp) => wp.position.x !== npc.position.x || wp.position.y !== npc.position.y
     );
     if (candidates.length === 0) return null;
@@ -481,11 +477,11 @@ export class WorldSimulation {
   }
 
   private randomPickFallback(npc: NpcSpatialState): Waypoint {
-    const candidates = WAYPOINTS.filter(
+    const candidates = this.waypoints.filter(
       (wp) =>
         wp.position.x !== npc.position.x || wp.position.y !== npc.position.y
     );
-    if (candidates.length === 0) return WAYPOINTS[0];
+    if (candidates.length === 0) return this.waypoints[0];
     return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
@@ -566,7 +562,13 @@ export class WorldSimulation {
 
   // ── Collision avoidance ────────────────────
 
-  private isTooCloseToOthers(pos: Position, npc: NpcSpatialState): boolean {
+  private isBlocked(pos: Position, npc: NpcSpatialState): boolean {
+    // Tile collision
+    if (this.collisionGrid.length > 0) {
+      const idx = pos.y * this.gridWidth + pos.x;
+      if (this.collisionGrid[idx]) return true;
+    }
+    // NPC-NPC collision
     for (const other of this.npcs.values()) {
       if (other.npcId === npc.npcId) continue;
       if (pos.x === other.position.x && pos.y === other.position.y) return true;
@@ -601,7 +603,7 @@ export class WorldSimulation {
     if (!npc) return undefined;
     let best: Waypoint | undefined;
     let bestDist = Infinity;
-    for (const wp of WAYPOINTS) {
+    for (const wp of this.waypoints) {
       const d =
         Math.abs(npc.position.x - wp.position.x) +
         Math.abs(npc.position.y - wp.position.y);
@@ -654,7 +656,7 @@ export class WorldSimulation {
     const activity = npc.activeActivity;
     if (!activity) return;
 
-    const waypoint = WAYPOINTS.find(wp => wp.id === activity.waypointId);
+    const waypoint = this.waypoints.find(wp => wp.id === activity.waypointId);
     const waypointName = waypoint?.name ?? activity.waypointId;
     const memoryText = buildActivityMemory(activity.activityId, waypointName);
 
@@ -709,7 +711,7 @@ export class WorldSimulation {
   // ── Helpers ──────────────────────────────────
 
   private randomWaypoint(): Waypoint {
-    return WAYPOINTS[Math.floor(Math.random() * WAYPOINTS.length)];
+    return this.waypoints[Math.floor(Math.random() * this.waypoints.length)];
   }
 
   // ── Drives: NPC-initiated seeking & social needs ──

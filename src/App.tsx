@@ -10,6 +10,7 @@ import { NpcStore } from "./npc-store";
 import { MemoryService } from "./memory-service";
 import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
+import { TilemapRenderer } from "./tilemap-renderer";
 import { DayCycle } from "./day-cycle";
 import type { NPC, BubbleData, FloaterData, ActionType, WaypointActivityId, DayPhase } from "./types";
 import { ACTIVITIES } from "./activities";
@@ -71,6 +72,7 @@ function App() {
 
   const managerRef = useRef<ConversationManager | null>(null);
   const worldRef = useRef<WorldSimulation | null>(null);
+  const tilemapRef = useRef(new TilemapRenderer());
   const dayCycleRef = useRef<DayCycle | null>(null);
   const [dayLabel, setDayLabel] = useState("");
   const [dayPhase, setDayPhase] = useState<DayPhase>("morning");
@@ -178,7 +180,7 @@ function App() {
     }]);
   }, []);
 
-  const handleStart = useCallback(() => {
+  const handleStart = useCallback(async () => {
     setFeed([]);
     setStreamingText({});
     setCurrentSpeaker(null);
@@ -189,11 +191,19 @@ function App() {
     for (const t of bubbleTimersRef.current.values()) clearTimeout(t);
     bubbleTimersRef.current.clear();
 
+    // Load tilemap (waypoints + collision)
+    const tilemap = tilemapRef.current;
+    if (!tilemap.ready) {
+      await tilemap.load("/assets/levels/testmap.tmj");
+    }
+
     // Create world simulation
     const world = new WorldSimulation({
       gridWidth: 72,
       gridHeight: 48,
       tickIntervalMs: 285,
+      waypoints: tilemap.waypoints,
+      collisionGrid: tilemap.collisionGrid,
       onProximity: (aId, bId) => {
         const started = managerRef.current?.triggerConversation(aId, bId);
         if (!started) {
@@ -351,25 +361,12 @@ function App() {
       memoryService: memoryRef.current,
     });
 
-    // Register NPCs at different starting positions (spread across waypoints)
+    // Register NPCs at waypoint positions (spread across available waypoints)
     const allNpcs = storeRef.current.getAll();
-    const startPositions = [
-      { x: 12, y: 8 },  // Fountain
-      { x: 4, y: 12 },  // Park Bench
-      { x: 22, y: 9 },  // Training Yard
-      { x: 7, y: 3 },   // Garden
-      { x: 18, y: 13 }, // Market
-      { x: 1, y: 2 },   // Chapel
-      { x: 14, y: 5 },  // Pond
-      { x: 10, y: 1 },  // Library Ruins
-      { x: 8, y: 14 },  // Tavern Porch
-      { x: 21, y: 1 },  // Hilltop
-      { x: 20, y: 4 },  // Old Tree
-      { x: 3, y: 7 },   // Well
-      { x: 15, y: 10 }, // Bridge
-    ];
+    const wps = world.waypoints;
     allNpcs.forEach((npc, i) => {
-      world.addNpc(npc.id, startPositions[i % startPositions.length]);
+      const wp = wps[i % wps.length];
+      world.addNpc(npc.id, { ...wp.position });
     });
 
     worldRef.current = world;
@@ -777,6 +774,7 @@ function App() {
             floaters={floaters}
             dayPhase={dayPhase}
             onNpcClick={setSelectedNpcId}
+            tilemap={tilemapRef.current}
           />
         </div>
         <NpcInspector

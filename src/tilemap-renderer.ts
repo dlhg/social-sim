@@ -1,5 +1,7 @@
 /** Loads a Tiled JSON (.tmj) map and renders tile layers to a Canvas 2D context. */
 
+import type { Waypoint } from "./types";
+
 interface TiledTileset {
   firstgid: number;
   columns: number;
@@ -12,10 +14,27 @@ interface TiledTileset {
 interface TiledLayer {
   name: string;
   type: string;
-  data: number[];
-  width: number;
-  height: number;
+  data?: number[];
+  objects?: TiledObject[];
+  width?: number;
+  height?: number;
   visible: boolean;
+  properties?: TiledProperty[];
+}
+
+interface TiledObject {
+  id: number;
+  name: string;
+  x: number;
+  y: number;
+  point?: boolean;
+  properties?: TiledProperty[];
+}
+
+interface TiledProperty {
+  name: string;
+  type: string;
+  value: string;
 }
 
 interface TiledMap {
@@ -37,12 +56,11 @@ export class TilemapRenderer {
   private groundCanvas: OffscreenCanvas | null = null;
   private objectCanvas: OffscreenCanvas | null = null;
 
-  /** Layers to render as ground (behind everything). */
-  private groundLayers: TiledLayer[] = [];
-  /** Layers to render as objects (on top of ground). */
-  private objectLayers: TiledLayer[] = [];
   /** Collision grid — true = blocked. */
   collisionGrid: boolean[] = [];
+
+  /** Waypoints parsed from object layers. */
+  waypoints: Waypoint[] = [];
 
   async load(mapUrl: string) {
     const resp = await fetch(mapUrl);
@@ -63,28 +81,73 @@ export class TilemapRenderer {
     });
 
     // Categorize layers
+    const groundLayers: TiledLayer[] = [];
+    const objectTileLayers: TiledLayer[] = [];
+
     for (const layer of this.map!.layers) {
+      if (layer.type === "objectgroup") {
+        this.parseWaypoints(layer);
+        continue;
+      }
       if (layer.type !== "tilelayer") continue;
+
       const lower = layer.name.toLowerCase();
       if (lower.includes("collis") || lower.includes("object")) {
-        this.objectLayers.push(layer);
+        objectTileLayers.push(layer);
+        // Build collision grid from any non-zero tile
         if (this.collisionGrid.length === 0) {
-          this.collisionGrid = layer.data.map(id => id !== 0);
+          this.collisionGrid = layer.data!.map(id => id !== 0);
+        } else {
+          // Merge: mark blocked if any collision-like layer has a tile
+          layer.data!.forEach((id, i) => {
+            if (id !== 0) this.collisionGrid[i] = true;
+          });
         }
+      } else if (lower === "ground") {
+        groundLayers.push(layer);
       } else {
-        this.groundLayers.push(layer);
+        // Additional tile layers (decorations, etc.) render on top of ground
+        objectTileLayers.push(layer);
       }
     }
 
     // Pre-render layers to offscreen canvases
-    this.groundCanvas = this.prerenderLayers(this.groundLayers);
-    this.objectCanvas = this.prerenderLayers(this.objectLayers);
+    this.groundCanvas = this.prerenderLayers(groundLayers);
+    this.objectCanvas = this.prerenderLayers(objectTileLayers);
 
     this.ready = true;
   }
 
   get mapWidth() { return this.map?.width ?? 0; }
   get mapHeight() { return this.map?.height ?? 0; }
+
+  private parseWaypoints(layer: TiledLayer) {
+    if (!layer.objects || !this.map) return;
+
+    for (const obj of layer.objects) {
+      if (!obj.point || !obj.name) continue;
+
+      // Convert pixel coords to grid coords
+      const gridX = Math.floor(obj.x / this.map.tilewidth);
+      const gridY = Math.floor(obj.y / this.map.tileheight);
+
+      // Derive id from name: lowercase, spaces to underscores
+      const id = obj.name.toLowerCase().replace(/\s+/g, "_");
+
+      // Get mood from object properties, fall back to layer properties
+      const objMood = obj.properties?.find(p => p.name === "mood")?.value;
+      const layerMood = layer.properties?.find(p => p.name === "mood")?.value;
+      const mood = objMood ?? layerMood ?? "social";
+
+      this.waypoints.push({
+        id,
+        name: obj.name,
+        position: { x: gridX, y: gridY },
+        mood: mood as Waypoint["mood"],
+        description: `${obj.name}, a ${mood} spot`,
+      });
+    }
+  }
 
   private prerenderLayers(layers: TiledLayer[]): OffscreenCanvas | null {
     if (!this.tilesetImage || !this.tileset || !this.map || layers.length === 0) return null;
@@ -98,6 +161,7 @@ export class TilemapRenderer {
     ctx.imageSmoothingEnabled = false;
 
     for (const layer of layers) {
+      if (!layer.data) continue;
       for (let row = 0; row < mapH; row++) {
         for (let col = 0; col < mapW; col++) {
           const tileId = layer.data[row * mapW + col];

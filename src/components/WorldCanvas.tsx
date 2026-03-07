@@ -13,6 +13,7 @@ interface WorldCanvasProps {
   floaters: FloaterData[];
   dayPhase: DayPhase;
   onNpcClick?: (npcId: string) => void;
+  tilemap: TilemapRenderer;
 }
 
 // Time-of-day color tints (subtle overlays on canvas)
@@ -118,12 +119,12 @@ export function WorldCanvas({
   floaters,
   dayPhase,
   onNpcClick,
+  tilemap,
 }: WorldCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const spritesRef = useRef(new SpriteSystem());
-  const tilemapRef = useRef(new TilemapRenderer());
   const bubbleRefsMap = useRef(new Map<string, HTMLDivElement>());
   const floaterRefsMap = useRef(new Map<string, HTMLDivElement>());
   const particlesRef = useRef<Particle[]>([]);
@@ -139,6 +140,7 @@ export function WorldCanvas({
   const bubblesRef = useRef(bubbles);
   const floatersRef = useRef(floaters);
   const dayPhaseRef = useRef(dayPhase);
+  const tilemapRef = useRef(tilemap);
 
   getSnapshotRef.current = getSnapshot;
   getNpcRef.current = getNpc;
@@ -147,6 +149,7 @@ export function WorldCanvas({
   bubblesRef.current = bubbles;
   floatersRef.current = floaters;
   dayPhaseRef.current = dayPhase;
+  tilemapRef.current = tilemap;
 
   const cameraRef = useRef<CameraState>({
     cx: GRID_WIDTH / 2,
@@ -161,7 +164,6 @@ export function WorldCanvas({
 
   useEffect(() => {
     spritesRef.current.load(); // fire-and-forget; draw loop checks .ready
-    tilemapRef.current.load("/assets/levels/testmap.tmj"); // fire-and-forget; draw loop checks .ready
 
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
@@ -248,6 +250,7 @@ export function WorldCanvas({
       ctx.fillRect(0, 0, width, height);
 
       const tilemap = tilemapRef.current;
+
       if (tilemap.ready) {
         // Tilemap replaces the flat grid background
         tilemap.drawGround(ctx, offsetX, offsetY, tileSize);
