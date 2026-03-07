@@ -809,6 +809,7 @@
 .inventory-item {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 1px;
   font-size: 11px;
   padding: 5px 8px;
