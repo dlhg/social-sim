@@ -1,5 +1,6 @@
 import type { Position, Waypoint, NpcSpatialState, WorldSnapshot, EmotionalState, DayPhase } from "./types";
 import type { NpcStore } from "./npc-store";
+import type { MemoryService } from "./memory-service";
 import { ACTIVITIES, shouldDoActivity, pickActivity, activityDurationTicks, buildActivityMemory, rollItemYield } from "./activities";
 
 export const WAYPOINTS: Waypoint[] = [
@@ -34,6 +35,7 @@ export interface WorldSimulationOptions {
   onTick?: () => void;
   getPhase?: () => DayPhase;
   npcStore?: NpcStore;
+  memoryService?: MemoryService;
 }
 
 export class WorldSimulation {
@@ -58,6 +60,7 @@ export class WorldSimulation {
   private lastItemDecay = 0;
   private getPhase: (() => DayPhase) | null;
   private npcStore: NpcStore | null;
+  private memoryService: MemoryService | null;
   private visitHistory: Map<string, Map<string, number>> = new Map();
 
   constructor(options: WorldSimulationOptions) {
@@ -72,6 +75,7 @@ export class WorldSimulation {
     this.onTickCallback = options.onTick ?? null;
     this.getPhase = options.getPhase ?? null;
     this.npcStore = options.npcStore ?? null;
+    this.memoryService = options.memoryService ?? null;
   }
 
   addNpc(npcId: string, startPosition?: Position): void {
@@ -623,8 +627,8 @@ export class WorldSimulation {
     }
 
     // Create memory
-    if (this.npcStore) {
-      this.npcStore.addMemory(npc.npcId, {
+    if (this.memoryService) {
+      this.memoryService.add(npc.npcId, {
         text: memoryText,
         importance: 0.3,
         recency: 1,
@@ -632,7 +636,7 @@ export class WorldSimulation {
         involvedNpcIds: [],
         timestamp: Date.now(),
         type: "activity",
-      }, "shortTermMemory");
+      });
     }
 
     this.onActivityEnd?.(npc.npcId, activity.activityId, waypointName, memoryText);

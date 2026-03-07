@@ -1,5 +1,6 @@
 import type { DayPhase, DayCycleState, NpcPromise, NPC, EmotionalState } from "./types";
 import type { NpcStore } from "./npc-store";
+import type { MemoryService } from "./memory-service";
 import type { ChatMessage } from "./ollama";
 import { accumulateChat } from "./ollama";
 import { extractJson } from "./response-parser";
@@ -13,6 +14,7 @@ export interface DayCycleOptions {
   onPhaseChange?: (state: DayCycleState) => void;
   onPlanResolved?: (promise: NpcPromise, outcome: string, promiserName: string, promiseeName: string) => void;
   npcStore: NpcStore;
+  memoryService: MemoryService;
   language?: string;
 }
 
@@ -28,6 +30,7 @@ export class DayCycle {
   private onPhaseChange: ((state: DayCycleState) => void) | null;
   private onPlanResolved: ((promise: NpcPromise, outcome: string, promiserName: string, promiseeName: string) => void) | null;
   private store: NpcStore;
+  private memory: MemoryService;
   private resolving = false;
   private language: string;
 
@@ -36,6 +39,7 @@ export class DayCycle {
     this.onPhaseChange = options.onPhaseChange ?? null;
     this.onPlanResolved = options.onPlanResolved ?? null;
     this.store = options.npcStore;
+    this.memory = options.memoryService;
     this.language = options.language ?? "English";
   }
 
@@ -230,7 +234,7 @@ You MUST write ALL text in ${this.language}. Never use any other language.`,
     // Both characters get the memory
     for (const npcId of [promiser.id, promisee.id]) {
       const otherId = npcId === promiser.id ? promisee.id : promiser.id;
-      this.store.addMemory(
+      this.memory.add(
         npcId,
         {
           text: outcomeText,

@@ -7,6 +7,7 @@ import { NpcCreator } from "./components/NpcCreator";
 import { SetupScreen } from "./components/SetupScreen";
 import { DmTools } from "./components/DmTools";
 import { NpcStore } from "./npc-store";
+import { MemoryService } from "./memory-service";
 import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
 import { DayCycle } from "./day-cycle";
@@ -40,6 +41,7 @@ const ACTION_LABELS: Record<ActionType, string> = {
 
 function App() {
   const storeRef = useRef(new NpcStore([]));
+  const memoryRef = useRef(new MemoryService(storeRef.current));
   const [npcs, setNpcs] = useState<NPC[]>([]);
   const [roster, setRoster] = useState<NPC[]>([]);
   const [feed, setFeed] = useState<FeedItem[]>([]);
@@ -106,6 +108,7 @@ function App() {
 
   const handleStartSimulation = useCallback(() => {
     storeRef.current = new NpcStore(roster);
+    memoryRef.current = new MemoryService(storeRef.current);
     handleStart();
   }, [roster]);
 
@@ -136,7 +139,7 @@ function App() {
     interactionCooldowns.current.set(pairKey, now);
 
     // Execute effects
-    executeInteraction(result, storeRef.current);
+    executeInteraction(result, storeRef.current, memoryRef.current);
     worldRef.current?.recordSocialContact(result.actorId);
     worldRef.current?.recordSocialContact(result.targetId);
 
@@ -314,7 +317,7 @@ function App() {
           });
         }
 
-        storeRef.current.addMemory(observerId, {
+        memoryRef.current.add(observerId, {
           text: opinion,
           importance: 0.25,
           recency: 1,
@@ -339,6 +342,7 @@ function App() {
       },
       getPhase: () => dayCycleRef.current?.getPhase() ?? "morning",
       npcStore: storeRef.current,
+      memoryService: memoryRef.current,
     });
 
     // Register NPCs at different starting positions (spread across waypoints)
@@ -365,7 +369,7 @@ function App() {
     worldRef.current = world;
 
     // Create conversation manager
-    const manager = new ConversationManager(storeRef.current, {
+    const manager = new ConversationManager(storeRef.current, memoryRef.current, {
       onStreamToken: (npcId, fullText) => {
         setStreamingText((prev) => ({ ...prev, [npcId]: fullText }));
         const speechText = extractSpeechFromStream(fullText);
@@ -510,6 +514,7 @@ function App() {
     // Create day cycle
     const dayCycle = new DayCycle({
       npcStore: storeRef.current,
+      memoryService: memoryRef.current,
       language: languageRef.current,
       onPhaseChange: (state) => {
         setDayLabel(dayCycle.getLabel());
@@ -599,7 +604,7 @@ function App() {
   }, []);
 
   const handleWhisper = useCallback((npcId: string, message: string) => {
-    storeRef.current.addMemory(
+    memoryRef.current.add(
       npcId,
       {
         text: `A mysterious voice whispered to me: "${message}"`,
@@ -628,7 +633,7 @@ function App() {
 
   const handleWorldEvent = useCallback((text: string) => {
     for (const npc of storeRef.current.getAll()) {
-      storeRef.current.addMemory(
+      memoryRef.current.add(
         npc.id,
         {
           text: `Something happened: ${text}`,
@@ -664,7 +669,7 @@ function App() {
     (npcId: string, aboutNpcId: string, rumor: string) => {
       const aboutName = storeRef.current.get(aboutNpcId)?.name ?? aboutNpcId;
       const recipientName = storeRef.current.get(npcId)?.name ?? npcId;
-      storeRef.current.addMemory(
+      memoryRef.current.add(
         npcId,
         {
           text: `I heard a rumor about ${aboutName}: ${rumor}`,

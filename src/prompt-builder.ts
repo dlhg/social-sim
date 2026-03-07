@@ -1,4 +1,5 @@
-import type { NPC, EmotionalState, MemoryEntry, ConversationSession } from "./types";
+import type { NPC, EmotionalState, ConversationSession } from "./types";
+import type { RetrievedMemories } from "./memory-service";
 import type { ChatMessage } from "./ollama";
 
 // ── Anti-agreeableness preamble ─────────────────
@@ -51,7 +52,7 @@ export interface PromptContext {
   allNpcs?: Array<{ id: string; name: string }>;
   trajectoryContext?: string;
   locationContext?: string;
-  preSortedMemories?: MemoryEntry[];
+  retrievedMemories?: RetrievedMemories;
   language?: string;
   timeOfDay?: string;
   pendingPlans?: Array<{ withName: string; text: string }>;
@@ -77,37 +78,16 @@ export function buildSystemPrompt(
   );
   const allGuidance = [...emotionGuidance, ...relGuidance];
 
-  // Use pre-sorted memories if available, otherwise sort inline
-  const sortedMemories = ctx.preSortedMemories ?? [...speaker.shortTermMemory]
-    .sort((a, b) => b.recency * b.importance - a.recency * a.importance);
-
-  const relevantMemories = sortedMemories
-    .filter((m) => m.involvedNpcIds.includes(listener.id))
-    .slice(0, 5)
-    .map((m) => `- ${m.text}`)
-    .join("\n");
-
-  // Gossip memories (things heard about others — exclude gossip about current conversation partner)
-  const seenGossipSubjects = new Set<string>();
-  const gossipMemories = sortedMemories
-    .filter((m) => m.type === "gossip" && !m.aboutNpcIds?.includes(listener.id))
-    .filter((m) => {
-      // Deduplicate: max 1 gossip per subject NPC
-      const subjectKey = m.aboutNpcIds?.join(",") ?? m.text;
-      if (seenGossipSubjects.has(subjectKey)) return false;
-      seenGossipSubjects.add(subjectKey);
-      return true;
-    })
-    .slice(0, 2)
-    .map((m) => `- ${m.text}`)
-    .join("\n");
-
-  // Things this NPC has heard about the listener specifically (limit 1)
-  const aboutListenerMemories = sortedMemories
-    .filter((m) => m.aboutNpcIds?.includes(listener.id) && m.type === "gossip")
-    .slice(0, 1)
-    .map((m) => `- ${m.text}`)
-    .join("\n");
+  const mem = ctx.retrievedMemories;
+  const relevantMemories = mem
+    ? mem.direct.map((m) => `- ${m.text}`).join("\n")
+    : "";
+  const gossipMemories = mem
+    ? mem.gossip.map((m) => `- ${m.text}`).join("\n")
+    : "";
+  const aboutListenerMemories = mem
+    ? mem.aboutPartner.map((m) => `- ${m.text}`).join("\n")
+    : "";
 
   const behavioralBlock =
     allGuidance.length > 0

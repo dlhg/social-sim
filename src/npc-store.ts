@@ -1,4 +1,4 @@
-import type { NPC, EmotionalState, MemoryEntry, NpcPromise, BehavioralOverride, InventoryItem, ItemCategory, RelationshipState } from "./types";
+import type { NPC, EmotionalState, NpcPromise, BehavioralOverride, InventoryItem, ItemCategory, RelationshipState } from "./types";
 
 type Listener = () => void;
 
@@ -16,8 +16,6 @@ export class NpcStore {
   private listeners: Set<Listener> = new Set();
   private relationshipHistory: Map<string, number[]> = new Map();
   private _batchDepth = 0;
-  private _memoryVersion = 0;
-  private _sortedMemoryCache = new Map<string, { version: number; sorted: MemoryEntry[] }>();
 
   constructor(initialNpcs: NPC[]) {
     this.npcs = new Map(
@@ -33,20 +31,6 @@ export class NpcStore {
 
   getAll(): NPC[] {
     return Array.from(this.npcs.values());
-  }
-
-  /** Returns short-term memories sorted by recency*importance, cached until memories change. */
-  getSortedShortTermMemory(npcId: string): MemoryEntry[] {
-    const cached = this._sortedMemoryCache.get(npcId);
-    if (cached && cached.version === this._memoryVersion) {
-      return cached.sorted;
-    }
-    const npc = this.npcs.get(npcId);
-    if (!npc) return [];
-    const sorted = [...npc.shortTermMemory]
-      .sort((a, b) => b.recency * b.importance - a.recency * a.importance);
-    this._sortedMemoryCache.set(npcId, { version: this._memoryVersion, sorted });
-    return sorted;
   }
 
   // ── Mutations ────────────────────────────────
@@ -93,21 +77,6 @@ export class NpcStore {
   getAffection(npcId: string, targetId: string): number {
     const npc = this.npcs.get(npcId);
     return npc?.relationships[targetId]?.affection ?? 0;
-  }
-
-  addMemory(
-    npcId: string,
-    entry: MemoryEntry,
-    slot: "shortTermMemory" | "longTermMemory"
-  ): void {
-    const npc = this.npcs.get(npcId);
-    if (!npc) return;
-    npc[slot].push(entry);
-    if (slot === "shortTermMemory" && npc.shortTermMemory.length > 20) {
-      npc.shortTermMemory.shift();
-    }
-    this._memoryVersion++;
-    this.notify();
   }
 
   setGoal(npcId: string, goal: string | null): void {
@@ -227,20 +196,6 @@ export class NpcStore {
     this.notify();
   }
 
-  /** Decay memory recency for all NPCs. Call after each conversation. */
-  decayAllMemoryRecency(rate = 0.85): void {
-    for (const npc of this.npcs.values()) {
-      for (const mem of npc.shortTermMemory) {
-        mem.recency *= rate;
-      }
-      for (const mem of npc.longTermMemory) {
-        mem.recency *= rate;
-      }
-    }
-    this._memoryVersion++; // Invalidate sorted cache (recency affects sort order)
-    // No notify needed — this is gradual background decay
-  }
-
   // ── Relationship History ────────────────────
 
   recordRelationshipSnapshot(npcAId: string, npcBId: string): void {
@@ -291,6 +246,11 @@ export class NpcStore {
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /** Notify listeners of a state change. Used by MemoryService. */
+  notifyChange(): void {
+    this.notify();
   }
 
   private notify(): void {

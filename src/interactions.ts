@@ -1,5 +1,6 @@
 import type { NPC, EmotionalState, MemoryEntry, ItemCategory } from "./types";
 import type { NpcStore } from "./npc-store";
+import type { MemoryService } from "./memory-service";
 
 // ── Interaction Types ─────────────────────────────
 
@@ -378,6 +379,7 @@ export function pickInteraction(
 export function executeInteraction(
   result: InteractionResult,
   store: NpcStore,
+  memory: MemoryService,
 ): void {
   const { interaction: def, actorId, targetId } = result;
   const actor = store.get(actorId);
@@ -431,14 +433,14 @@ export function executeInteraction(
     type: "action_performed",
   };
 
-  store.addMemory(actorId, {
+  memory.add(actorId, {
     ...baseMem,
     text: `I ${actorMemText}.`,
     involvedNpcIds: [targetId],
     type: "action_performed",
   }, "shortTermMemory");
 
-  store.addMemory(targetId, {
+  memory.add(targetId, {
     ...baseMem,
     text: targetMemText + ".",
     involvedNpcIds: [actorId],

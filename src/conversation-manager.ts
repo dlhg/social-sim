@@ -11,6 +11,7 @@ import type {
   FloaterCategory,
 } from "./types";
 import type { NpcStore } from "./npc-store";
+import type { MemoryService } from "./memory-service";
 import type { WorldSimulation } from "./world-simulation";
 import type { DayCycle } from "./day-cycle";
 import { buildConversationMessages, buildReflectionMessages } from "./prompt-builder";
@@ -49,6 +50,7 @@ export class ConversationManager {
 
   constructor(
     private store: NpcStore,
+    private memory: MemoryService,
     private callbacks: ConversationManagerCallbacks
   ) {}
 
@@ -218,7 +220,7 @@ export class ConversationManager {
     this.store.batch(() => {
       this.store.decayEmotions(npcAId);
       this.store.decayEmotions(npcBId);
-      this.store.decayAllMemoryRecency();
+      this.memory.decayAllRecency();
     });
 
     // Log post-conversation summary
@@ -272,7 +274,10 @@ export class ConversationManager {
     const nearWp = this.worldSim?.getNearestWaypoint(speaker.id);
     const locationContext = nearWp?.description;
 
-    const preSortedMemories = this.store.getSortedShortTermMemory(speaker.id);
+    const retrievedMemories = this.memory.retrieve(speaker.id, {
+      partnerId: listener.id,
+      excludeAbout: listener.id,
+    });
 
     const timeOfDay = this.dayCycle?.getLabel();
     const pendingPlans = this.store.getPromisesFor(speaker.id)
@@ -287,7 +292,7 @@ export class ConversationManager {
       currentSpeaker,
       currentListener,
       session,
-      { allNpcs, trajectoryContext, locationContext, preSortedMemories, language: this.language, timeOfDay, pendingPlans }
+      { allNpcs, trajectoryContext, locationContext, retrievedMemories, language: this.language, timeOfDay, pendingPlans }
     );
 
     let raw: string;
@@ -415,7 +420,7 @@ export class ConversationManager {
           : 0;
 
     // Speaker memory
-    this.store.addMemory(
+    this.memory.add(
       speaker.id,
       {
         text: speakerMemory,
@@ -432,7 +437,7 @@ export class ConversationManager {
     );
 
     // Listener memory
-    this.store.addMemory(
+    this.memory.add(
       listener.id,
       {
         text: listenerMemory,
@@ -459,7 +464,7 @@ export class ConversationManager {
       if (matchedSecret) {
         this.store.addKnownSecret(listener.id, speaker.id, matchedSecret);
 
-        this.store.addMemory(
+        this.memory.add(
           speaker.id,
           {
             text: `I revealed a secret to ${listener.name}: "${matchedSecret}"`,
@@ -475,7 +480,7 @@ export class ConversationManager {
           "longTermMemory"
         );
 
-        this.store.addMemory(
+        this.memory.add(
           listener.id,
           {
             text: `${speaker.name} confided in me: "${matchedSecret}"`,
@@ -508,7 +513,7 @@ export class ConversationManager {
       this.dayCycle?.assignResolvePhase(promise);
       this.store.addPromise(promise);
 
-      this.store.addMemory(
+      this.memory.add(
         speaker.id,
         {
           text: `I promised ${listener.name}: "${response.promise}"`,
@@ -522,7 +527,7 @@ export class ConversationManager {
         "shortTermMemory"
       );
 
-      this.store.addMemory(
+      this.memory.add(
         listener.id,
         {
           text: `${speaker.name} promised me: "${response.promise}"`,
@@ -549,7 +554,7 @@ export class ConversationManager {
 
         const mentionedName = this.npcName(mention.npc_id);
 
-        this.store.addMemory(
+        this.memory.add(
           listener.id,
           {
             text: `${speaker.name} told me about ${mentionedName}: "${mention.what_was_said}"`,
@@ -624,14 +629,14 @@ export class ConversationManager {
     this.store.applyEmotionDelta(speaker.id, { anger: 0, trust: 0.05, fear: 0, joy: 0.1, sadness: 0, curiosity: 0, disgust: 0, guilt: 0 });
     this.store.applyEmotionDelta(listener.id, { anger: 0, trust: 0.05, fear: 0, joy: 0.1, sadness: 0, curiosity: 0, disgust: 0, guilt: 0 });
 
-    this.store.addMemory(speaker.id, {
+    this.memory.add(speaker.id, {
       text: `I gave ${listener.name} a gift: ${giftDesc}`,
       importance: 0.7, recency: 1, emotionalWeight: 0.6,
       involvedNpcIds: [listener.id], aboutNpcIds: [],
       type: "action_performed", sentiment: 0.5, timestamp: Date.now(),
     }, "shortTermMemory");
 
-    this.store.addMemory(listener.id, {
+    this.memory.add(listener.id, {
       text: `${speaker.name} gave me a gift: ${giftDesc}`,
       importance: 0.7, recency: 1, emotionalWeight: 0.6,
       involvedNpcIds: [speaker.id], aboutNpcIds: [],
@@ -656,14 +661,14 @@ export class ConversationManager {
     this.store.applyEmotionDelta(listener.id, { anger: 0.1, trust: -0.1, fear: 0, joy: -0.05, sadness: 0.05, curiosity: 0, disgust: 0.03, guilt: 0 });
     this.store.applyEmotionDelta(speaker.id, { anger: 0, trust: 0, fear: 0, joy: 0.05, sadness: 0, curiosity: 0, disgust: 0, guilt: 0 });
 
-    this.store.addMemory(speaker.id, {
+    this.memory.add(speaker.id, {
       text: `I publicly mocked ${listener.name}: ${mockDetail}`,
       importance: 0.6, recency: 1, emotionalWeight: 0.5,
       involvedNpcIds: [listener.id], aboutNpcIds: [listener.id],
       type: "action_performed", sentiment: -0.4, timestamp: Date.now(),
     }, "shortTermMemory");
 
-    this.store.addMemory(listener.id, {
+    this.memory.add(listener.id, {
       text: `${speaker.name} publicly mocked me: ${mockDetail}`,
       importance: 0.8, recency: 1, emotionalWeight: 0.7,
       involvedNpcIds: [speaker.id], aboutNpcIds: [listener.id],
@@ -693,14 +698,14 @@ export class ConversationManager {
       reason: `Stormed off from conversation with ${listener.name}`,
     });
 
-    this.store.addMemory(speaker.id, {
+    this.memory.add(speaker.id, {
       text: `I stormed off from my conversation with ${listener.name}`,
       importance: 0.7, recency: 1, emotionalWeight: 0.6,
       involvedNpcIds: [listener.id], aboutNpcIds: [],
       type: "action_performed", sentiment: -0.3, timestamp: Date.now(),
     }, "shortTermMemory");
 
-    this.store.addMemory(listener.id, {
+    this.memory.add(listener.id, {
       text: `${speaker.name} stormed off during our conversation`,
       importance: 0.7, recency: 1, emotionalWeight: 0.6,
       involvedNpcIds: [speaker.id], aboutNpcIds: [],
@@ -725,14 +730,14 @@ export class ConversationManager {
     this.store.applyEmotionDelta(speaker.id, { anger: -0.05, trust: 0.1, fear: -0.05, joy: 0.1, sadness: -0.05, curiosity: 0, disgust: 0, guilt: 0 });
     this.store.applyEmotionDelta(listener.id, { anger: -0.05, trust: 0.1, fear: -0.05, joy: 0.1, sadness: -0.05, curiosity: 0, disgust: 0, guilt: 0 });
 
-    this.store.addMemory(speaker.id, {
+    this.memory.add(speaker.id, {
       text: `I embraced ${listener.name}: ${desc}`,
       importance: 0.7, recency: 1, emotionalWeight: 0.7,
       involvedNpcIds: [listener.id], aboutNpcIds: [],
       type: "action_performed", sentiment: 0.6, timestamp: Date.now(),
     }, "shortTermMemory");
 
-    this.store.addMemory(listener.id, {
+    this.memory.add(listener.id, {
       text: `${speaker.name} embraced me: ${desc}`,
       importance: 0.7, recency: 1, emotionalWeight: 0.7,
       involvedNpcIds: [speaker.id], aboutNpcIds: [],
@@ -767,7 +772,7 @@ export class ConversationManager {
       });
     }
 
-    this.store.addMemory(speaker.id, {
+    this.memory.add(speaker.id, {
       text: `I threatened ${listener.name}: ${threat}`,
       importance: 0.8, recency: 1, emotionalWeight: 0.7,
       involvedNpcIds: [listener.id], aboutNpcIds: [listener.id],
@@ -775,7 +780,7 @@ export class ConversationManager {
     }, "shortTermMemory");
 
     // Threats go to long-term memory for the recipient
-    this.store.addMemory(listener.id, {
+    this.memory.add(listener.id, {
       text: `${speaker.name} threatened me: ${threat}`,
       importance: 0.9, recency: 1, emotionalWeight: 0.9,
       involvedNpcIds: [speaker.id], aboutNpcIds: [listener.id],
@@ -804,14 +809,14 @@ export class ConversationManager {
     this.store.applyRelationshipDelta(speaker.id, targetId, -0.05);
     this.store.applyRelationshipDelta(listener.id, targetId, -0.05);
 
-    this.store.addMemory(speaker.id, {
+    this.memory.add(speaker.id, {
       text: `I conspired with ${listener.name} against ${targetName}: ${plan}`,
       importance: 0.85, recency: 1, emotionalWeight: 0.7,
       involvedNpcIds: [listener.id], aboutNpcIds: [targetId],
       type: "alliance", sentiment: -0.5, timestamp: Date.now(),
     }, "longTermMemory");
 
-    this.store.addMemory(listener.id, {
+    this.memory.add(listener.id, {
       text: `${speaker.name} proposed a conspiracy against ${targetName}: ${plan}`,
       importance: 0.85, recency: 1, emotionalWeight: 0.7,
       involvedNpcIds: [speaker.id], aboutNpcIds: [targetId],
@@ -835,14 +840,14 @@ export class ConversationManager {
     const targetName = this.npcName(targetId);
     const rumor = action.detail ?? "something unspecified";
 
-    this.store.addMemory(listener.id, {
+    this.memory.add(listener.id, {
       text: `${speaker.name} told me something about ${targetName}: "${rumor}"`,
       importance: 0.6, recency: 1, emotionalWeight: 0.4,
       involvedNpcIds: [speaker.id], aboutNpcIds: [targetId],
       type: "rumor_planted", sentiment: -0.3, timestamp: Date.now(),
     }, "shortTermMemory");
 
-    this.store.addMemory(speaker.id, {
+    this.memory.add(speaker.id, {
       text: `I spread a rumor about ${targetName} to ${listener.name}: "${rumor}"`,
       importance: 0.5, recency: 1, emotionalWeight: 0.3,
       involvedNpcIds: [listener.id], aboutNpcIds: [targetId],
@@ -944,7 +949,7 @@ export class ConversationManager {
 
       this.store.applyEmotionDelta(witnessId, emotionDelta);
 
-      this.store.addMemory(witnessId, {
+      this.memory.add(witnessId, {
         text: memoryText,
         importance: 0.6, recency: 1, emotionalWeight: 0.5,
         involvedNpcIds: [speaker.id, listener.id],
@@ -1278,8 +1283,8 @@ export class ConversationManager {
     }
 
     // Gossip session: one participant has gossip memories
-    const aHasGossip = a.shortTermMemory.some((m) => m.type === "gossip");
-    const bHasGossip = b.shortTermMemory.some((m) => m.type === "gossip");
+    const aHasGossip = this.memory.hasGossip(a.id);
+    const bHasGossip = this.memory.hasGossip(b.id);
     if (aHasGossip || bHasGossip) {
       return "gossip_session";
     }
@@ -1310,7 +1315,7 @@ export class ConversationManager {
       const eavesdropper = this.store.get(eavesdropperId);
       if (!eavesdropper) continue;
 
-      this.store.addMemory(
+      this.memory.add(
         eavesdropperId,
         {
           text: `I overheard ${speaker.name} say to ${listener.name}: "${response.speech}"`,
@@ -1396,7 +1401,7 @@ export class ConversationManager {
             typeof parsed.thought === "string" ? parsed.thought.trim() : null;
           if (!thought) return;
 
-          this.store.addMemory(
+          this.memory.add(
             npc.id,
             {
               text: thought,
