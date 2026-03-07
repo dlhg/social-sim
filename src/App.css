@@ -2037,6 +2037,23 @@
   cursor: not-allowed;
 }
 
+.btn-test-map {
+  padding: 10px 28px;
+  font-size: 14px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-test-map:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--text-faint);
+}
+
 .setup-start-hint {
   margin: 0;
   font-size: 12px;

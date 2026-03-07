@@ -27,6 +27,7 @@ interface SetupScreenProps {
   onRemoveFromRoster: (npcId: string) => void;
   onLanguageChange: (language: string) => void;
   onStartSimulation: () => void;
+  onTestMap?: () => void;
 }
 
 export function SetupScreen({
@@ -36,6 +37,7 @@ export function SetupScreen({
   onRemoveFromRoster,
   onLanguageChange,
   onStartSimulation,
+  onTestMap,
 }: SetupScreenProps) {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [creatorOpen, setCreatorOpen] = useState(false);
@@ -140,6 +142,14 @@ export function SetupScreen({
         >
           Start Simulation
         </button>
+        {onTestMap && (
+          <button
+            className="btn btn-test-map"
+            onClick={onTestMap}
+          >
+            Test Map
+          </button>
+        )}
         {roster.length < 2 && (
           <p className="setup-start-hint">Add at least 2 characters</p>
         )}

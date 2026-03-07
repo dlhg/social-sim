@@ -271,7 +271,8 @@ export type WaypointMood =
   | "reflective"
   | "intimate"
   | "gathering"
-  | "mysterious";
+  | "mysterious"
+  | (string & {});
 
 export interface Waypoint {
   id: string;

@@ -5,6 +5,7 @@ import { CharacterViewer } from "./components/CharacterViewer";
 import { NpcInspector } from "./components/NpcInspector";
 import { NpcCreator } from "./components/NpcCreator";
 import { SetupScreen } from "./components/SetupScreen";
+import { MapTestMode } from "./components/MapTestMode";
 import { DmTools } from "./components/DmTools";
 import { NpcStore } from "./npc-store";
 import { MemoryService } from "./memory-service";
@@ -53,7 +54,7 @@ function App() {
   const [activeConversationPair, setActiveConversationPair] = useState<
     [string, string] | null
   >(null);
-  const [status, setStatus] = useState<"idle" | "running" | "paused">("idle");
+  const [status, setStatus] = useState<"idle" | "running" | "paused" | "map-test">("idle");
   const [language, setLanguage] = useState("English");
   const languageRef = useRef(language);
   languageRef.current = language;
@@ -734,6 +735,14 @@ function App() {
     []
   );
 
+  if (status === "map-test") {
+    return (
+      <div className="app">
+        <MapTestMode onExit={() => setStatus("idle")} />
+      </div>
+    );
+  }
+
   if (status === "idle") {
     return (
       <div className="app">
@@ -744,6 +753,7 @@ function App() {
           onRemoveFromRoster={handleRemoveFromRoster}
           onLanguageChange={setLanguage}
           onStartSimulation={handleStartSimulation}
+          onTestMap={() => setStatus("map-test")}
         />
       </div>
     );
