@@ -47,7 +47,7 @@ const PREAMBLES: Record<ConversationType, string> = {
 
 const RESPONSE_JSON_SCHEMA = `- Your response MUST be a single JSON object with exactly these fields:
 {
-  "speech": "what you say out loud",
+  "speech": "your actual spoken words ONLY — no narration, no action descriptions, no third-person text like 'she smiles' or 'he hands over'. Just the words that come out of your mouth.",
   "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0, "sadness": 0, "curiosity": 0, "disgust": 0, "guilt": 0 },
   "relationship_delta": 0,
   "affection_delta": 0,
@@ -78,6 +78,7 @@ ACTIONS (optional — set "action" to one of these, or null):
 - {"action": "spread_rumor", "target_npc_id": "id", "detail": "the rumor"} — Plant a false or exaggerated claim about a third person.
 - IMPORTANT: Most turns should have NO action (null). Actions are dramatic moments — use them sparingly, maybe once per conversation at most.
 
+- CRITICAL: "speech" must contain ONLY your spoken dialog — the literal words you say. NEVER put narration, action descriptions, or third-person text in speech (wrong: "Ivy smiles and offers a cake" — right: "Here, I brought you some cake!"). Use the "action" field for physical actions.
 - Output ONLY the JSON object. No markdown, no code fences, no extra text.`;
 
 // ── System prompt builder ───────────────────────
