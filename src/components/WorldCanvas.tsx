@@ -14,6 +14,7 @@ interface WorldCanvasProps {
   dayPhase: DayPhase;
   onNpcClick?: (npcId: string) => void;
   tilemap: TilemapRenderer;
+  cameraMode: "auto" | "free";
 }
 
 // Time-of-day color tints (subtle overlays on canvas)
@@ -107,6 +108,8 @@ const CAMERA_LERP_SPEED = 0.03;  // per frame (~60fps)
 const FOCUS_ZOOM = 2.0;
 const DIM_OPACITY = 0.35;
 
+const FREE_CAM_SPEED = 0.5; // grid tiles per frame
+
 export function WorldCanvas({
   getSnapshot,
   getNpc,
@@ -117,6 +120,7 @@ export function WorldCanvas({
   dayPhase,
   onNpcClick,
   tilemap,
+  cameraMode,
 }: WorldCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -128,6 +132,9 @@ export function WorldCanvas({
   const npcScreenPositions = useRef<{ npcId: string; x: number; y: number; radius: number }[]>([]);
   const onNpcClickRef = useRef(onNpcClick);
   onNpcClickRef.current = onNpcClick;
+  const cameraModeRef = useRef(cameraMode);
+  cameraModeRef.current = cameraMode;
+  const keysDown = useRef(new Set<string>());
 
   // Store props in refs so the rAF loop always reads fresh values
   const getSnapshotRef = useRef(getSnapshot);
@@ -182,6 +189,19 @@ export function WorldCanvas({
     });
     observer.observe(container);
 
+    // Arrow key listeners for free cam
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+        keysDown.current.add(e.key);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keysDown.current.delete(e.key);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
     function frame() {
       if (width === 0 || height === 0) {
         rafRef.current = requestAnimationFrame(frame);
@@ -195,7 +215,16 @@ export function WorldCanvas({
       const cam = cameraRef.current;
 
       // ── Update camera target ──────────────────
-      if (pair) {
+      if (cameraModeRef.current === "free") {
+        // Free cam: arrow keys move the camera directly
+        const keys = keysDown.current;
+        if (keys.has("ArrowUp")) cam.targetCy -= FREE_CAM_SPEED;
+        if (keys.has("ArrowDown")) cam.targetCy += FREE_CAM_SPEED;
+        if (keys.has("ArrowLeft")) cam.targetCx -= FREE_CAM_SPEED;
+        if (keys.has("ArrowRight")) cam.targetCx += FREE_CAM_SPEED;
+        cam.targetZoom = 1;
+        cam.targetDimAmount = 0;
+      } else if (pair) {
         const aSpatial = snap.npcs.find((n) => n.npcId === pair[0]);
         const bSpatial = snap.npcs.find((n) => n.npcId === pair[1]);
         if (aSpatial && bSpatial) {
@@ -536,6 +565,8 @@ export function WorldCanvas({
     return () => {
       observer.disconnect();
       cancelAnimationFrame(rafRef.current);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
     };
   }, []);
 

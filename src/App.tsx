@@ -81,6 +81,7 @@ function App() {
   const ttsStreamedRef = useRef(new Set<string>());
   const ttsSentIndexRef = useRef(new Map<string, number>());
   const [ttsEnabled, setTtsEnabled] = useState(true);
+  const [cameraMode, setCameraMode] = useState<"auto" | "free">("auto");
 
   useEffect(() => {
     setNpcs(storeRef.current.getAll());
@@ -783,6 +784,20 @@ function App() {
         />
         <div className="world-panel">
           {dayLabel && <div className="day-label">{dayLabel}</div>}
+          <div className="camera-toggle">
+            <button
+              className={`camera-btn ${cameraMode === "auto" ? "active" : ""}`}
+              onClick={() => setCameraMode("auto")}
+            >
+              Auto
+            </button>
+            <button
+              className={`camera-btn ${cameraMode === "free" ? "active" : ""}`}
+              onClick={() => setCameraMode("free")}
+            >
+              Free
+            </button>
+          </div>
           <WorldCanvas
             getSnapshot={() =>
               worldRef.current?.getSnapshot() ?? {
@@ -799,6 +814,7 @@ function App() {
             dayPhase={dayPhase}
             onNpcClick={setSelectedNpcId}
             tilemap={tilemapRef.current}
+            cameraMode={cameraMode}
           />
         </div>
         <NpcInspector
