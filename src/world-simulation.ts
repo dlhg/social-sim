@@ -39,8 +39,8 @@ export class WorldSimulation {
   private paused = false;
   private slowNpcIds: Set<string> = new Set();
   private stuckTicks: Map<string, number> = new Map();
-  /** Recent position history per NPC to prevent oscillation. */
-  private recentPositions: Map<string, number[]> = new Map();
+  /** Precomputed A* paths per NPC. */
+  private npcPaths: Map<string, Position[]> = new Map();
 
   readonly gridWidth: number;
   readonly gridHeight: number;
@@ -171,6 +171,7 @@ export class WorldSimulation {
     if (npc) {
       npc.frozen = true;
       npc.activeActivity = null;
+      this.npcPaths.delete(npcId);
     }
   }
 
@@ -180,6 +181,7 @@ export class WorldSimulation {
       npc.frozen = false;
       npc.destination = null;
       npc.idleTicksRemaining = 3;
+      this.npcPaths.delete(npcId);
     }
   }
 
@@ -223,9 +225,21 @@ export class WorldSimulation {
       }
 
       if (!npc.destination) {
-        npc.destination = Math.random() < 0.25
+        const dest = Math.random() < 0.25
           ? this.pickWanderTarget(npc)
           : this.pickDestination(npc);
+        npc.destination = dest;
+
+        // Compute A* path to destination
+        const path = this.computePath(npc.position, dest.position);
+        if (path && path.length > 0) {
+          this.npcPaths.set(npc.npcId, path);
+        } else {
+          // Unreachable — pick a different destination next tick
+          npc.destination = null;
+          npc.idleTicksRemaining = 2;
+          continue;
+        }
       }
 
       const dest = npc.destination.position;
@@ -237,6 +251,7 @@ export class WorldSimulation {
         }
         this.visitHistory.get(npc.npcId)!.set(npc.destination.id, Date.now());
         this.stuckTicks.delete(npc.npcId);
+        this.npcPaths.delete(npc.npcId);
 
         // Try to start an activity at this waypoint
         const arrivedWaypoint = npc.destination;
@@ -253,92 +268,52 @@ export class WorldSimulation {
       npc.previousPosition = { ...npc.position };
       npc.lastTickTime = now;
 
-      // Take multiple steps per tick to maintain visual speed on the larger grid
+      // Follow precomputed A* path
+      let path = this.npcPaths.get(npc.npcId);
+      if (!path || path.length === 0) {
+        // Path exhausted but not at destination — recompute
+        const newPath = this.computePath(npc.position, dest);
+        if (newPath && newPath.length > 0) {
+          this.npcPaths.set(npc.npcId, newPath);
+          path = newPath;
+        } else {
+          npc.destination = null;
+          npc.idleTicksRemaining = 2;
+          this.npcPaths.delete(npc.npcId);
+          continue;
+        }
+      }
+
       let movedThisTick = false;
       for (let step = 0; step < STEPS_PER_TICK; step++) {
-        const dx = dest.x - npc.position.x;
-        const dy = dest.y - npc.position.y;
-        if (dx === 0 && dy === 0) break;
+        if (path.length === 0) break;
+        const next = path[0];
 
-        // Build candidate moves: direct first, perpendicular detours, then backward
-        const candidates: Position[] = [];
-        const { x, y } = npc.position;
-        if (dx !== 0 && dy !== 0) {
-          if (Math.random() < 0.5) {
-            candidates.push({ x: x + Math.sign(dx), y });
-            candidates.push({ x, y: y + Math.sign(dy) });
-          } else {
-            candidates.push({ x, y: y + Math.sign(dy) });
-            candidates.push({ x: x + Math.sign(dx), y });
-          }
-          // Backward as last resort
-          candidates.push({ x: x - Math.sign(dx), y });
-          candidates.push({ x, y: y - Math.sign(dy) });
-        } else if (dx !== 0) {
-          candidates.push({ x: x + Math.sign(dx), y });
-          const perpDir = Math.random() < 0.5 ? 1 : -1;
-          candidates.push({ x, y: y + perpDir });
-          candidates.push({ x, y: y - perpDir });
-          candidates.push({ x: x - Math.sign(dx), y });
-        } else {
-          candidates.push({ x, y: y + Math.sign(dy) });
-          const perpDir = Math.random() < 0.5 ? 1 : -1;
-          candidates.push({ x: x + perpDir, y });
-          candidates.push({ x: x - perpDir, y });
-          candidates.push({ x, y: y - Math.sign(dy) });
-        }
+        // Check NPC-NPC collision (tile collision already handled by A*)
+        if (this.isBlockedByNpc(next, npc)) break; // wait for them to move
 
-        const inBounds = candidates.filter(
-          c => c.x >= 0 && c.x < this.gridWidth && c.y >= 0 && c.y < this.gridHeight
-        );
-        // Get recent positions to avoid oscillation
-        const recent = this.recentPositions.get(npc.npcId) ?? [];
-        let moved = false;
-        // Prefer tiles not recently visited; fall back to any open tile
-        for (const candidate of inBounds) {
-          if (this.isBlocked(candidate, npc)) continue;
-          const key = candidate.y * this.gridWidth + candidate.x;
-          if (recent.includes(key)) continue;
-          npc.position.x = candidate.x;
-          npc.position.y = candidate.y;
-          moved = true;
-          movedThisTick = true;
-          break;
-        }
-        // If all non-blocked candidates were recently visited, allow revisit
-        if (!moved) {
-          for (const candidate of inBounds) {
-            if (!this.isBlocked(candidate, npc)) {
-              npc.position.x = candidate.x;
-              npc.position.y = candidate.y;
-              moved = true;
-              movedThisTick = true;
-              break;
-            }
-          }
-        }
-        if (!moved) break; // blocked, stop stepping
+        path.shift();
+        npc.position.x = next.x;
+        npc.position.y = next.y;
+        movedThisTick = true;
       }
 
-      // Track recent positions (keep last 6 tiles)
-      if (movedThisTick) {
-        const posKey = npc.position.y * this.gridWidth + npc.position.x;
-        const hist = this.recentPositions.get(npc.npcId) ?? [];
-        hist.push(posKey);
-        if (hist.length > 6) hist.shift();
-        this.recentPositions.set(npc.npcId, hist);
-      }
-
-      // Stuck detection: if blocked too long, pick a new destination
+      // Stuck detection: if blocked by NPCs too long, recompute path around them
       if (!movedThisTick) {
         npc.previousPosition = { ...npc.position };
         const stuck = (this.stuckTicks.get(npc.npcId) ?? 0) + 1;
         this.stuckTicks.set(npc.npcId, stuck);
         if (stuck >= STUCK_THRESHOLD) {
-          npc.destination = null;
-          npc.idleTicksRemaining = 2;
+          // Recompute, this time including NPC positions as obstacles
+          const reroute = this.computePath(npc.position, dest, true);
+          if (reroute && reroute.length > 0) {
+            this.npcPaths.set(npc.npcId, reroute);
+          } else {
+            npc.destination = null;
+            npc.idleTicksRemaining = 2;
+            this.npcPaths.delete(npc.npcId);
+          }
           this.stuckTicks.delete(npc.npcId);
-          this.recentPositions.delete(npc.npcId);
         }
       } else {
         this.stuckTicks.delete(npc.npcId);
@@ -620,20 +595,133 @@ export class WorldSimulation {
     }
   }
 
-  // ── Collision avoidance ────────────────────
+  // ── Collision & Pathfinding ────────────────
 
-  private isBlocked(pos: Position, npc: NpcSpatialState): boolean {
-    // Tile collision
-    if (this.collisionGrid.length > 0) {
-      const idx = pos.y * this.gridWidth + pos.x;
-      if (this.collisionGrid[idx]) return true;
-    }
-    // NPC-NPC collision
+  private isBlockedByNpc(pos: Position, self: NpcSpatialState): boolean {
     for (const other of this.npcs.values()) {
-      if (other.npcId === npc.npcId) continue;
+      if (other.npcId === self.npcId) continue;
       if (pos.x === other.position.x && pos.y === other.position.y) return true;
     }
     return false;
+  }
+
+  /** A* pathfinding. Returns array of positions (excluding start). */
+  private computePath(from: Position, to: Position, avoidNpcs = false): Position[] | null {
+    const gw = this.gridWidth;
+    const gh = this.gridHeight;
+    const startKey = from.y * gw + from.x;
+    const endKey = to.y * gw + to.x;
+    if (startKey === endKey) return [];
+
+    const heuristic = (x: number, y: number) => Math.abs(x - to.x) + Math.abs(y - to.y);
+
+    // Collect NPC positions as obstacles when rerouting around stuck NPCs
+    let npcBlocked: Set<number> | null = null;
+    if (avoidNpcs) {
+      npcBlocked = new Set<number>();
+      for (const other of this.npcs.values()) {
+        npcBlocked.add(other.position.y * gw + other.position.x);
+      }
+      // Don't block start or end
+      npcBlocked.delete(startKey);
+      npcBlocked.delete(endKey);
+    }
+
+    // Open set: binary heap by f-score (min-heap via array)
+    const gScore = new Float32Array(gw * gh).fill(Infinity);
+    const cameFrom = new Int32Array(gw * gh).fill(-1);
+    const inClosed = new Uint8Array(gw * gh);
+
+    gScore[startKey] = 0;
+
+    // Simple heap: [f, key] pairs
+    const heap: [number, number][] = [[heuristic(from.x, from.y), startKey]];
+
+    const DIRS = [
+      [0, -1], [0, 1], [-1, 0], [1, 0],
+    ];
+
+    const MAX_ITER = 3000;
+    let iter = 0;
+
+    while (heap.length > 0 && iter < MAX_ITER) {
+      iter++;
+
+      // Pop min f-score
+      const [, ck] = this.heapPop(heap);
+      if (ck === endKey) break;
+      if (inClosed[ck]) continue;
+      inClosed[ck] = 1;
+
+      const cx = ck % gw;
+      const cy = (ck - cx) / gw;
+      const cg = gScore[ck];
+
+      for (const [ddx, ddy] of DIRS) {
+        const nx = cx + ddx;
+        const ny = cy + ddy;
+        if (nx < 0 || nx >= gw || ny < 0 || ny >= gh) continue;
+
+        const nk = ny * gw + nx;
+        if (inClosed[nk]) continue;
+        if (this.collisionGrid.length > 0 && this.collisionGrid[nk]) continue;
+        if (npcBlocked && npcBlocked.has(nk)) continue;
+
+        const ng = cg + 1;
+        if (ng >= gScore[nk]) continue;
+
+        gScore[nk] = ng;
+        cameFrom[nk] = ck;
+        this.heapPush(heap, [ng + heuristic(nx, ny), nk]);
+      }
+    }
+
+    // Reconstruct path
+    if (cameFrom[endKey] === -1 && startKey !== endKey) return null;
+
+    const path: Position[] = [];
+    let k = endKey;
+    while (k !== startKey) {
+      const x = k % gw;
+      const y = (k - x) / gw;
+      path.push({ x, y });
+      k = cameFrom[k];
+      if (k === -1) return null; // broken chain
+    }
+    path.reverse();
+    return path;
+  }
+
+  private heapPush(heap: [number, number][], item: [number, number]) {
+    heap.push(item);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (heap[parent][0] <= heap[i][0]) break;
+      [heap[parent], heap[i]] = [heap[i], heap[parent]];
+      i = parent;
+    }
+  }
+
+  private heapPop(heap: [number, number][]): [number, number] {
+    const top = heap[0];
+    const last = heap.pop()!;
+    if (heap.length > 0) {
+      heap[0] = last;
+      let i = 0;
+      const len = heap.length;
+      while (true) {
+        let smallest = i;
+        const l = 2 * i + 1;
+        const r = 2 * i + 2;
+        if (l < len && heap[l][0] < heap[smallest][0]) smallest = l;
+        if (r < len && heap[r][0] < heap[smallest][0]) smallest = r;
+        if (smallest === i) break;
+        [heap[i], heap[smallest]] = [heap[smallest], heap[i]];
+        i = smallest;
+      }
+    }
+    return top;
   }
 
   // ── Spatial queries ─────────────────────────
@@ -780,7 +868,7 @@ export class WorldSimulation {
       const ty = Math.round(npc.position.y + Math.sin(angle) * dist);
       if (tx < 1 || tx >= this.gridWidth - 1 || ty < 1 || ty >= this.gridHeight - 1) continue;
       if (this.collisionGrid.length > 0 && this.collisionGrid[ty * this.gridWidth + tx]) continue;
-      return { id: "_wander", name: "strolling", position: { x: tx, y: ty } };
+      return { id: "_wander", name: "strolling", position: { x: tx, y: ty }, moods: [] };
     }
     // Fallback to a real waypoint
     return this.pickDestination(npc);
