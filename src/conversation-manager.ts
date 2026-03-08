@@ -144,8 +144,6 @@ export class ConversationManager {
   private preparedConversations: PreparedConversation[] = [];
   private readonly DIRECTOR_INTERVAL_MS = 5_000;
   private readonly PREPARED_MAX_AGE_MS = 600_000; // discard after 10 min
-  private readonly PREPARED_FORCE_PLAY_MS = 20_000; // force-play after 20s even if not close
-  private readonly DIRECTOR_PROXIMITY_THRESHOLD = 12; // wider trigger radius for prepared convos
 
   // LLM generation slot (freed as soon as LLM finishes, before TTS)
   private llmPairKey: string | null = null;
@@ -311,6 +309,8 @@ export class ConversationManager {
   }
 
   triggerConversation(npcAId: string, npcBId: string): boolean {
+    // Conversations are fully orchestrated by the director pipeline now.
+    // Proximity only plays already-prepared conversations — never generates new ones.
     if (this.activeSession || !this.running || this.paused) return false;
 
     const now = Date.now();
@@ -328,33 +328,7 @@ export class ConversationManager {
       return true;
     }
 
-    // If there are prepared conversations ready, play the oldest eligible one instead of
-    // generating a new batch for this organic pair — prepared convos are instant, batch is slow.
-    for (let i = 0; i < this.preparedConversations.length; i++) {
-      const p = this.preparedConversations[i];
-      const ppKey = this.pairKey(p.npcAId, p.npcBId);
-      const pLastTime = this.cooldowns.get(ppKey) ?? 0;
-      if (now - pLastTime < this.COOLDOWN_MS) continue;
-      this.preparedConversations.splice(i, 1);
-      this.preparedConsumed++;
-      this.log(`[director] Playing prepared conversation for ${this.npcName(p.npcAId)} + ${this.npcName(p.npcBId)} (instead of generating ${this.npcName(npcAId)} + ${this.npcName(npcBId)})`);
-      this.playPreparedConversation(p);
-      return true;
-    }
-
-    // If either NPC has a director seek override targeting someone else,
-    // don't let organic proximity hijack them — the director has plans.
-    const npcA = this.store.get(npcAId);
-    const npcB = this.store.get(npcBId);
-    if (npcA?.behavioralOverride?.mode === "seek" && npcA.behavioralOverride.targetNpcId !== npcBId) return false;
-    if (npcB?.behavioralOverride?.mode === "seek" && npcB.behavioralOverride.targetNpcId !== npcAId) return false;
-
-    if (this._batchMode) {
-      this.runBatchConversation(npcAId, npcBId);
-    } else {
-      this.runConversation(npcAId, npcBId);
-    }
-    return true;
+    return false;
   }
 
   private pairKey(a: string, b: string): string {
@@ -853,42 +827,21 @@ export class ConversationManager {
       return true;
     });
 
-    // ── Proactively play prepared conversations ──
-    // Don't wait for organic proximity — use wider threshold + force-play timer
+    // ── Play prepared conversations ──
+    // Director fully orchestrates conversations — play the oldest eligible one immediately.
     if (!this.activeSession && this.preparedConversations.length > 0) {
+      if (now - this.lastConversationEnd < this.GLOBAL_COOLDOWN_MS) return;
       for (let i = 0; i < this.preparedConversations.length; i++) {
         const p = this.preparedConversations[i];
         const pKey = this.pairKey(p.npcAId, p.npcBId);
         const lastTime = this.cooldowns.get(pKey) ?? 0;
         if (now - lastTime < this.COOLDOWN_MS) continue;
-        if (now - this.lastConversationEnd < this.GLOBAL_COOLDOWN_MS) continue;
 
-        let shouldPlay = false;
-
-        // Wide proximity: play if NPCs are within 12 tiles (vs normal 5)
-        if (this.worldSim) {
-          const posA = this.worldSim.getNpcPosition(p.npcAId);
-          const posB = this.worldSim.getNpcPosition(p.npcBId);
-          if (posA && posB) {
-            const dist = Math.abs(posA.x - posB.x) + Math.abs(posA.y - posB.y);
-            if (dist <= this.DIRECTOR_PROXIMITY_THRESHOLD) {
-              shouldPlay = true;
-            }
-          }
-        }
-
-        // Force-play: if ready for >20s, play regardless of distance
-        if (!shouldPlay && now - p.preparedAt > this.PREPARED_FORCE_PLAY_MS) {
-          shouldPlay = true;
-        }
-
-        if (shouldPlay) {
-          this.preparedConversations.splice(i, 1);
-          this.preparedConsumed++;
-          this.log(`[director] Proactively playing conversation for ${this.npcName(p.npcAId)} + ${this.npcName(p.npcBId)}`);
-          this.playPreparedConversation(p);
-          return; // only play one per tick
-        }
+        this.preparedConversations.splice(i, 1);
+        this.preparedConsumed++;
+        this.log(`[director] Playing conversation for ${this.npcName(p.npcAId)} + ${this.npcName(p.npcBId)}`);
+        this.playPreparedConversation(p);
+        return;
       }
     }
 
@@ -1049,26 +1002,6 @@ export class ConversationManager {
       llmDurationMs, ttsDurationMs,
     });
     this.log(`[director] Conversation ready for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns)`);
-
-    // Refresh seek overrides in case they expired during generation
-    const freshA = this.store.get(npcAId);
-    const freshB = this.store.get(npcBId);
-    if (freshA && !freshA.behavioralOverride) {
-      this.store.setBehavioralOverride(npcAId, {
-        mode: "seek",
-        targetNpcId: npcBId,
-        expiresAt: Date.now() + this.PREPARED_MAX_AGE_MS,
-        reason: "Director: approaching for conversation",
-      });
-    }
-    if (freshB && !freshB.behavioralOverride) {
-      this.store.setBehavioralOverride(npcBId, {
-        mode: "seek",
-        targetNpcId: npcAId,
-        expiresAt: Date.now() + this.PREPARED_MAX_AGE_MS,
-        reason: "Director: approaching for conversation",
-      });
-    }
   }
 
   private clearLlmSlot(): void {

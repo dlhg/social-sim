@@ -772,9 +772,6 @@ export class WorldSimulation {
     const npcData = this.npcStore.get(npc.npcId);
     if (!npcData) return false;
 
-    // Don't start activities when the director is steering this NPC toward a conversation
-    if (npcData.behavioralOverride?.reason?.startsWith("Director")) return false;
-
     // Try up to 3 times to find a non-cooldown activity
     const now = Date.now();
     for (let attempt = 0; attempt < 3; attempt++) {
