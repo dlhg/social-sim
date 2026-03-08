@@ -32,38 +32,67 @@ function StalenessBar({ ageMs, maxAgeMs }: { ageMs: number; maxAgeMs: number }) 
   );
 }
 
+function TurnList({ speeches, speakerNames, convIndex, onPlayTurn, currentTurn }: {
+  speeches: string[];
+  speakerNames: string[];
+  convIndex?: number;
+  onPlayTurn?: (convIndex: number, turnIndex: number) => void;
+  currentTurn?: number;
+}) {
+  return (
+    <div className="dd-turns-scroll">
+      {speeches.map((speech, i) => (
+        <div
+          key={i}
+          className={`dd-turn-line${currentTurn !== undefined && i === currentTurn ? " dd-turn-current" : ""}${currentTurn !== undefined && i < currentTurn ? " dd-turn-played" : ""}`}
+        >
+          {onPlayTurn && convIndex !== undefined && (
+            <button
+              className="dd-play-btn"
+              onClick={() => onPlayTurn(convIndex, i)}
+              title="Play audio"
+            >
+              &#9654;
+            </button>
+          )}
+          <span className="dd-turn-speaker">{speakerNames[i]}:</span>{" "}
+          <span className="dd-turn-text">{speech}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PreparedCard({ info, convIndex, onPlayTurn }: {
   info: PreparedConversationInfo;
   convIndex: number;
   onPlayTurn?: (convIndex: number, turnIndex: number) => void;
 }) {
+  const isTts = info.phase === "generating_tts";
   return (
-    <div className="dd-card dd-card-ready">
-      <div className="dd-pair-names">
-        {info.npcAName} + {info.npcBName}
+    <div className={`dd-card ${isTts ? "dd-card-preparing" : "dd-card-ready"}`}>
+      <div className="dd-card-header">
+        <div className="dd-pair-names">
+          {info.npcAName} + {info.npcBName}
+        </div>
+        {isTts && (
+          <span className="dd-phase-badge dd-phase-tts">
+            TTS {formatDuration(info.ttsElapsedMs ?? 0)}
+          </span>
+        )}
       </div>
       <div className="dd-card-meta">
         {info.convType} &middot; {info.turnCount} turns
-        &middot; LLM {formatDuration(info.llmDurationMs)} + TTS {formatDuration(info.ttsDurationMs)}
+        &middot; LLM {formatDuration(info.llmDurationMs)}
+        {!isTts && <> + TTS {formatDuration(info.ttsDurationMs)}</>}
       </div>
-      <StalenessBar ageMs={info.ageMs} maxAgeMs={info.maxAgeMs} />
-      <div className="dd-turns-scroll">
-        {info.speeches.map((speech, i) => (
-          <div key={i} className="dd-turn-line">
-            {onPlayTurn && (
-              <button
-                className="dd-play-btn"
-                onClick={() => onPlayTurn(convIndex, i)}
-                title="Play audio"
-              >
-                &#9654;
-              </button>
-            )}
-            <span className="dd-turn-speaker">{info.speakerNames[i]}:</span>{" "}
-            <span className="dd-turn-text">{speech}</span>
-          </div>
-        ))}
-      </div>
+      {!isTts && <StalenessBar ageMs={info.ageMs} maxAgeMs={info.maxAgeMs} />}
+      <TurnList
+        speeches={info.speeches}
+        speakerNames={info.speakerNames}
+        convIndex={isTts ? undefined : convIndex}
+        onPlayTurn={isTts ? undefined : onPlayTurn}
+      />
     </div>
   );
 }
@@ -75,6 +104,10 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
     const interval = setInterval(() => setStatus(getStatus()), 500);
     return () => clearInterval(interval);
   }, [getStatus]);
+
+  // Count ready conversations (exclude TTS-in-progress for the "ready" pipeline slot)
+  const readyCount = status.preparedConversations.filter(c => c.phase === "ready").length;
+  const ttsConv = status.preparedConversations.find(c => c.phase === "generating_tts");
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -103,24 +136,22 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
               )}
             </div>
             <div className="dd-pipeline-arrow">&rarr;</div>
-            <div className={`dd-pipeline-slot ${status.prefetchingPair ? "dd-slot-active" : ""}`}>
+            <div className={`dd-pipeline-slot ${ttsConv ? "dd-slot-active" : ""}`}>
               <span className="dd-slot-label">TTS</span>
-              {status.prefetchingPair ? (
+              {ttsConv ? (
                 <span className="dd-slot-detail">
-                  {status.prefetchingPair.npcAName} + {status.prefetchingPair.npcBName}
-                  <span className="dd-slot-time">{formatDuration(status.prefetchingPair.elapsedMs)}</span>
+                  {ttsConv.npcAName} + {ttsConv.npcBName}
+                  <span className="dd-slot-time">{formatDuration(ttsConv.ttsElapsedMs ?? 0)}</span>
                 </span>
               ) : (
                 <span className="dd-slot-idle">idle</span>
               )}
             </div>
             <div className="dd-pipeline-arrow">&rarr;</div>
-            <div className={`dd-pipeline-slot ${status.preparedConversations.length > 0 ? "dd-slot-active" : ""}`}>
+            <div className={`dd-pipeline-slot ${readyCount > 0 ? "dd-slot-active" : ""}`}>
               <span className="dd-slot-label">Ready</span>
-              <span className={status.preparedConversations.length > 0 ? "dd-slot-detail" : "dd-slot-idle"}>
-                {status.preparedConversations.length > 0
-                  ? `${status.preparedConversations.length} queued`
-                  : "empty"}
+              <span className={readyCount > 0 ? "dd-slot-detail" : "dd-slot-idle"}>
+                {readyCount > 0 ? `${readyCount} queued` : "empty"}
               </span>
             </div>
           </div>
@@ -133,20 +164,20 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
             <span className="dd-stat-label">Played</span>
           </div>
           <div className="dd-stat">
-            <span className="dd-stat-value">{status.preparedConsumed}</span>
-            <span className="dd-stat-label">Instant</span>
-          </div>
-          <div className="dd-stat">
             <span className="dd-stat-value">{status.preparedExpired}</span>
             <span className="dd-stat-label">Expired</span>
           </div>
           <div className="dd-stat">
             <span className="dd-stat-value">
-              {status.conversationsPlayed > 0
-                ? `${Math.round((status.preparedConsumed / status.conversationsPlayed) * 100)}%`
-                : "-"}
+              {status.avgLlmMs > 0 ? formatDuration(status.avgLlmMs) : "-"}
             </span>
-            <span className="dd-stat-label">Hit rate</span>
+            <span className="dd-stat-label">Avg LLM</span>
+          </div>
+          <div className="dd-stat">
+            <span className="dd-stat-value">
+              {status.avgTtsMs > 0 ? formatDuration(status.avgTtsMs) : "-"}
+            </span>
+            <span className="dd-stat-label">Avg TTS</span>
           </div>
         </div>
 
@@ -162,18 +193,30 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
                 {status.activeConversation.convType} &middot; turn{" "}
                 {status.activeConversation.turnCount}/{status.activeConversation.maxTurns}
               </div>
+              {status.activeConversation.speeches.length > 0 && (
+                <TurnList
+                  speeches={status.activeConversation.speeches}
+                  speakerNames={status.activeConversation.speakerNames}
+                  currentTurn={status.activeConversation.turnCount - 1}
+                />
+              )}
             </div>
           </div>
         )}
 
-        {/* Prepared conversations */}
+        {/* Pipeline conversations (TTS-in-progress + ready) */}
         {status.preparedConversations.length > 0 && (
           <div className="dd-section">
             <div className="dd-section-title">
-              Ready for Playback ({status.preparedConversations.length})
+              In Pipeline ({status.preparedConversations.length})
             </div>
             {status.preparedConversations.map((info, i) => (
-              <PreparedCard key={i} info={info} convIndex={i} onPlayTurn={onPlayTurnAudio} />
+              <PreparedCard
+                key={`${info.npcAName}-${info.npcBName}-${info.phase}`}
+                info={info}
+                convIndex={info.phase === "generating_tts" ? -1 : i - (ttsConv ? 1 : 0)}
+                onPlayTurn={onPlayTurnAudio}
+              />
             ))}
           </div>
         )}

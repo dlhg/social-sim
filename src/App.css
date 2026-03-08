@@ -2438,6 +2438,10 @@
   border-left: 3px solid transparent;
 }
 
+.dd-card + .dd-card {
+  margin-top: 8px;
+}
+
 .dd-card-active {
   border-left-color: #7ec87e;
 }
@@ -2448,6 +2452,36 @@
 
 .dd-card-ready {
   border-left-color: #6ca6d9;
+}
+
+.dd-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dd-phase-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.dd-phase-tts {
+  background: rgba(224, 168, 76, 0.15);
+  color: #e0a84c;
+  border: 1px solid rgba(224, 168, 76, 0.3);
+}
+
+.dd-turn-current {
+  background: rgba(126, 200, 126, 0.08);
+}
+
+.dd-turn-played {
+  opacity: 0.5;
 }
 
 .dd-pair-names {

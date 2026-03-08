@@ -85,14 +85,15 @@ export interface PreparedConversationInfo {
   maxAgeMs: number;
   llmDurationMs: number;
   ttsDurationMs: number;
+  /** "ready" = fully prepared, "generating_tts" = LLM done, TTS in progress */
+  phase: "ready" | "generating_tts";
+  ttsElapsedMs?: number;
 }
 
 export interface DirectorStatus {
   /** The LLM generation slot */
   generatingPair: { npcAName: string; npcBName: string; elapsedMs: number } | null;
-  /** The TTS prefetch slot (runs independently from LLM) */
-  prefetchingPair: { npcAName: string; npcBName: string; elapsedMs: number } | null;
-  /** All prepared conversations waiting to be played */
+  /** All conversations in the pipeline (TTS-in-progress + ready) */
   preparedConversations: PreparedConversationInfo[];
   /** Currently playing conversation */
   activeConversation: {
@@ -101,15 +102,19 @@ export interface DirectorStatus {
     turnCount: number;
     maxTurns: number;
     convType: ConversationType;
+    speeches: string[];
+    speakerNames: string[];
   } | null;
   /** Top scored pairs from last director tick */
   topPairs: DirectorScoredPair[];
   /** Total conversations played since start */
   conversationsPlayed: number;
-  /** Total prepared conversations that were consumed (played instantly) */
-  preparedConsumed: number;
   /** Total prepared conversations that expired */
   preparedExpired: number;
+  /** Average LLM generation time in ms (0 if no data) */
+  avgLlmMs: number;
+  /** Average TTS generation time in ms (0 if no data) */
+  avgTtsMs: number;
 }
 
 export class ConversationManager {
@@ -160,6 +165,13 @@ export class ConversationManager {
   private conversationsPlayed = 0;
   private preparedConsumed = 0;
   private preparedExpired = 0;
+  private llmDurations: number[] = [];
+  private ttsDurations: number[] = [];
+
+  // TTS-in-progress conversation (LLM done, audio generating)
+  private ttsConvTurns: BatchTurnData[] | null = null;
+  private ttsConvType: ConversationType = "casual";
+  private ttsConvLlmMs = 0;
 
   constructor(
     private store: NpcStore,
@@ -204,28 +216,45 @@ export class ConversationManager {
       };
     }
 
-    let prefetchingPair: DirectorStatus["prefetchingPair"] = null;
-    if (this.ttsPairIds) {
-      prefetchingPair = {
+    // Build pipeline list: TTS-in-progress conversations + fully ready conversations
+    const preparedConversations: PreparedConversationInfo[] = [];
+
+    // Show TTS-in-progress conversation first (LLM done, audio generating)
+    if (this.ttsPairIds && this.ttsConvTurns) {
+      preparedConversations.push({
         npcAName: this.npcName(this.ttsPairIds[0]),
         npcBName: this.npcName(this.ttsPairIds[1]),
-        elapsedMs: this.ttsStartedAt ? now - this.ttsStartedAt : 0,
-      };
+        convType: this.ttsConvType,
+        turnCount: this.ttsConvTurns.length,
+        speeches: this.ttsConvTurns.map(t => t.speech),
+        speakerNames: this.ttsConvTurns.map(t => this.npcName(t.speaker_id)),
+        preparedAt: 0,
+        ageMs: 0,
+        maxAgeMs: this.PREPARED_MAX_AGE_MS,
+        llmDurationMs: this.ttsConvLlmMs,
+        ttsDurationMs: 0,
+        phase: "generating_tts",
+        ttsElapsedMs: this.ttsStartedAt ? now - this.ttsStartedAt : 0,
+      });
     }
 
-    const preparedConversations: PreparedConversationInfo[] = this.preparedConversations.map(p => ({
-      npcAName: this.npcName(p.npcAId),
-      npcBName: this.npcName(p.npcBId),
-      convType: p.convType,
-      turnCount: p.turns.length,
-      speeches: p.turns.map(t => t.speech),
-      speakerNames: p.turns.map(t => this.npcName(t.speaker_id)),
-      preparedAt: p.preparedAt,
-      ageMs: now - p.preparedAt,
-      maxAgeMs: this.PREPARED_MAX_AGE_MS,
-      llmDurationMs: p.llmDurationMs,
-      ttsDurationMs: p.ttsDurationMs,
-    }));
+    // Fully ready conversations
+    for (const p of this.preparedConversations) {
+      preparedConversations.push({
+        npcAName: this.npcName(p.npcAId),
+        npcBName: this.npcName(p.npcBId),
+        convType: p.convType,
+        turnCount: p.turns.length,
+        speeches: p.turns.map(t => t.speech),
+        speakerNames: p.turns.map(t => this.npcName(t.speaker_id)),
+        preparedAt: p.preparedAt,
+        ageMs: now - p.preparedAt,
+        maxAgeMs: this.PREPARED_MAX_AGE_MS,
+        llmDurationMs: p.llmDurationMs,
+        ttsDurationMs: p.ttsDurationMs,
+        phase: "ready",
+      });
+    }
 
     let activeConversation: DirectorStatus["activeConversation"] = null;
     if (this.activeSession) {
@@ -235,18 +264,22 @@ export class ConversationManager {
         turnCount: this.activeSession.turnCount,
         maxTurns: this.activeSession.maxTurns,
         convType: this.activeConvType,
+        speeches: this.activeSession.messages.map(m => m.text),
+        speakerNames: this.activeSession.messages.map(m => m.npcName),
       };
     }
 
+    const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+
     return {
       generatingPair,
-      prefetchingPair,
       preparedConversations,
       activeConversation,
       topPairs: this.lastScoredPairs,
       conversationsPlayed: this.conversationsPlayed,
-      preparedConsumed: this.preparedConsumed,
       preparedExpired: this.preparedExpired,
+      avgLlmMs: avg(this.llmDurations),
+      avgTtsMs: avg(this.ttsDurations),
     };
   }
 
@@ -965,6 +998,7 @@ export class ConversationManager {
     }
 
     const llmDurationMs = Date.now() - llmStart;
+    this.llmDurations.push(llmDurationMs);
     this.log(`[director] LLM done for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns, ${Math.round(llmDurationMs / 1000)}s)`);
 
     // ── Free the LLM slot — director can now start generating the next conversation ──
@@ -974,6 +1008,9 @@ export class ConversationManager {
     // ── Phase 2: TTS prefetch (runs independently, doesn't block next LLM) ──
     this.ttsPairIds = [npcAId, npcBId];
     this.ttsStartedAt = Date.now();
+    this.ttsConvTurns = turns;
+    this.ttsConvType = convType;
+    this.ttsConvLlmMs = llmDurationMs;
 
     let audioBuffers: (ArrayBuffer | null)[] = [];
     if (this.ttsService) {
@@ -990,8 +1027,10 @@ export class ConversationManager {
     }
 
     const ttsDurationMs = Date.now() - (this.ttsStartedAt ?? Date.now());
+    this.ttsDurations.push(ttsDurationMs);
     this.ttsPairIds = null;
     this.ttsStartedAt = null;
+    this.ttsConvTurns = null;
 
     if (!this.running) return;
 
