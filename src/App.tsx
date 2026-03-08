@@ -7,6 +7,7 @@ import { NpcCreator } from "./components/NpcCreator";
 import { SetupScreen } from "./components/SetupScreen";
 import { MapTestMode } from "./components/MapTestMode";
 import { DmTools } from "./components/DmTools";
+import { DirectorDashboard } from "./components/DirectorDashboard";
 import { NpcStore } from "./npc-store";
 import { MemoryService } from "./memory-service";
 import { ConversationManager } from "./conversation-manager";
@@ -64,6 +65,7 @@ function App() {
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [dmToolsOpen, setDmToolsOpen] = useState(false);
   const [npcViewerOpen, setNpcViewerOpen] = useState(false);
+  const [directorOpen, setDirectorOpen] = useState(false);
 
   // Panel state
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
@@ -819,6 +821,7 @@ function App() {
           npcs={npcs}
           feed={feed}
           currentSpeaker={currentSpeaker}
+          onOpenDirector={status === "running" ? () => setDirectorOpen(true) : undefined}
         />
         <div className="world-panel">
           {dayLabel && <div className="day-label">{dayLabel}</div>}
@@ -948,6 +951,12 @@ function App() {
             />
           </div>
         </div>
+      )}
+      {directorOpen && managerRef.current && (
+        <DirectorDashboard
+          getStatus={() => managerRef.current!.getDirectorStatus()}
+          onClose={() => setDirectorOpen(false)}
+        />
       )}
     </div>
   );

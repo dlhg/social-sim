@@ -61,6 +61,56 @@ interface PreparedConversation {
   preparedAt: number;
 }
 
+export type DirectorPhase = "idle" | "llm_generating" | "tts_prefetching" | "ready";
+
+export interface DirectorScoredPair {
+  npcAId: string;
+  npcAName: string;
+  npcBId: string;
+  npcBName: string;
+  score: number;
+}
+
+export interface DirectorStatus {
+  phase: DirectorPhase;
+  /** The pair currently being prepared (during llm_generating / tts_prefetching) */
+  preparingPair: { npcAName: string; npcBName: string } | null;
+  /** Timing: when current preparation started */
+  prepareStartedAt: number | null;
+  /** Timing: when LLM finished (null if still generating) */
+  llmFinishedAt: number | null;
+  /** Timing: when TTS finished (null if still prefetching) */
+  ttsFinishedAt: number | null;
+  /** The prepared conversation waiting to be played */
+  prepared: {
+    npcAName: string;
+    npcBName: string;
+    convType: ConversationType;
+    turnCount: number;
+    speeches: string[];
+    speakerNames: string[];
+    preparedAt: number;
+    ageMs: number;
+    maxAgeMs: number;
+  } | null;
+  /** Currently playing conversation */
+  activeConversation: {
+    npcAName: string;
+    npcBName: string;
+    turnCount: number;
+    maxTurns: number;
+    convType: ConversationType;
+  } | null;
+  /** Top scored pairs from last director tick */
+  topPairs: DirectorScoredPair[];
+  /** Total conversations played since start */
+  conversationsPlayed: number;
+  /** Total prepared conversations that were consumed (played instantly) */
+  preparedConsumed: number;
+  /** Total prepared conversations that expired */
+  preparedExpired: number;
+}
+
 export class ConversationManager {
   private running = false;
   private paused = false;
@@ -92,9 +142,20 @@ export class ConversationManager {
   private directorTimer: ReturnType<typeof setInterval> | null = null;
   private preparedConversation: PreparedConversation | null = null;
   private preparingPairKey: string | null = null; // currently generating for this pair
+  private preparingPairIds: [string, string] | null = null;
   private prepareAbort: AbortController | null = null;
   private readonly DIRECTOR_INTERVAL_MS = 5_000;
   private readonly PREPARED_MAX_AGE_MS = 120_000; // discard after 2 min
+
+  // ── Director telemetry ──
+  private directorPhase: DirectorPhase = "idle";
+  private prepareStartedAt: number | null = null;
+  private llmFinishedAt: number | null = null;
+  private ttsFinishedAt: number | null = null;
+  private lastScoredPairs: DirectorScoredPair[] = [];
+  private conversationsPlayed = 0;
+  private preparedConsumed = 0;
+  private preparedExpired = 0;
 
   constructor(
     private store: NpcStore,
@@ -124,6 +185,60 @@ export class ConversationManager {
 
   get batchMode(): boolean {
     return this._batchMode;
+  }
+
+  /** Get a snapshot of the director's current state for the dashboard */
+  getDirectorStatus(): DirectorStatus {
+    const now = Date.now();
+
+    let preparingPair: DirectorStatus["preparingPair"] = null;
+    if (this.preparingPairIds) {
+      preparingPair = {
+        npcAName: this.npcName(this.preparingPairIds[0]),
+        npcBName: this.npcName(this.preparingPairIds[1]),
+      };
+    }
+
+    let prepared: DirectorStatus["prepared"] = null;
+    if (this.preparedConversation) {
+      const p = this.preparedConversation;
+      prepared = {
+        npcAName: this.npcName(p.npcAId),
+        npcBName: this.npcName(p.npcBId),
+        convType: p.convType,
+        turnCount: p.turns.length,
+        speeches: p.turns.map(t => t.speech),
+        speakerNames: p.turns.map(t => this.npcName(t.speaker_id)),
+        preparedAt: p.preparedAt,
+        ageMs: now - p.preparedAt,
+        maxAgeMs: this.PREPARED_MAX_AGE_MS,
+      };
+    }
+
+    let activeConversation: DirectorStatus["activeConversation"] = null;
+    if (this.activeSession) {
+      activeConversation = {
+        npcAName: this.npcName(this.activeSession.participantIds[0]),
+        npcBName: this.npcName(this.activeSession.participantIds[1]),
+        turnCount: this.activeSession.turnCount,
+        maxTurns: this.activeSession.maxTurns,
+        convType: this.activeConvType,
+      };
+    }
+
+    return {
+      phase: this.directorPhase,
+      preparingPair,
+      prepareStartedAt: this.prepareStartedAt,
+      llmFinishedAt: this.llmFinishedAt,
+      ttsFinishedAt: this.ttsFinishedAt,
+      prepared,
+      activeConversation,
+      topPairs: this.lastScoredPairs,
+      conversationsPlayed: this.conversationsPlayed,
+      preparedConsumed: this.preparedConsumed,
+      preparedExpired: this.preparedExpired,
+    };
   }
 
   // ── Lifecycle ────────────────────────────────
@@ -337,6 +452,7 @@ export class ConversationManager {
     this.cooldowns.set(this.pairKey(npcAId, npcBId), Date.now());
     this.callbacks.onSpeakerChange(null);
     this.callbacks.onConversationEnd(session);
+    this.conversationsPlayed++;
     this.log(
       `Conversation ended between ${npcA.name} and ${npcB.name} (${session.turnCount} turns)`
     );
@@ -613,6 +729,7 @@ export class ConversationManager {
     this.cooldowns.set(this.pairKey(npcAId, npcBId), Date.now());
     this.callbacks.onSpeakerChange(null);
     this.callbacks.onConversationEnd(session);
+    this.conversationsPlayed++;
     this.log(`[batch] Conversation ended between ${npcA.name} and ${npcB.name} (${session.turnCount} turns)`);
 
     this.store.batch(() => {
@@ -674,6 +791,8 @@ export class ConversationManager {
     }
     this.preparedConversation = null;
     this.preparingPairKey = null;
+    this.preparingPairIds = null;
+    this.directorPhase = "idle";
   }
 
   private directorTick(): void {
@@ -686,6 +805,8 @@ export class ConversationManager {
       if (Date.now() - this.preparedConversation.preparedAt > this.PREPARED_MAX_AGE_MS) {
         this.log("[director] Discarding stale prepared conversation");
         this.preparedConversation = null;
+        this.preparedExpired++;
+        this.directorPhase = "idle";
       } else {
         return; // already have one ready
       }
@@ -698,6 +819,11 @@ export class ConversationManager {
     const [npcAId, npcBId] = pair;
     const pKey = this.pairKey(npcAId, npcBId);
     this.preparingPairKey = pKey;
+    this.preparingPairIds = [npcAId, npcBId];
+    this.directorPhase = "llm_generating";
+    this.prepareStartedAt = Date.now();
+    this.llmFinishedAt = null;
+    this.ttsFinishedAt = null;
 
     this.log(`[director] Pre-generating conversation for ${this.npcName(npcAId)} + ${this.npcName(npcBId)}`);
 
@@ -718,12 +844,18 @@ export class ConversationManager {
     // Generate in background
     this.prepareConversation(npcAId, npcBId).then((prepared) => {
       this.preparingPairKey = null;
+      this.preparingPairIds = null;
       if (prepared && this.running) {
         this.preparedConversation = prepared;
+        this.directorPhase = "ready";
         this.log(`[director] Conversation ready for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${prepared.turns.length} turns)`);
+      } else {
+        this.directorPhase = "idle";
       }
     }).catch(() => {
       this.preparingPairKey = null;
+      this.preparingPairIds = null;
+      this.directorPhase = "idle";
     });
   }
 
@@ -736,8 +868,7 @@ export class ConversationManager {
     const busyIds = new Set(this.activeSession?.participantIds ?? []);
 
     const now = Date.now();
-    let bestPair: [string, string] | null = null;
-    let bestScore = -Infinity;
+    const scored: DirectorScoredPair[] = [];
 
     for (let i = 0; i < allNpcs.length; i++) {
       for (let j = i + 1; j < allNpcs.length; j++) {
@@ -785,14 +916,19 @@ export class ConversationManager {
         // Small random factor to prevent always picking the same pair
         score += Math.random() * 1.5;
 
-        if (score > bestScore) {
-          bestScore = score;
-          bestPair = [a.id, b.id];
-        }
+        scored.push({
+          npcAId: a.id, npcAName: a.name,
+          npcBId: b.id, npcBName: b.name,
+          score: Math.round(score * 100) / 100,
+        });
       }
     }
 
-    return bestPair;
+    // Sort descending and save top 5 for dashboard
+    scored.sort((a, b) => b.score - a.score);
+    this.lastScoredPairs = scored.slice(0, 5);
+
+    return scored.length > 0 ? [scored[0].npcAId, scored[0].npcBId] : null;
   }
 
   /** Pre-generate a full conversation and TTS in the background */
@@ -873,6 +1009,9 @@ export class ConversationManager {
 
     if (turns.length === 0) return null;
 
+    this.llmFinishedAt = Date.now();
+    this.directorPhase = "tts_prefetching";
+
     // Pre-fetch all TTS in parallel
     let audioBuffers: (ArrayBuffer | null)[] = [];
     if (this.ttsService) {
@@ -888,6 +1027,7 @@ export class ConversationManager {
       audioBuffers = await Promise.all(promises);
     }
 
+    this.ttsFinishedAt = Date.now();
     this.prepareAbort = null;
 
     return {
@@ -909,10 +1049,13 @@ export class ConversationManager {
     if (!matchesPair) return null;
     if (Date.now() - p.preparedAt > this.PREPARED_MAX_AGE_MS) {
       this.preparedConversation = null;
+      this.preparedExpired++;
       return null;
     }
 
     this.preparedConversation = null;
+    this.preparedConsumed++;
+    this.directorPhase = "idle";
     return p;
   }
 
@@ -1044,6 +1187,7 @@ export class ConversationManager {
     this.cooldowns.set(this.pairKey(npcAId, npcBId), Date.now());
     this.callbacks.onSpeakerChange(null);
     this.callbacks.onConversationEnd(session);
+    this.conversationsPlayed++;
     this.log(`[director] Conversation ended between ${npcA.name} and ${npcB.name} (${session.turnCount} turns)`);
 
     this.store.batch(() => {

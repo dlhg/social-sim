@@ -42,6 +42,7 @@ interface FeedPanelProps {
   npcs: NPC[];
   feed: FeedItem[];
   currentSpeaker: string | null;
+  onOpenDirector?: () => void;
 }
 
 function formatTime(date: Date) {
@@ -56,6 +57,7 @@ export function FeedPanel({
   npcs,
   feed,
   currentSpeaker,
+  onOpenDirector,
 }: FeedPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(
@@ -104,6 +106,14 @@ export function FeedPanel({
       <div className="feed-header">
         <span className="feed-label">Feed</span>
         <div className="feed-header-buttons">
+          {onOpenDirector && (
+            <button
+              className="feed-copy-pill"
+              onClick={onOpenDirector}
+            >
+              Director
+            </button>
+          )}
           <button
             className="feed-copy-pill"
             onClick={copyLog}
