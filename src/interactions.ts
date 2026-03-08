@@ -16,7 +16,17 @@ export type InteractionId =
   | "share_story"
   | "ask_favor"
   | "compliment"
-  | "taunt";
+  | "taunt"
+  | "joke"
+  | "tease"
+  | "vent"
+  | "apologize"
+  | "encourage"
+  | "debate"
+  | "show_off"
+  | "confide"
+  | "reminisce"
+  | "people_watch";
 
 export interface InteractionDef {
   id: InteractionId;
@@ -301,6 +311,263 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
     weight: (actor, target) => {
       const rel = actor.relationships[target.id]?.regard ?? 0;
       return rel < -0.2 ? 3 : 1;
+    },
+  },
+
+  // ── Emotion-driven interactions ──────────────────
+
+  vent: {
+    id: "vent",
+    label: "venting",
+    emoji: "😤",
+    actorText: "vents frustrations to {target}",
+    targetText: "{actor} vented to me about their troubles",
+    feedText: "{actor} vented frustrations to {target}",
+    relationshipDelta: [0.03, 0.01],
+    emotionActor: { anger: -0.06, sadness: -0.04, trust: 0.02 },
+    emotionTarget: { trust: 0.02, sadness: 0.02 },
+    importance: 0.5,
+    condition: (actor, target) => {
+      const rel = actor.relationships[target.id]?.regard ?? 0;
+      // Need to be upset AND trust the target enough
+      return (actor.emotionalState.anger > 0.35 || actor.emotionalState.sadness > 0.35) && rel > 0.1;
+    },
+    weight: (actor, _target) => {
+      return (actor.emotionalState.anger + actor.emotionalState.sadness) * 3;
+    },
+  },
+
+  apologize: {
+    id: "apologize",
+    label: "apologizing",
+    emoji: "😔",
+    actorText: "apologizes to {target}",
+    targetText: "{actor} apologized to me",
+    feedText: "{actor} apologized to {target}",
+    relationshipDelta: [0.06, 0.08],
+    emotionActor: { guilt: -0.1, fear: -0.03, trust: 0.03 },
+    emotionTarget: { anger: -0.05, trust: 0.04, joy: 0.02 },
+    importance: 0.7,
+    condition: (actor, target) => {
+      const rel = actor.relationships[target.id]?.regard ?? 0;
+      // Guilt-driven, directed at someone the actor has harmed (low regard from target)
+      const targetRel = target.relationships[actor.id]?.regard ?? 0;
+      return actor.emotionalState.guilt > 0.3 && (targetRel < 0.1 || rel < 0.1);
+    },
+    weight: (actor, _target) => {
+      return actor.emotionalState.guilt * 5;
+    },
+  },
+
+  encourage: {
+    id: "encourage",
+    label: "encouraging",
+    emoji: "💪",
+    actorText: "encourages {target} with kind words",
+    targetText: "{actor} encouraged me when I was feeling low",
+    feedText: "{actor} encouraged {target}",
+    relationshipDelta: [0.03, 0.07],
+    emotionActor: { joy: 0.02 },
+    emotionTarget: { joy: 0.06, fear: -0.05, sadness: -0.04, trust: 0.03 },
+    importance: 0.5,
+    condition: (actor, target) => {
+      const traits = actor.personalityTraits.map(t => t.toLowerCase());
+      // Target must be struggling, actor should be kind-natured or at least not hostile
+      const targetDown = target.emotionalState.sadness > 0.3 || target.emotionalState.fear > 0.3 || target.emotionalState.joy < 0.2;
+      const actorWilling = traits.some(t => ["kind", "empathetic", "optimistic", "enthusiastic", "charming"].includes(t));
+      const rel = actor.relationships[target.id]?.regard ?? 0;
+      return targetDown && (actorWilling || rel > 0.2);
+    },
+    weight: (actor, target) => {
+      // Stronger when target is really struggling
+      const distress = target.emotionalState.sadness + target.emotionalState.fear;
+      const traits = actor.personalityTraits.map(t => t.toLowerCase());
+      const traitBoost = traits.some(t => ["kind", "empathetic"].includes(t)) ? 1.5 : 0;
+      return distress * 2 + traitBoost;
+    },
+  },
+
+  // ── Relationship-driven interactions ─────────────
+
+  tease: {
+    id: "tease",
+    label: "teasing playfully",
+    emoji: "😜",
+    actorText: "teases {target} playfully",
+    targetText: "{actor} teased me in a friendly way",
+    feedText: "{actor} playfully teased {target}",
+    relationshipDelta: [0.01, 0.02],
+    emotionActor: { joy: 0.03 },
+    emotionTarget: { joy: 0.02, anger: 0.01 },
+    importance: 0.2,
+    condition: (actor, target) => {
+      const rel = actor.relationships[target.id]?.regard ?? 0;
+      // Only between friends — teasing strangers is just rude
+      return rel > 0.2;
+    },
+    weight: (actor, target) => {
+      const rel = actor.relationships[target.id]?.regard ?? 0;
+      const traits = actor.personalityTraits.map(t => t.toLowerCase());
+      const traitBoost = traits.some(t => ["sardonic", "witty", "charming", "competitive"].includes(t)) ? 1.5 : 0;
+      return rel * 2 + traitBoost;
+    },
+  },
+
+  confide: {
+    id: "confide",
+    label: "confiding",
+    emoji: "🤫",
+    actorText: "confides something personal to {target}",
+    targetText: "{actor} trusted me with something personal",
+    feedText: "{actor} confided in {target}",
+    relationshipDelta: [0.05, 0.08],
+    emotionActor: { fear: 0.02, trust: 0.04, sadness: -0.02 },
+    emotionTarget: { trust: 0.06, curiosity: 0.03 },
+    importance: 0.7,
+    condition: (actor, target) => {
+      const rel = actor.relationships[target.id]?.regard ?? 0;
+      // Needs high trust and actor must have secrets to share
+      return rel > 0.3 && actor.secrets.length > 0;
+    },
+    weight: (actor, target) => {
+      const rel = actor.relationships[target.id]?.regard ?? 0;
+      return rel * 3;
+    },
+  },
+
+  reminisce: {
+    id: "reminisce",
+    label: "reminiscing",
+    emoji: "🌅",
+    actorText: "reminisces about old times with {target}",
+    targetText: "{actor} and I talked about old times",
+    feedText: "{actor} reminisced with {target} about shared memories",
+    relationshipDelta: [0.04, 0.04],
+    emotionActor: { joy: 0.04, sadness: 0.01 },
+    emotionTarget: { joy: 0.04, trust: 0.02, sadness: 0.01 },
+    importance: 0.4,
+    condition: (actor, target) => {
+      const rel = actor.relationships[target.id]?.regard ?? 0;
+      // Need established friendship AND shared memories
+      const sharedMemories = actor.shortTermMemory.filter(
+        m => m.involvedNpcIds.includes(target.id),
+      ).length + actor.longTermMemory.filter(
+        m => m.involvedNpcIds.includes(target.id),
+      ).length;
+      return rel > 0.25 && sharedMemories >= 2;
+    },
+    weight: (actor, target) => {
+      const rel = actor.relationships[target.id]?.regard ?? 0;
+      return rel * 2 + 1;
+    },
+  },
+
+  // ── Trait-driven interactions ────────────────────
+
+  joke: {
+    id: "joke",
+    label: "telling a joke",
+    emoji: "😂",
+    actorText: "tells {target} a joke",
+    targetText: "{actor} told me a funny joke",
+    feedText: "{actor} told {target} a joke",
+    relationshipDelta: [0.01, 0.03],
+    emotionActor: { joy: 0.03 },
+    emotionTarget: { joy: 0.04, anger: -0.02, sadness: -0.02 },
+    importance: 0.2,
+    condition: (actor, _target) => {
+      const traits = actor.personalityTraits.map(t => t.toLowerCase());
+      return (
+        traits.some(t => ["charming", "witty", "enthusiastic", "sardonic", "optimistic"].includes(t)) ||
+        actor.emotionalState.joy > 0.5
+      );
+    },
+    weight: (actor, _target) => {
+      const traits = actor.personalityTraits.map(t => t.toLowerCase());
+      if (traits.some(t => ["witty", "charming", "sardonic"].includes(t))) return 2;
+      return 1;
+    },
+  },
+
+  debate: {
+    id: "debate",
+    label: "debating",
+    emoji: "🤔",
+    actorText: "debates a topic with {target}",
+    targetText: "{actor} and I had an interesting debate",
+    feedText: "{actor} debated with {target}",
+    relationshipDelta: [0.01, 0.01],
+    emotionActor: { curiosity: 0.05, joy: 0.01 },
+    emotionTarget: { curiosity: 0.04, anger: 0.01 },
+    importance: 0.4,
+    condition: (actor, target) => {
+      const aTraits = actor.personalityTraits.map(t => t.toLowerCase());
+      const tTraits = target.personalityTraits.map(t => t.toLowerCase());
+      // At least one party must be intellectually inclined
+      const actorIntellectual = aTraits.some(t =>
+        ["philosophical", "curious", "analytical", "calculating", "perceptive"].includes(t),
+      );
+      const targetIntellectual = tTraits.some(t =>
+        ["philosophical", "curious", "analytical", "calculating", "perceptive"].includes(t),
+      );
+      return actorIntellectual || (targetIntellectual && actor.emotionalState.curiosity > 0.3);
+    },
+    weight: (actor, _target) => {
+      return 1 + actor.emotionalState.curiosity * 2;
+    },
+  },
+
+  show_off: {
+    id: "show_off",
+    label: "showing off",
+    emoji: "💫",
+    actorText: "shows off to {target}",
+    targetText: "{actor} was showing off to me",
+    feedText: "{actor} showed off to {target}",
+    relationshipDelta: [0.01, -0.02],
+    emotionActor: { joy: 0.04 },
+    emotionTarget: { curiosity: 0.02, anger: 0.02, disgust: 0.01 },
+    importance: 0.3,
+    condition: (actor, target) => {
+      const traits = actor.personalityTraits.map(t => t.toLowerCase());
+      const rel = actor.relationships[target.id]?.regard ?? 0;
+      // Competitive/confident types showing off to non-close people
+      return (
+        traits.some(t => ["competitive", "confident", "aggressive", "vain", "boisterous"].includes(t)) &&
+        rel < 0.3
+      );
+    },
+    weight: (actor, _target) => {
+      const traits = actor.personalityTraits.map(t => t.toLowerCase());
+      if (traits.some(t => ["vain", "competitive"].includes(t))) return 2.5;
+      return 1.5;
+    },
+  },
+
+  people_watch: {
+    id: "people_watch",
+    label: "people-watching together",
+    emoji: "👀",
+    actorText: "sits with {target} and watches the world go by",
+    targetText: "{actor} and I sat together and watched the world go by",
+    feedText: "{actor} and {target} sat together, people-watching",
+    relationshipDelta: [0.02, 0.02],
+    emotionActor: { joy: 0.02, curiosity: 0.02, sadness: -0.01 },
+    emotionTarget: { joy: 0.02, curiosity: 0.02, trust: 0.01 },
+    importance: 0.2,
+    condition: (actor, target) => {
+      const rel = actor.relationships[target.id]?.regard ?? 0;
+      const traits = actor.personalityTraits.map(t => t.toLowerCase());
+      // Quiet, observant types with at least a neutral relationship
+      return rel > 0 && (
+        traits.some(t => ["perceptive", "curious", "philosophical", "reserved", "quiet", "contemplative"].includes(t)) ||
+        actor.emotionalState.curiosity > 0.4
+      );
+    },
+    weight: (actor, _target) => {
+      const traits = actor.personalityTraits.map(t => t.toLowerCase());
+      if (traits.some(t => ["perceptive", "quiet", "reserved"].includes(t))) return 2;
+      return 1;
     },
   },
 };
