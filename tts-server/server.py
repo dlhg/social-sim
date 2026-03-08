@@ -1,15 +1,21 @@
 """
-Lightweight local TTS server using Kokoro (82M params).
-Streams WAV audio back over HTTP for each NPC speech line.
+Dual-engine TTS server: proxies to Chatterbox Turbo for English,
+uses Kokoro directly for other languages.
 
-Install:
-  pip install kokoro soundfile flask flask-cors
+The Chatterbox server runs in its own venv on port 8788.
+This server handles routing, caching, and emotion mapping.
 
-First run downloads the model (~300MB) from HuggingFace automatically.
+Install (Kokoro venv):
+  pip install kokoro soundfile flask flask-cors requests
 
 Usage:
+  # Terminal 1: Chatterbox server (separate venv)
+  source tts-server/.venv-chatterbox/bin/activate
+  python tts-server/chatterbox_server.py
+
+  # Terminal 2: Main server (Kokoro venv)
+  source tts-server/.venv/bin/activate
   python tts-server/server.py
-  # Listens on http://localhost:8787
 """
 
 import io
@@ -19,6 +25,7 @@ from pathlib import Path
 from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
 import soundfile as sf
+import requests as http_requests
 
 app = Flask(__name__)
 CORS(app)
@@ -27,10 +34,69 @@ CORS(app)
 CACHE_DIR = Path(__file__).parent / ".tts-cache"
 CACHE_DIR.mkdir(exist_ok=True)
 
-# ── Multi-language pipeline management ───────────
-# One KPipeline per language, lazily initialized. They share one KModel.
+# Chatterbox Turbo server URL
+CHATTERBOX_URL = os.environ.get("CHATTERBOX_URL", "http://localhost:8788")
 
-# Map app language names → Kokoro lang codes
+# ── Voice pool ────────────────────────────────────
+# Each ID maps to a reference audio clip used by Chatterbox
+VOICE_POOL = [
+    "voice_01",   # warm female
+    "voice_02",   # neutral male
+    "voice_03",   # british female
+    "voice_04",   # deep male
+    "voice_05",   # energetic female
+    "voice_06",   # british male
+    "voice_07",   # clear female
+    "voice_08",   # playful male
+    "voice_09",   # soft female
+    "voice_10",   # steady male
+    "voice_11",   # bright female
+    "voice_12",   # calm male
+    "voice_13",   # smooth female
+]
+
+# Kokoro voice names — used only for non-English fallback
+KOKORO_VOICES = [
+    "af_heart", "am_adam", "bf_emma", "am_fenrir", "af_bella",
+    "bm_george", "af_nova", "am_puck", "bf_isabella", "am_eric",
+    "af_sky", "bm_lewis", "af_nicole",
+]
+
+# ── Engine routing ────────────────────────────────
+
+def is_english(language: str | None) -> bool:
+    lang = (language or "english").lower().strip()
+    return lang in ("english", "british english")
+
+
+# ── Chatterbox Turbo (English, via proxy) ─────────
+
+def compute_chatterbox_exaggeration(emotions: dict) -> float:
+    """Map emotional intensity to Chatterbox exaggeration parameter."""
+    if not emotions:
+        return 0.5
+    intensity = max(
+        emotions.get("anger", 0),
+        emotions.get("joy", 0),
+        emotions.get("fear", 0),
+        emotions.get("sadness", 0),
+    )
+    return min(1.0, 0.3 + intensity * 0.7)
+
+
+def synthesize_chatterbox(text: str, voice_id: str, exaggeration: float) -> bytes:
+    """Proxy synthesis request to the Chatterbox server."""
+    resp = http_requests.post(
+        f"{CHATTERBOX_URL}/speak",
+        json={"text": text, "voice": voice_id, "exaggeration": exaggeration},
+        timeout=300,
+    )
+    resp.raise_for_status()
+    return resp.content
+
+
+# ── Kokoro (non-English fallback) ─────────────────
+
 LANGUAGE_TO_LANG_CODE = {
     "english": "a",
     "british english": "b",
@@ -46,169 +112,96 @@ LANGUAGE_TO_LANG_CODE = {
 }
 
 _pipelines: dict = {}  # lang_code -> KPipeline
-_model = None  # shared KModel instance
+_kokoro_model = None
 
 
 def get_pipeline(lang_code: str = "a"):
-    global _model
+    global _kokoro_model
     from kokoro import KPipeline
 
     if lang_code in _pipelines:
         return _pipelines[lang_code]
 
-    # Reuse one model across all pipelines
-    if _model is None:
+    if _kokoro_model is None:
         pipeline = KPipeline(lang_code=lang_code)
-        _model = pipeline.model
+        _kokoro_model = pipeline.model
         print(f"[tts] Kokoro model loaded, first pipeline: {lang_code}")
     else:
-        pipeline = KPipeline(lang_code=lang_code, model=_model)
-        print(f"[tts] Added pipeline for lang_code={lang_code}")
+        pipeline = KPipeline(lang_code=lang_code, model=_kokoro_model)
+        print(f"[tts] Added Kokoro pipeline for lang_code={lang_code}")
 
     _pipelines[lang_code] = pipeline
     return pipeline
 
 
 def resolve_lang_code(language: str | None) -> str | None:
-    """Map a language name from the app to a Kokoro lang code, or None if unsupported."""
     if not language:
         return "a"
     return LANGUAGE_TO_LANG_CODE.get(language.lower().strip())
 
 
-# ── Available voice pool ──────────────────────────
-# These are the English voices we rotate through for NPCs.
-# Mixing male/female, American/British for variety.
-VOICE_POOL = [
-    "af_heart",      # warm female
-    "am_adam",        # neutral male
-    "bf_emma",        # british female
-    "am_fenrir",      # deep male
-    "af_bella",       # energetic female
-    "bm_george",      # british male
-    "af_nova",        # clear female
-    "am_puck",        # playful male
-    "bf_isabella",    # soft british female
-    "am_eric",        # steady male
-    "af_sky",         # bright female
-    "bm_lewis",       # calm british male
-    "af_nicole",      # smooth female
-]
+def synthesize_kokoro(text: str, voice: str, speed: float, lang_code: str) -> bytes:
+    import numpy as np
+
+    pipeline = get_pipeline(lang_code)
+    voice_pack = pipeline.load_voice(voice)
+
+    audio_chunks = []
+    for _gs, _ps, audio in pipeline(text, voice=voice_pack, speed=speed):
+        audio_chunks.append(audio)
+
+    if not audio_chunks:
+        raise RuntimeError("Synthesis produced no audio")
+
+    full_audio = np.concatenate(audio_chunks)
+    buf = io.BytesIO()
+    sf.write(buf, full_audio, 24000, format="WAV", subtype="PCM_16")
+    return buf.getvalue()
+
 
 # ── Emotion → speech speed mapping ────────────────
-# Returns a speed multiplier based on the dominant emotional state.
-# Base speed comes from the request; this applies a modifier on top.
 
 def compute_emotion_speed(emotions: dict) -> float:
-    """Map emotional state to a speed modifier (0.85 – 1.25)."""
     if not emotions:
         return 1.0
 
-    anger = emotions.get("anger", 0)
-    joy = emotions.get("joy", 0)
-    sadness = emotions.get("sadness", 0)
-    fear = emotions.get("fear", 0)
-    curiosity = emotions.get("curiosity", 0)
-    disgust = emotions.get("disgust", 0)
-    guilt = emotions.get("guilt", 0)
-
-    # Weighted contribution: each emotion pulls speed in a direction
-    # Positive = faster, negative = slower
     speed_delta = 0.0
-    speed_delta += anger * 0.20       # anger → faster, clipped
-    speed_delta += joy * 0.15         # joy → slightly faster, upbeat
-    speed_delta += fear * 0.18        # fear → faster, nervous
-    speed_delta += curiosity * 0.05   # curiosity → very slightly faster
-    speed_delta -= sadness * 0.20     # sadness → slower, heavy
-    speed_delta -= guilt * 0.15       # guilt → slower, hesitant
-    speed_delta -= disgust * 0.10     # disgust → slower, deliberate
+    speed_delta += emotions.get("anger", 0) * 0.20
+    speed_delta += emotions.get("joy", 0) * 0.15
+    speed_delta += emotions.get("fear", 0) * 0.18
+    speed_delta += emotions.get("curiosity", 0) * 0.05
+    speed_delta -= emotions.get("sadness", 0) * 0.20
+    speed_delta -= emotions.get("guilt", 0) * 0.15
+    speed_delta -= emotions.get("disgust", 0) * 0.10
 
-    # Clamp to reasonable range
     return max(0.85, min(1.25, 1.0 + speed_delta))
 
 
-# ── Emotion → voice blending ─────────────────────
-# Slightly blend the NPC's base voice toward an "emotional modifier"
-# voice to shift the tonal quality.
-
-# Modifier voices: chosen for their tonal character
-EMOTION_VOICE_MODIFIERS = {
-    "intense": "am_fenrir",     # deep, intense → anger, confrontation
-    "bright": "af_bella",       # energetic, bright → joy, excitement
-    "soft": "bf_isabella",      # soft, gentle → sadness, vulnerability
-    "nervous": "af_sky",        # bright, quick → fear, anxiety
-}
-
-
-def compute_voice_blend(base_voice: str, emotions: dict):
-    """
-    Return (voice_spec, blend_key) where voice_spec is either:
-    - the base voice name (no blending needed)
-    - a pre-blended tensor (needs to be passed directly)
-    blend_key is a string for cache keying.
-    """
-    if not emotions:
-        return base_voice, base_voice
-
-    # Find dominant emotion (excluding trust/curiosity which don't need voice shifts)
-    emotion_scores = {
-        "intense": max(emotions.get("anger", 0), emotions.get("disgust", 0) * 0.6),
-        "bright": emotions.get("joy", 0),
-        "soft": max(emotions.get("sadness", 0), emotions.get("guilt", 0) * 0.7),
-        "nervous": emotions.get("fear", 0),
-    }
-
-    dominant = max(emotion_scores, key=emotion_scores.get)
-    strength = emotion_scores[dominant]
-
-    # Only blend if the emotion is meaningfully strong
-    if strength < 0.35:
-        return base_voice, base_voice
-
-    modifier_voice = EMOTION_VOICE_MODIFIERS[dominant]
-
-    # Don't blend a voice with itself
-    if modifier_voice == base_voice:
-        return base_voice, base_voice
-
-    # Blend weight: scales from 0 at threshold to 0.25 at max
-    blend_weight = min(0.25, (strength - 0.35) * 0.38)
-    blend_key = f"{base_voice}+{modifier_voice}@{blend_weight:.2f}"
-
-    return (base_voice, modifier_voice, blend_weight), blend_key
-
-
-def resolve_voice_pack(pipeline, voice_spec):
-    """
-    Given a voice_spec from compute_voice_blend, return a voice tensor.
-    voice_spec is either a string (plain voice name) or a tuple
-    (base, modifier, weight) for blending.
-    """
-    import torch
-
-    if isinstance(voice_spec, str):
-        return pipeline.load_voice(voice_spec)
-
-    base_name, modifier_name, weight = voice_spec
-    base_pack = pipeline.load_single_voice(base_name)
-    modifier_pack = pipeline.load_single_voice(modifier_name)
-    # Weighted interpolation
-    blended = (1.0 - weight) * base_pack + weight * modifier_pack
-    return blended.to(base_pack.device)
-
+# ── Endpoints ─────────────────────────────────────
 
 @app.route("/health", methods=["GET"])
 def health():
+    # Check if Chatterbox server is reachable
+    chatterbox_status = "unavailable"
+    try:
+        r = http_requests.get(f"{CHATTERBOX_URL}/health", timeout=2)
+        if r.ok:
+            chatterbox_status = "ok"
+    except Exception:
+        pass
+
     return jsonify({
         "status": "ok",
-        "engine": "kokoro",
+        "engines": {
+            "english": {"name": "chatterbox-turbo", "status": chatterbox_status},
+            "non_english": {"name": "kokoro", "status": "ok"},
+        },
         "languages": list(LANGUAGE_TO_LANG_CODE.keys()),
     })
 
 
 @app.route("/voices", methods=["GET"])
 def voices():
-    """Return the voice pool so the frontend can assign voices to NPCs."""
     return jsonify({"voices": VOICE_POOL})
 
 
@@ -218,128 +211,145 @@ def speak():
     Synthesize speech and return WAV audio.
 
     JSON body:
-      { "text": "Hello world", "voice": "af_heart", "speed": 1.0,
+      { "text": "Hello world", "voice": "voice_01", "speed": 1.0,
         "emotions": {"anger": 0, "joy": 0.5, ...},
         "language": "English" }
-
-    Returns: audio/wav
     """
     data = request.get_json(force=True)
     text = data.get("text", "").strip()
-    voice = data.get("voice", "af_heart")
+    voice = data.get("voice", VOICE_POOL[0])
     speed = float(data.get("speed", 1.0))
     emotions = data.get("emotions")
-    lang_code = resolve_lang_code(data.get("language"))
+    language = data.get("language")
 
     if not text:
         return Response("No text provided", status=400)
-    if lang_code is None:
-        return Response(f"Language not supported for TTS: {data.get('language')}", status=400)
 
-    # Compute emotion-aware speed and voice blend
     emotion_speed = compute_emotion_speed(emotions)
     final_speed = speed * emotion_speed
-    voice_spec, blend_key = compute_voice_blend(voice, emotions)
 
-    # Check cache (keyed on language + blended voice + emotion-adjusted speed + text)
-    cache_key = hashlib.sha256(f"{lang_code}:{blend_key}:{final_speed:.3f}:{text}".encode()).hexdigest()[:16]
-    cache_path = CACHE_DIR / f"{cache_key}.wav"
+    if is_english(language):
+        # ── Chatterbox Turbo path (proxy to port 8788) ──
+        exaggeration = compute_chatterbox_exaggeration(emotions)
+        cache_key = hashlib.sha256(
+            f"cb:{voice}:{exaggeration:.2f}:{text}".encode()
+        ).hexdigest()[:16]
+        cache_path = CACHE_DIR / f"{cache_key}.wav"
 
-    if cache_path.exists():
+        if cache_path.exists():
+            return Response(
+                cache_path.read_bytes(),
+                mimetype="audio/wav",
+                headers={"X-TTS-Cached": "true"},
+            )
+
+        try:
+            wav_bytes = synthesize_chatterbox(text, voice, exaggeration)
+        except http_requests.ConnectionError:
+            return Response(
+                "Chatterbox server not running (start chatterbox_server.py)",
+                status=503,
+            )
+        except Exception as e:
+            print(f"[tts] Chatterbox error: {e}")
+            return Response(f"Synthesis failed: {e}", status=500)
+
+        cache_path.write_bytes(wav_bytes)
         return Response(
-            cache_path.read_bytes(),
+            wav_bytes,
             mimetype="audio/wav",
-            headers={"X-TTS-Cached": "true"},
+            headers={"X-TTS-Cached": "false"},
         )
+    else:
+        # ── Kokoro fallback path ──
+        lang_code = resolve_lang_code(language)
+        if lang_code is None:
+            return Response(f"Language not supported for TTS: {language}", status=400)
 
-    # Synthesize with language-appropriate pipeline
-    try:
-        pipeline = get_pipeline(lang_code)
-    except Exception as e:
-        print(f"[tts] Failed to load pipeline for lang_code={lang_code}: {e}")
-        return Response(f"Language not supported: {lang_code}", status=400)
-    voice_pack = resolve_voice_pack(pipeline, voice_spec)
+        try:
+            voice_idx = VOICE_POOL.index(voice)
+        except ValueError:
+            voice_idx = 0
+        kokoro_voice = KOKORO_VOICES[voice_idx % len(KOKORO_VOICES)]
 
-    # Kokoro returns generator of (graphemes, phonemes, audio) tuples
-    # Collect all audio chunks and concatenate
-    audio_chunks = []
-    for _gs, _ps, audio in pipeline(text, voice=voice_pack, speed=final_speed):
-        audio_chunks.append(audio)
+        cache_key = hashlib.sha256(
+            f"ko:{lang_code}:{kokoro_voice}:{final_speed:.3f}:{text}".encode()
+        ).hexdigest()[:16]
+        cache_path = CACHE_DIR / f"{cache_key}.wav"
 
-    if not audio_chunks:
-        return Response("Synthesis produced no audio", status=500)
+        if cache_path.exists():
+            return Response(
+                cache_path.read_bytes(),
+                mimetype="audio/wav",
+                headers={"X-TTS-Cached": "true"},
+            )
 
-    import numpy as np
-    full_audio = np.concatenate(audio_chunks)
+        try:
+            wav_bytes = synthesize_kokoro(text, kokoro_voice, final_speed, lang_code)
+        except Exception as e:
+            print(f"[tts] Kokoro error: {e}")
+            return Response(f"Synthesis failed: {e}", status=500)
 
-    # Write to WAV buffer
-    buf = io.BytesIO()
-    sf.write(buf, full_audio, 24000, format="WAV", subtype="PCM_16")
-    wav_bytes = buf.getvalue()
-
-    # Cache it
-    cache_path.write_bytes(wav_bytes)
-
-    return Response(
-        wav_bytes,
-        mimetype="audio/wav",
-        headers={"X-TTS-Cached": "false"},
-    )
+        cache_path.write_bytes(wav_bytes)
+        return Response(
+            wav_bytes,
+            mimetype="audio/wav",
+            headers={"X-TTS-Cached": "false"},
+        )
 
 
 @app.route("/speak-stream", methods=["POST"])
 def speak_stream():
-    """
-    Streaming version: starts sending WAV chunks as soon as the first
-    segment is ready, so playback can begin with lower latency.
-
-    Same JSON body as /speak.
-    Returns: audio/wav (complete file, but synthesis starts immediately)
-    """
+    """Same as /speak but streams the response."""
     data = request.get_json(force=True)
     text = data.get("text", "").strip()
-    voice = data.get("voice", "af_heart")
+    voice = data.get("voice", VOICE_POOL[0])
     speed = float(data.get("speed", 1.0))
     emotions = data.get("emotions")
-    lang_code = resolve_lang_code(data.get("language"))
+    language = data.get("language")
 
     if not text:
         return Response("No text provided", status=400)
-    if lang_code is None:
-        return Response(f"Language not supported for TTS: {data.get('language')}", status=400)
 
     emotion_speed = compute_emotion_speed(emotions)
     final_speed = speed * emotion_speed
-    voice_spec, _blend_key = compute_voice_blend(voice, emotions)
 
-    try:
-        pipeline = get_pipeline(lang_code)
-    except Exception as e:
-        print(f"[tts] Failed to load pipeline for lang_code={lang_code}: {e}")
-        return Response(f"Language not supported: {lang_code}", status=400)
-    voice_pack = resolve_voice_pack(pipeline, voice_spec)
+    if is_english(language):
+        exaggeration = compute_chatterbox_exaggeration(emotions)
 
-    def generate():
-        import numpy as np
-        chunks = []
-        for _gs, _ps, audio in pipeline(text, voice=voice_pack, speed=final_speed):
-            chunks.append(audio)
+        def generate():
+            try:
+                yield synthesize_chatterbox(text, voice, exaggeration)
+            except Exception as e:
+                print(f"[tts] Chatterbox stream error: {e}")
 
-        if chunks:
-            full_audio = np.concatenate(chunks)
-            buf = io.BytesIO()
-            sf.write(buf, full_audio, 24000, format="WAV", subtype="PCM_16")
-            yield buf.getvalue()
+        return Response(generate(), mimetype="audio/wav")
+    else:
+        lang_code = resolve_lang_code(language)
+        if lang_code is None:
+            return Response(f"Language not supported: {language}", status=400)
 
-    return Response(generate(), mimetype="audio/wav")
+        try:
+            voice_idx = VOICE_POOL.index(voice)
+        except ValueError:
+            voice_idx = 0
+        kokoro_voice = KOKORO_VOICES[voice_idx % len(KOKORO_VOICES)]
+
+        def generate():
+            try:
+                yield synthesize_kokoro(text, kokoro_voice, final_speed, lang_code)
+            except Exception as e:
+                print(f"[tts] Kokoro stream error: {e}")
+
+        return Response(generate(), mimetype="audio/wav")
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("TTS_PORT", 8787))
-    print(f"[tts] Starting Kokoro TTS server on http://localhost:{port}")
+    print(f"[tts] Starting dual-engine TTS server on http://localhost:{port}")
+    print(f"[tts] English: Chatterbox Turbo (via {CHATTERBOX_URL})")
+    print(f"[tts] Non-English: Kokoro (local)")
     print(f"[tts] Cache dir: {CACHE_DIR}")
     print(f"[tts] Voice pool: {len(VOICE_POOL)} voices")
-    print(f"[tts] Emotion-aware speed & voice blending enabled")
     print(f"[tts] Supported languages: {', '.join(LANGUAGE_TO_LANG_CODE.keys())}")
-    print(f"[tts] Model will load on first request...")
     app.run(host="127.0.0.1", port=port, threaded=True)

@@ -26,3 +26,4 @@ dist-ssr
 # TTS server
 tts-server/.tts-cache/
 tts-server/.venv/
+tts-server/.venv-chatterbox/

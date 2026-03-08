@@ -12,19 +12,19 @@ const TTS_BASE = "http://localhost:8787";
 
 // ── Voice pool (must match server's VOICE_POOL) ─────────
 const VOICE_POOL = [
-  "af_heart",
-  "am_adam",
-  "bf_emma",
-  "am_fenrir",
-  "af_bella",
-  "bm_george",
-  "af_nova",
-  "am_puck",
-  "bf_isabella",
-  "am_eric",
-  "af_sky",
-  "bm_lewis",
-  "af_nicole",
+  "voice_01",
+  "voice_02",
+  "voice_03",
+  "voice_04",
+  "voice_05",
+  "voice_06",
+  "voice_07",
+  "voice_08",
+  "voice_09",
+  "voice_10",
+  "voice_11",
+  "voice_12",
+  "voice_13",
 ];
 
 export interface TTSOptions {
@@ -191,7 +191,7 @@ export class TTSService {
           emotions: emotions ?? undefined,
           language: language ?? undefined,
         }),
-        signal: AbortSignal.timeout(60000),
+        signal: AbortSignal.timeout(300000),
       });
 
       if (!res.ok) {
