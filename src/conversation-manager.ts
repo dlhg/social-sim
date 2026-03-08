@@ -59,6 +59,8 @@ interface PreparedConversation {
   audioBuffers: (ArrayBuffer | null)[];
   convType: ConversationType;
   preparedAt: number;
+  llmDurationMs: number;
+  ttsDurationMs: number;
 }
 
 export type DirectorPhase = "idle" | "llm_generating" | "tts_prefetching" | "ready";
@@ -71,28 +73,27 @@ export interface DirectorScoredPair {
   score: number;
 }
 
+export interface PreparedConversationInfo {
+  npcAName: string;
+  npcBName: string;
+  convType: ConversationType;
+  turnCount: number;
+  speeches: string[];
+  speakerNames: string[];
+  preparedAt: number;
+  ageMs: number;
+  maxAgeMs: number;
+  llmDurationMs: number;
+  ttsDurationMs: number;
+}
+
 export interface DirectorStatus {
-  phase: DirectorPhase;
-  /** The pair currently being prepared (during llm_generating / tts_prefetching) */
-  preparingPair: { npcAName: string; npcBName: string } | null;
-  /** Timing: when current preparation started */
-  prepareStartedAt: number | null;
-  /** Timing: when LLM finished (null if still generating) */
-  llmFinishedAt: number | null;
-  /** Timing: when TTS finished (null if still prefetching) */
-  ttsFinishedAt: number | null;
-  /** The prepared conversation waiting to be played */
-  prepared: {
-    npcAName: string;
-    npcBName: string;
-    convType: ConversationType;
-    turnCount: number;
-    speeches: string[];
-    speakerNames: string[];
-    preparedAt: number;
-    ageMs: number;
-    maxAgeMs: number;
-  } | null;
+  /** The LLM generation slot */
+  generatingPair: { npcAName: string; npcBName: string; elapsedMs: number } | null;
+  /** The TTS prefetch slot (runs independently from LLM) */
+  prefetchingPair: { npcAName: string; npcBName: string; elapsedMs: number } | null;
+  /** All prepared conversations waiting to be played */
+  preparedConversations: PreparedConversationInfo[];
   /** Currently playing conversation */
   activeConversation: {
     npcAName: string;
@@ -140,18 +141,21 @@ export class ConversationManager {
 
   // ── Director state (pre-generates conversations in background) ──
   private directorTimer: ReturnType<typeof setInterval> | null = null;
-  private preparedConversation: PreparedConversation | null = null;
-  private preparingPairKey: string | null = null; // currently generating for this pair
-  private preparingPairIds: [string, string] | null = null;
-  private prepareAbort: AbortController | null = null;
+  private preparedConversations: PreparedConversation[] = [];
   private readonly DIRECTOR_INTERVAL_MS = 5_000;
-  private readonly PREPARED_MAX_AGE_MS = 120_000; // discard after 2 min
+  private readonly PREPARED_MAX_AGE_MS = 600_000; // discard after 10 min
+
+  // LLM generation slot (freed as soon as LLM finishes, before TTS)
+  private llmPairKey: string | null = null;
+  private llmPairIds: [string, string] | null = null;
+  private llmAbort: AbortController | null = null;
+  private llmStartedAt: number | null = null;
+
+  // TTS prefetch slot (runs independently from LLM)
+  private ttsPairIds: [string, string] | null = null;
+  private ttsStartedAt: number | null = null;
 
   // ── Director telemetry ──
-  private directorPhase: DirectorPhase = "idle";
-  private prepareStartedAt: number | null = null;
-  private llmFinishedAt: number | null = null;
-  private ttsFinishedAt: number | null = null;
   private lastScoredPairs: DirectorScoredPair[] = [];
   private conversationsPlayed = 0;
   private preparedConsumed = 0;
@@ -191,29 +195,37 @@ export class ConversationManager {
   getDirectorStatus(): DirectorStatus {
     const now = Date.now();
 
-    let preparingPair: DirectorStatus["preparingPair"] = null;
-    if (this.preparingPairIds) {
-      preparingPair = {
-        npcAName: this.npcName(this.preparingPairIds[0]),
-        npcBName: this.npcName(this.preparingPairIds[1]),
+    let generatingPair: DirectorStatus["generatingPair"] = null;
+    if (this.llmPairIds) {
+      generatingPair = {
+        npcAName: this.npcName(this.llmPairIds[0]),
+        npcBName: this.npcName(this.llmPairIds[1]),
+        elapsedMs: this.llmStartedAt ? now - this.llmStartedAt : 0,
       };
     }
 
-    let prepared: DirectorStatus["prepared"] = null;
-    if (this.preparedConversation) {
-      const p = this.preparedConversation;
-      prepared = {
-        npcAName: this.npcName(p.npcAId),
-        npcBName: this.npcName(p.npcBId),
-        convType: p.convType,
-        turnCount: p.turns.length,
-        speeches: p.turns.map(t => t.speech),
-        speakerNames: p.turns.map(t => this.npcName(t.speaker_id)),
-        preparedAt: p.preparedAt,
-        ageMs: now - p.preparedAt,
-        maxAgeMs: this.PREPARED_MAX_AGE_MS,
+    let prefetchingPair: DirectorStatus["prefetchingPair"] = null;
+    if (this.ttsPairIds) {
+      prefetchingPair = {
+        npcAName: this.npcName(this.ttsPairIds[0]),
+        npcBName: this.npcName(this.ttsPairIds[1]),
+        elapsedMs: this.ttsStartedAt ? now - this.ttsStartedAt : 0,
       };
     }
+
+    const preparedConversations: PreparedConversationInfo[] = this.preparedConversations.map(p => ({
+      npcAName: this.npcName(p.npcAId),
+      npcBName: this.npcName(p.npcBId),
+      convType: p.convType,
+      turnCount: p.turns.length,
+      speeches: p.turns.map(t => t.speech),
+      speakerNames: p.turns.map(t => this.npcName(t.speaker_id)),
+      preparedAt: p.preparedAt,
+      ageMs: now - p.preparedAt,
+      maxAgeMs: this.PREPARED_MAX_AGE_MS,
+      llmDurationMs: p.llmDurationMs,
+      ttsDurationMs: p.ttsDurationMs,
+    }));
 
     let activeConversation: DirectorStatus["activeConversation"] = null;
     if (this.activeSession) {
@@ -227,12 +239,9 @@ export class ConversationManager {
     }
 
     return {
-      phase: this.directorPhase,
-      preparingPair,
-      prepareStartedAt: this.prepareStartedAt,
-      llmFinishedAt: this.llmFinishedAt,
-      ttsFinishedAt: this.ttsFinishedAt,
-      prepared,
+      generatingPair,
+      prefetchingPair,
+      preparedConversations,
       activeConversation,
       topPairs: this.lastScoredPairs,
       conversationsPlayed: this.conversationsPlayed,
@@ -785,45 +794,45 @@ export class ConversationManager {
       clearInterval(this.directorTimer);
       this.directorTimer = null;
     }
-    if (this.prepareAbort) {
-      this.prepareAbort.abort();
-      this.prepareAbort = null;
+    if (this.llmAbort) {
+      this.llmAbort.abort();
+      this.llmAbort = null;
     }
-    this.preparedConversation = null;
-    this.preparingPairKey = null;
-    this.preparingPairIds = null;
-    this.directorPhase = "idle";
+    this.preparedConversations = [];
+    this.llmPairKey = null;
+    this.llmPairIds = null;
+    this.llmStartedAt = null;
+    this.ttsPairIds = null;
+    this.ttsStartedAt = null;
   }
 
   private directorTick(): void {
     if (!this.running || this.paused) return;
-    // Don't block on activeSession — prepare the next conversation
-    // during playback so the LLM and TTS aren't sitting idle.
-    if (this.preparingPairKey) return; // already generating
-    if (this.preparedConversation) {
-      // Check if prepared conversation is stale
-      if (Date.now() - this.preparedConversation.preparedAt > this.PREPARED_MAX_AGE_MS) {
-        this.log("[director] Discarding stale prepared conversation");
-        this.preparedConversation = null;
+
+    // Expire stale prepared conversations
+    const now = Date.now();
+    const before = this.preparedConversations.length;
+    this.preparedConversations = this.preparedConversations.filter(p => {
+      if (now - p.preparedAt > this.PREPARED_MAX_AGE_MS) {
+        this.log(`[director] Discarding stale conversation for ${this.npcName(p.npcAId)} + ${this.npcName(p.npcBId)}`);
         this.preparedExpired++;
-        this.directorPhase = "idle";
-      } else {
-        return; // already have one ready
+        return false;
       }
-    }
+      return true;
+    });
+
+    // Only start a new LLM generation if the LLM slot is free.
+    // TTS runs independently and doesn't block this.
+    if (this.llmPairKey) return;
 
     // Pick the most interesting pair
     const pair = this.pickNextPair();
     if (!pair) return;
 
     const [npcAId, npcBId] = pair;
-    const pKey = this.pairKey(npcAId, npcBId);
-    this.preparingPairKey = pKey;
-    this.preparingPairIds = [npcAId, npcBId];
-    this.directorPhase = "llm_generating";
-    this.prepareStartedAt = Date.now();
-    this.llmFinishedAt = null;
-    this.ttsFinishedAt = null;
+    this.llmPairKey = this.pairKey(npcAId, npcBId);
+    this.llmPairIds = [npcAId, npcBId];
+    this.llmStartedAt = Date.now();
 
     this.log(`[director] Pre-generating conversation for ${this.npcName(npcAId)} + ${this.npcName(npcBId)}`);
 
@@ -841,22 +850,140 @@ export class ConversationManager {
       reason: "Director: approaching for conversation",
     });
 
-    // Generate in background
-    this.prepareConversation(npcAId, npcBId).then((prepared) => {
-      this.preparingPairKey = null;
-      this.preparingPairIds = null;
-      if (prepared && this.running) {
-        this.preparedConversation = prepared;
-        this.directorPhase = "ready";
-        this.log(`[director] Conversation ready for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${prepared.turns.length} turns)`);
-      } else {
-        this.directorPhase = "idle";
+    // Run the pipeline: LLM → free slot → TTS (independent)
+    this.runPipeline(npcAId, npcBId).catch(() => {});
+  }
+
+  /** Pipeline: generate LLM, free LLM slot, then TTS independently */
+  private async runPipeline(npcAId: string, npcBId: string): Promise<void> {
+    const npcA = this.store.get(npcAId);
+    const npcB = this.store.get(npcBId);
+    if (!npcA || !npcB) {
+      this.clearLlmSlot();
+      return;
+    }
+
+    this.llmAbort = new AbortController();
+    const convType = this.classifyConversationType(npcA, npcB);
+    const maxTurns = this.rollMaxTurns(convType);
+    const minTurns = Math.max(this.MIN_TURNS, Math.floor(maxTurns * 0.6));
+
+    // Build context
+    const allNpcs = this.store.getAll().map(n => ({ id: n.id, name: n.name }));
+    const velocity = this.store.getRelationshipVelocity(npcAId, npcBId);
+    let trajectoryContext: string | undefined;
+    if (velocity.values.length >= 2) {
+      const descriptor = velocity.trend === "improving" ? "warming up"
+        : velocity.trend === "declining" ? "deteriorating" : "stable";
+      trajectoryContext = `Their relationship has been ${descriptor} over their last ${velocity.values.length} encounters.`;
+    }
+
+    const nearWp = this.worldSim?.getNearestWaypoint(npcAId);
+    const locationContext = nearWp?.description;
+    const timeOfDay = this.dayCycle?.getLabel();
+
+    const memoriesA = this.memory.retrieve(npcAId, { partnerId: npcBId, excludeAbout: npcBId });
+    const memoriesB = this.memory.retrieve(npcBId, { partnerId: npcAId, excludeAbout: npcAId });
+
+    const pendingPlansA = this.store.getPromisesFor(npcAId)
+      .filter(p => p.status === "active")
+      .map(p => {
+        const otherId = p.promiserId === npcAId ? p.promiseeId : p.promiserId;
+        return { withName: this.store.get(otherId)?.name ?? otherId, text: p.text };
+      });
+    const pendingPlansB = this.store.getPromisesFor(npcBId)
+      .filter(p => p.status === "active")
+      .map(p => {
+        const otherId = p.promiserId === npcBId ? p.promiseeId : p.promiserId;
+        return { withName: this.store.get(otherId)?.name ?? otherId, text: p.text };
+      });
+
+    const relAtoB = npcA.relationships[npcBId];
+    const relBtoA = npcB.relationships[npcAId];
+
+    const messages = buildBatchConversationMessages(
+      npcA, npcB, npcAId, minTurns, maxTurns,
+      {
+        allNpcs, trajectoryContext, locationContext,
+        memoriesA, memoriesB,
+        language: this.language, timeOfDay,
+        pendingPlansA, pendingPlansB,
+        conversationType: convType,
+        frozenRegardAtoB: relAtoB?.regard,
+        frozenAffectionAtoB: relAtoB?.affection,
+        frozenRegardBtoA: relBtoA?.regard,
+        frozenAffectionBtoA: relBtoA?.affection,
       }
-    }).catch(() => {
-      this.preparingPairKey = null;
-      this.preparingPairIds = null;
-      this.directorPhase = "idle";
+    );
+
+    // ── Phase 1: LLM generation ──
+    const llmStart = Date.now();
+    let turns: BatchTurnData[];
+    try {
+      const raw = await accumulateChat(messages, {
+        signal: this.llmAbort.signal,
+        numPredict: 4096,
+      });
+      turns = parseBatchLLMResponse(raw, [npcAId, npcBId]);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        this.clearLlmSlot();
+        return;
+      }
+      this.log(`[director] LLM/parse error: ${e}`);
+      this.clearLlmSlot();
+      return;
+    }
+
+    if (turns.length === 0) {
+      this.clearLlmSlot();
+      return;
+    }
+
+    const llmDurationMs = Date.now() - llmStart;
+    this.log(`[director] LLM done for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns, ${Math.round(llmDurationMs / 1000)}s)`);
+
+    // ── Free the LLM slot — director can now start generating the next conversation ──
+    this.llmAbort = null;
+    this.clearLlmSlot();
+
+    // ── Phase 2: TTS prefetch (runs independently, doesn't block next LLM) ──
+    this.ttsPairIds = [npcAId, npcBId];
+    this.ttsStartedAt = Date.now();
+
+    let audioBuffers: (ArrayBuffer | null)[] = [];
+    if (this.ttsService) {
+      const promises = turns.map(turn => {
+        const speaker = this.store.get(turn.speaker_id)!;
+        return this.ttsService!.prefetch(
+          turn.speaker_id,
+          turn.speech,
+          speaker.emotionalState,
+          this.language
+        );
+      });
+      audioBuffers = await Promise.all(promises);
+    }
+
+    const ttsDurationMs = Date.now() - (this.ttsStartedAt ?? Date.now());
+    this.ttsPairIds = null;
+    this.ttsStartedAt = null;
+
+    if (!this.running) return;
+
+    // ── Store as ready ──
+    this.preparedConversations.push({
+      npcAId, npcBId, turns, audioBuffers,
+      convType, preparedAt: Date.now(),
+      llmDurationMs, ttsDurationMs,
     });
+    this.log(`[director] Conversation ready for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns)`);
+  }
+
+  private clearLlmSlot(): void {
+    this.llmPairKey = null;
+    this.llmPairIds = null;
+    this.llmStartedAt = null;
   }
 
   /** Pick the most interesting NPC pair for the next conversation */
@@ -866,6 +993,11 @@ export class ConversationManager {
 
     // Skip NPCs currently in a conversation
     const busyIds = new Set(this.activeSession?.participantIds ?? []);
+    // Skip pairs that already have a prepared conversation or are being TTS'd
+    const preparedPairKeys = new Set([
+      ...this.preparedConversations.map(p => this.pairKey(p.npcAId, p.npcBId)),
+      ...(this.ttsPairIds ? [this.pairKey(this.ttsPairIds[0], this.ttsPairIds[1])] : []),
+    ]);
 
     const now = Date.now();
     const scored: DirectorScoredPair[] = [];
@@ -876,6 +1008,9 @@ export class ConversationManager {
         const b = allNpcs[j];
         if (busyIds.has(a.id) || busyIds.has(b.id)) continue;
         const pKey = this.pairKey(a.id, b.id);
+
+        // Skip if already prepared or being TTS'd
+        if (preparedPairKeys.has(pKey)) continue;
 
         // Skip if on cooldown
         const lastTime = this.cooldowns.get(pKey) ?? 0;
@@ -931,131 +1066,26 @@ export class ConversationManager {
     return scored.length > 0 ? [scored[0].npcAId, scored[0].npcBId] : null;
   }
 
-  /** Pre-generate a full conversation and TTS in the background */
-  private async prepareConversation(
-    npcAId: string,
-    npcBId: string
-  ): Promise<PreparedConversation | null> {
-    const npcA = this.store.get(npcAId);
-    const npcB = this.store.get(npcBId);
-    if (!npcA || !npcB) return null;
-
-    this.prepareAbort = new AbortController();
-    const convType = this.classifyConversationType(npcA, npcB);
-    const maxTurns = this.rollMaxTurns(convType);
-    const minTurns = Math.max(this.MIN_TURNS, Math.floor(maxTurns * 0.6));
-
-    // Build context
-    const allNpcs = this.store.getAll().map(n => ({ id: n.id, name: n.name }));
-    const velocity = this.store.getRelationshipVelocity(npcAId, npcBId);
-    let trajectoryContext: string | undefined;
-    if (velocity.values.length >= 2) {
-      const descriptor = velocity.trend === "improving" ? "warming up"
-        : velocity.trend === "declining" ? "deteriorating" : "stable";
-      trajectoryContext = `Their relationship has been ${descriptor} over their last ${velocity.values.length} encounters.`;
-    }
-
-    const nearWp = this.worldSim?.getNearestWaypoint(npcAId);
-    const locationContext = nearWp?.description;
-    const timeOfDay = this.dayCycle?.getLabel();
-
-    const memoriesA = this.memory.retrieve(npcAId, { partnerId: npcBId, excludeAbout: npcBId });
-    const memoriesB = this.memory.retrieve(npcBId, { partnerId: npcAId, excludeAbout: npcAId });
-
-    const pendingPlansA = this.store.getPromisesFor(npcAId)
-      .filter(p => p.status === "active")
-      .map(p => {
-        const otherId = p.promiserId === npcAId ? p.promiseeId : p.promiserId;
-        return { withName: this.store.get(otherId)?.name ?? otherId, text: p.text };
-      });
-    const pendingPlansB = this.store.getPromisesFor(npcBId)
-      .filter(p => p.status === "active")
-      .map(p => {
-        const otherId = p.promiserId === npcBId ? p.promiseeId : p.promiserId;
-        return { withName: this.store.get(otherId)?.name ?? otherId, text: p.text };
-      });
-
-    const relAtoB = npcA.relationships[npcBId];
-    const relBtoA = npcB.relationships[npcAId];
-
-    const messages = buildBatchConversationMessages(
-      npcA, npcB, npcAId, minTurns, maxTurns,
-      {
-        allNpcs, trajectoryContext, locationContext,
-        memoriesA, memoriesB,
-        language: this.language, timeOfDay,
-        pendingPlansA, pendingPlansB,
-        conversationType: convType,
-        frozenRegardAtoB: relAtoB?.regard,
-        frozenAffectionAtoB: relAtoB?.affection,
-        frozenRegardBtoA: relBtoA?.regard,
-        frozenAffectionBtoA: relBtoA?.affection,
-      }
-    );
-
-    // LLM call
-    let turns: BatchTurnData[];
-    try {
-      const raw = await accumulateChat(messages, {
-        signal: this.prepareAbort.signal,
-        numPredict: 4096,
-      });
-      turns = parseBatchLLMResponse(raw, [npcAId, npcBId]);
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") return null;
-      this.log(`[director] LLM/parse error: ${e}`);
-      return null;
-    }
-
-    if (turns.length === 0) return null;
-
-    this.llmFinishedAt = Date.now();
-    this.directorPhase = "tts_prefetching";
-
-    // Pre-fetch all TTS in parallel
-    let audioBuffers: (ArrayBuffer | null)[] = [];
-    if (this.ttsService) {
-      const promises = turns.map(turn => {
-        const speaker = this.store.get(turn.speaker_id)!;
-        return this.ttsService!.prefetch(
-          turn.speaker_id,
-          turn.speech,
-          speaker.emotionalState,
-          this.language
-        );
-      });
-      audioBuffers = await Promise.all(promises);
-    }
-
-    this.ttsFinishedAt = Date.now();
-    this.prepareAbort = null;
-
-    return {
-      npcAId, npcBId, turns, audioBuffers,
-      convType,
-      preparedAt: Date.now(),
-    };
-  }
-
   /** Check if there's a prepared conversation for this pair and consume it */
   private consumePrepared(npcAId: string, npcBId: string): PreparedConversation | null {
-    const p = this.preparedConversation;
-    if (!p) return null;
+    const idx = this.preparedConversations.findIndex(p => {
+      const matchesPair =
+        (p.npcAId === npcAId && p.npcBId === npcBId) ||
+        (p.npcAId === npcBId && p.npcBId === npcAId);
+      return matchesPair;
+    });
 
-    const matchesPair =
-      (p.npcAId === npcAId && p.npcBId === npcBId) ||
-      (p.npcAId === npcBId && p.npcBId === npcAId);
+    if (idx === -1) return null;
 
-    if (!matchesPair) return null;
+    const p = this.preparedConversations[idx];
     if (Date.now() - p.preparedAt > this.PREPARED_MAX_AGE_MS) {
-      this.preparedConversation = null;
+      this.preparedConversations.splice(idx, 1);
       this.preparedExpired++;
       return null;
     }
 
-    this.preparedConversation = null;
+    this.preparedConversations.splice(idx, 1);
     this.preparedConsumed++;
-    this.directorPhase = "idle";
     return p;
   }
 
