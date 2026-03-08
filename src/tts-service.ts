@@ -27,6 +27,8 @@ const VOICE_POOL = [
   "voice_13",
 ];
 
+export type TTSEngine = "chatterbox" | "kokoro";
+
 export interface TTSOptions {
   /** 0 = muted, 1 = full volume */
   volume: number;
@@ -34,6 +36,8 @@ export interface TTSOptions {
   speed: number;
   /** Whether TTS is enabled at all */
   enabled: boolean;
+  /** Which TTS engine to use (default: auto based on language) */
+  engine?: TTSEngine;
 }
 
 const DEFAULT_OPTIONS: TTSOptions = {
@@ -190,6 +194,7 @@ export class TTSService {
           speed: this.options.speed,
           emotions: emotions ?? undefined,
           language: language ?? undefined,
+          engine: this.options.engine ?? undefined,
         }),
         signal: AbortSignal.timeout(300000),
       });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { randomizeNpc } from "../npcs";
 import { NpcCreator } from "./NpcCreator";
 import type { NPC } from "../types";
@@ -29,12 +29,17 @@ const LANGUAGES = [
   { code: "Thai", label: "Thai" },
 ];
 
+type TTSEngine = "chatterbox" | "kokoro";
+
 interface SetupScreenProps {
   roster: NPC[];
   language: string;
+  ttsEngine: TTSEngine;
   onAddToRoster: (npc: NPC) => void;
   onRemoveFromRoster: (npcId: string) => void;
   onLanguageChange: (language: string) => void;
+  onTtsEngineChange: (engine: TTSEngine) => void;
+  onTestTts: (text: string, engine: TTSEngine) => void;
   onStartSimulation: () => void;
   onTestMap?: () => void;
 }
@@ -42,9 +47,12 @@ interface SetupScreenProps {
 export function SetupScreen({
   roster,
   language,
+  ttsEngine,
   onAddToRoster,
   onRemoveFromRoster,
   onLanguageChange,
+  onTtsEngineChange,
+  onTestTts,
   onStartSimulation,
   onTestMap,
 }: SetupScreenProps) {
@@ -60,6 +68,9 @@ export function SetupScreen({
     null
   );
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [testPhrase, setTestPhrase] = useState("");
+  const [testPlaying, setTestPlaying] = useState(false);
+  const testTimeout = useRef<number | null>(null);
 
   const rosterIds = new Set(roster.map((n) => n.id));
   const atCapacity = roster.length >= MAX_ROSTER;
@@ -213,6 +224,65 @@ export function SetupScreen({
           ))}
         </select>
       </div>
+
+      {(() => {
+        const lang = language.toLowerCase().trim();
+        const isEnglish = lang === "english" || lang === "british english";
+        return (
+          <div className="setup-tts-engine">
+            <span className="setup-tts-engine-label">TTS Engine</span>
+            <div className="setup-tts-engine-options">
+              <button
+                className={`tts-engine-btn ${ttsEngine === "chatterbox" ? "active" : ""} ${!isEnglish ? "disabled" : ""}`}
+                onClick={() => isEnglish && onTtsEngineChange("chatterbox")}
+                disabled={!isEnglish}
+              >
+                Chatterbox Turbo
+              </button>
+              <button
+                className={`tts-engine-btn ${ttsEngine === "kokoro" ? "active" : ""}`}
+                onClick={() => onTtsEngineChange("kokoro")}
+              >
+                Kokoro
+              </button>
+            </div>
+            {!isEnglish && (
+              <span className="tts-engine-hint">
+                Chatterbox Turbo only supports English
+              </span>
+            )}
+            <div className="tts-test-area">
+              <input
+                type="text"
+                className="tts-test-input"
+                placeholder="Type a phrase to test..."
+                value={testPhrase}
+                onChange={(e) => setTestPhrase(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && testPhrase.trim() && !testPlaying) {
+                    setTestPlaying(true);
+                    onTestTts(testPhrase.trim(), ttsEngine);
+                    if (testTimeout.current) clearTimeout(testTimeout.current);
+                    testTimeout.current = window.setTimeout(() => setTestPlaying(false), 5000);
+                  }
+                }}
+              />
+              <button
+                className="btn tts-test-btn"
+                disabled={!testPhrase.trim() || testPlaying}
+                onClick={() => {
+                  setTestPlaying(true);
+                  onTestTts(testPhrase.trim(), ttsEngine);
+                  if (testTimeout.current) clearTimeout(testTimeout.current);
+                  testTimeout.current = window.setTimeout(() => setTestPlaying(false), 5000);
+                }}
+              >
+                {testPlaying ? "Playing..." : "Test"}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="setup-start-area">
         <button

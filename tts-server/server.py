@@ -69,6 +69,15 @@ def is_english(language: str | None) -> bool:
     return lang in ("english", "british english")
 
 
+def use_chatterbox(language: str | None, engine: str | None) -> bool:
+    """Decide whether to use Chatterbox Turbo. Explicit engine choice wins."""
+    if engine == "chatterbox":
+        return True
+    if engine == "kokoro":
+        return False
+    return is_english(language)
+
+
 # ── Chatterbox Turbo (English, via proxy) ─────────
 
 def synthesize_chatterbox(text: str, voice_id: str) -> bytes:
@@ -208,6 +217,7 @@ def speak():
     speed = float(data.get("speed", 1.0))
     emotions = data.get("emotions")
     language = data.get("language")
+    engine = data.get("engine")  # "chatterbox" | "kokoro" | None (auto)
 
     if not text:
         return Response("No text provided", status=400)
@@ -215,7 +225,7 @@ def speak():
     emotion_speed = compute_emotion_speed(emotions)
     final_speed = speed * emotion_speed
 
-    if is_english(language):
+    if use_chatterbox(language, engine):
         # ── Chatterbox Turbo path (proxy to port 8788) ──
         cache_key = hashlib.sha256(
             f"cb:{voice}:{text}".encode()
@@ -293,6 +303,7 @@ def speak_stream():
     speed = float(data.get("speed", 1.0))
     emotions = data.get("emotions")
     language = data.get("language")
+    engine = data.get("engine")
 
     if not text:
         return Response("No text provided", status=400)
@@ -300,7 +311,7 @@ def speak_stream():
     emotion_speed = compute_emotion_speed(emotions)
     final_speed = speed * emotion_speed
 
-    if is_english(language):
+    if use_chatterbox(language, engine):
         def generate():
             try:
                 yield synthesize_chatterbox(text, voice)

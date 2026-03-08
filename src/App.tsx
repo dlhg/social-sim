@@ -58,6 +58,9 @@ function App() {
   const [language, setLanguage] = useState("English");
   const languageRef = useRef(language);
   languageRef.current = language;
+  const [ttsEngine, setTtsEngine] = useState<"chatterbox" | "kokoro">("chatterbox");
+  const ttsEngineRef = useRef(ttsEngine);
+  ttsEngineRef.current = ttsEngine;
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [dmToolsOpen, setDmToolsOpen] = useState(false);
   const [npcViewerOpen, setNpcViewerOpen] = useState(false);
@@ -402,14 +405,12 @@ function App() {
             }
             return [...prev, { npcId, text: speechText, type: "speech", startedAt: Date.now() }];
           });
-          // Stream TTS: Chatterbox Turbo (English) sends the full message at
-          // once for better expressiveness; Kokoro (non-English) streams
-          // sentence-by-sentence for lower latency.
+          // Stream TTS: Chatterbox Turbo sends the full message at once for
+          // better expressiveness; Kokoro streams sentence-by-sentence for
+          // lower latency.
           const ttsEmotions = storeRef.current.get(npcId)?.emotionalState;
-          const lang = (languageRef.current ?? "english").toLowerCase().trim();
-          const isEnglish = lang === "english" || lang === "british english";
 
-          if (isEnglish) {
+          if (ttsEngineRef.current === "chatterbox") {
             // Chatterbox path: wait for complete text, send as one chunk.
             // onTurnComplete will handle dispatching the full message.
             if (complete && speechText.trim()) {
@@ -777,9 +778,29 @@ function App() {
         <SetupScreen
           roster={roster}
           language={language}
+          ttsEngine={ttsEngine}
           onAddToRoster={handleAddToRoster}
           onRemoveFromRoster={handleRemoveFromRoster}
-          onLanguageChange={setLanguage}
+          onLanguageChange={(lang) => {
+            setLanguage(lang);
+            const l = lang.toLowerCase().trim();
+            if (l !== "english" && l !== "british english") {
+              setTtsEngine("kokoro");
+              ttsRef.current.setOptions({ engine: "kokoro" });
+            }
+          }}
+          onTtsEngineChange={(engine) => {
+            setTtsEngine(engine);
+            ttsRef.current.setOptions({ engine });
+          }}
+          onTestTts={(text, engine) => {
+            const svc = ttsRef.current;
+            svc.setOptions({ engine });
+            svc.warmUp();
+            svc.checkServer().then((ok) => {
+              if (ok) svc.speak("__test__", text, undefined, language);
+            });
+          }}
           onStartSimulation={handleStartSimulation}
           onTestMap={() => setStatus("map-test")}
         />
