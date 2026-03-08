@@ -989,11 +989,13 @@ export class ConversationManager {
       }
       this.log(`[director] LLM/parse error: ${e}`);
       this.clearLlmSlot();
+      this.kickNextLlm();
       return;
     }
 
     if (turns.length === 0) {
       this.clearLlmSlot();
+      this.kickNextLlm();
       return;
     }
 
@@ -1004,6 +1006,7 @@ export class ConversationManager {
     // ── Free the LLM slot — director can now start generating the next conversation ──
     this.llmAbort = null;
     this.clearLlmSlot();
+    this.kickNextLlm();
 
     // ── Phase 2: TTS prefetch (runs independently, doesn't block next LLM) ──
     this.ttsPairIds = [npcAId, npcBId];
@@ -1047,6 +1050,20 @@ export class ConversationManager {
     this.llmPairKey = null;
     this.llmPairIds = null;
     this.llmStartedAt = null;
+  }
+
+  /** Immediately start the next LLM generation without waiting for the director tick.
+   *  Critical for fast providers (Groq ~2-3s) where the 5s tick interval would leave the pipeline idle. */
+  private kickNextLlm(): void {
+    if (!this.running || this.paused || this.llmPairKey) return;
+    const pair = this.pickNextPair();
+    if (!pair) return;
+    const [npcAId, npcBId] = pair;
+    this.llmPairKey = this.pairKey(npcAId, npcBId);
+    this.llmPairIds = [npcAId, npcBId];
+    this.llmStartedAt = Date.now();
+    this.log(`[director] Pre-generating conversation for ${this.npcName(npcAId)} + ${this.npcName(npcBId)}`);
+    this.runPipeline(npcAId, npcBId);
   }
 
   /** Pick the most interesting NPC pair for the next conversation */
