@@ -2101,6 +2101,130 @@
   color: var(--text-faint);
 }
 
+/* ── Custom Premade Cards ─────────────────────── */
+
+.premade-card-custom {
+  position: relative;
+  cursor: pointer;
+}
+
+.premade-card-custom.premade-card-disabled {
+  cursor: default;
+}
+
+.premade-card-manage {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--duration-fast);
+  z-index: 1;
+}
+
+.premade-card-custom:hover .premade-card-manage {
+  opacity: 1;
+}
+
+.premade-manage-btn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--duration-fast), background var(--duration-fast);
+  padding: 0;
+  font-family: var(--font-ui);
+}
+
+.premade-manage-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.premade-manage-delete:hover {
+  color: var(--accent-danger);
+  background: var(--accent-danger-dim);
+}
+
+/* ── Roster Card Save Button ──────────────────── */
+
+.roster-card-save {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--duration-fast), color var(--duration-fast), background var(--duration-fast);
+  padding: 0;
+}
+
+.roster-card:hover .roster-card-save {
+  opacity: 1;
+}
+
+.roster-card-save:hover {
+  color: var(--accent-caution);
+  background: rgba(255, 213, 79, 0.12);
+}
+
+.roster-card-save.saved {
+  opacity: 1;
+  color: var(--accent-caution);
+}
+
+/* ── Delete Confirmation Modal ────────────────── */
+
+.confirm-delete-modal {
+  max-width: 340px;
+  text-align: center;
+}
+
+.confirm-delete-modal h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.confirm-delete-modal p {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.confirm-delete-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.btn-danger {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}
+
+.btn-danger:hover {
+  background: var(--accent-danger-dim);
+}
+
 /* ── Particle Canvas ───────────────────────────── */
 
 .particle-canvas {

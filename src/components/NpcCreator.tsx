@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { createNpc, randomizeFields, AVATAR_OPTIONS, COLOR_SWATCHES, RANDOM_ITEMS } from "../npcs";
-import type { NPC, InventoryItem, ItemCategory } from "../types";
+import type { NPC, InventoryItem, ItemCategory, EmotionalState } from "../types";
 import { ITEM_LIFETIME_BY_CATEGORY } from "../types";
 
 interface NpcCreatorProps {
   onClose: () => void;
   onCreateNpc: (npc: NPC) => void;
   existingIds: string[];
+  initialNpc?: NPC;
+  title?: string;
+  submitLabel?: string;
 }
 
 const CATEGORY_ORDER: ItemCategory[] = ["food", "herb", "fish", "trinket", "craft", "book"];
@@ -24,18 +27,37 @@ export function NpcCreator({
   onClose,
   onCreateNpc,
   existingIds,
+  initialNpc,
+  title,
+  submitLabel,
 }: NpcCreatorProps) {
-  const [name, setName] = useState("");
-  const [avatar, setAvatar] = useState("😀");
-  const [color, setColor] = useState("#4dd0e1");
-  const [traits, setTraits] = useState("");
-  const [desires, setDesires] = useState("");
-  const [secrets, setSecrets] = useState("");
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [name, setName] = useState(initialNpc?.name ?? "");
+  const [avatar, setAvatar] = useState(initialNpc?.avatar ?? "😀");
+  const [color, setColor] = useState(initialNpc?.color ?? "#4dd0e1");
+  const [traits, setTraits] = useState(
+    initialNpc?.personalityTraits.join(", ") ?? ""
+  );
+  const [desires, setDesires] = useState(
+    initialNpc?.coreDesires.join(", ") ?? ""
+  );
+  const [secrets, setSecrets] = useState(
+    initialNpc?.secrets.join("\n") ?? ""
+  );
+  const [inventory, setInventory] = useState<InventoryItem[]>(
+    initialNpc?.inventory ?? []
+  );
   const [error, setError] = useState("");
 
+  // Preserve emotional state from the initial NPC when editing
+  const [emotionalStateOverride] = useState<Partial<EmotionalState> | undefined>(
+    initialNpc?.emotionalState
+  );
+
   const derivedId = name.trim().toLowerCase().replace(/\s+/g, "-");
-  const isDuplicate = derivedId !== "" && existingIds.includes(derivedId);
+  const isDuplicate =
+    derivedId !== "" &&
+    derivedId !== initialNpc?.id &&
+    existingIds.includes(derivedId);
 
   function handleRandomize() {
     const r = randomizeFields(existingIds);
@@ -111,6 +133,7 @@ export function NpcCreator({
       coreDesires: parsedDesires,
       secrets: parsedSecrets,
       inventory,
+      emotionalState: emotionalStateOverride,
     });
 
     onCreateNpc(npc);
@@ -129,7 +152,7 @@ export function NpcCreator({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header-row">
-          <h3>Create NPC</h3>
+          <h3>{title ?? "Create NPC"}</h3>
           <button className="btn btn-randomize-fields" onClick={handleRandomize}>
             Randomize
           </button>
@@ -257,7 +280,7 @@ export function NpcCreator({
         {error && <div className="form-error">{error}</div>}
 
         <button className="btn-spawn" onClick={handleSubmit}>
-          Spawn
+          {submitLabel ?? "Spawn"}
         </button>
       </div>
     </div>

@@ -105,10 +105,15 @@ interface CameraState {
 }
 
 const CAMERA_LERP_SPEED = 0.03;  // per frame (~60fps)
-const FOCUS_ZOOM = 2.0;
+const DEFAULT_ZOOM = 1.5;
+const FOCUS_ZOOM = 3.5;
+const FOCUS_ZOOM_MIN = 2.5;
 const DIM_OPACITY = 0.35;
 
 const FREE_CAM_SPEED = 0.5; // grid tiles per frame
+const FREE_CAM_ZOOM_STEP = 0.15;
+const FREE_CAM_ZOOM_MIN = 0.5;
+const FREE_CAM_ZOOM_MAX = 5.0;
 
 export function WorldCanvas({
   getSnapshot,
@@ -158,13 +163,14 @@ export function WorldCanvas({
   const cameraRef = useRef<CameraState>({
     cx: tilemap.mapWidth / 2,
     cy: tilemap.mapHeight / 2,
-    zoom: 1,
+    zoom: DEFAULT_ZOOM,
     targetCx: tilemap.mapWidth / 2,
     targetCy: tilemap.mapHeight / 2,
-    targetZoom: 1,
+    targetZoom: DEFAULT_ZOOM,
     dimAmount: 0,
     targetDimAmount: 0,
   });
+  const freeCamZoomRef = useRef(DEFAULT_ZOOM);
 
   useEffect(() => {
     spritesRef.current.load(); // fire-and-forget; draw loop checks .ready
@@ -189,18 +195,32 @@ export function WorldCanvas({
     });
     observer.observe(container);
 
-    // Arrow key listeners for free cam
+    // Arrow key + zoom listeners for free cam
     const handleKeyDown = (e: KeyboardEvent) => {
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
         keysDown.current.add(e.key);
       }
+      if (cameraModeRef.current === "free") {
+        if (e.key === "=" || e.key === "+") {
+          freeCamZoomRef.current = Math.min(FREE_CAM_ZOOM_MAX, freeCamZoomRef.current + FREE_CAM_ZOOM_STEP);
+        } else if (e.key === "-") {
+          freeCamZoomRef.current = Math.max(FREE_CAM_ZOOM_MIN, freeCamZoomRef.current - FREE_CAM_ZOOM_STEP);
+        }
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       keysDown.current.delete(e.key);
     };
+    const handleWheel = (e: WheelEvent) => {
+      if (cameraModeRef.current !== "free") return;
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -FREE_CAM_ZOOM_STEP : FREE_CAM_ZOOM_STEP;
+      freeCamZoomRef.current = Math.max(FREE_CAM_ZOOM_MIN, Math.min(FREE_CAM_ZOOM_MAX, freeCamZoomRef.current + delta));
+    };
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
 
     function frame() {
       if (width === 0 || height === 0) {
@@ -216,13 +236,13 @@ export function WorldCanvas({
 
       // ── Update camera target ──────────────────
       if (cameraModeRef.current === "free") {
-        // Free cam: arrow keys move the camera directly
+        // Free cam: arrow keys move, +/-/scroll to zoom
         const keys = keysDown.current;
         if (keys.has("ArrowUp")) cam.targetCy -= FREE_CAM_SPEED;
         if (keys.has("ArrowDown")) cam.targetCy += FREE_CAM_SPEED;
         if (keys.has("ArrowLeft")) cam.targetCx -= FREE_CAM_SPEED;
         if (keys.has("ArrowRight")) cam.targetCx += FREE_CAM_SPEED;
-        cam.targetZoom = 1;
+        cam.targetZoom = freeCamZoomRef.current;
         cam.targetDimAmount = 0;
       } else if (pair) {
         const aSpatial = snap.npcs.find((n) => n.npcId === pair[0]);
@@ -236,14 +256,14 @@ export function WorldCanvas({
           cam.targetCy = (ay + by) / 2 + 0.5;
           // Zoom more when NPCs are close, less when far apart
           const dist = Math.hypot(bx - ax, by - ay);
-          const zoomForDist = Math.max(1.5, FOCUS_ZOOM - dist * 0.03);
+          const zoomForDist = Math.max(FOCUS_ZOOM_MIN, FOCUS_ZOOM - dist * 0.05);
           cam.targetZoom = zoomForDist;
           cam.targetDimAmount = 1;
         }
       } else {
         cam.targetCx = tilemapRef.current.mapWidth / 2;
         cam.targetCy = tilemapRef.current.mapHeight / 2;
-        cam.targetZoom = 1;
+        cam.targetZoom = DEFAULT_ZOOM;
         cam.targetDimAmount = 0;
       }
 
@@ -567,6 +587,7 @@ export function WorldCanvas({
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      canvas.removeEventListener("wheel", handleWheel);
     };
   }, []);
 

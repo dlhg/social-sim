@@ -1,7 +1,16 @@
 import { useState } from "react";
-import { initialNpcs, randomizeNpc } from "../npcs";
+import { randomizeNpc } from "../npcs";
 import { NpcCreator } from "./NpcCreator";
 import type { NPC } from "../types";
+import {
+  ensurePremadeSeeded,
+  loadCustomPremades,
+  saveCustomPremade,
+  deleteCustomPremade,
+  premadeTemplateToNpc,
+  npcToPremadeTemplate,
+} from "../premade-storage";
+import type { PremadeTemplate } from "../premade-storage";
 
 const MAX_ROSTER = 13;
 
@@ -41,9 +50,56 @@ export function SetupScreen({
 }: SetupScreenProps) {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [creatorOpen, setCreatorOpen] = useState(false);
+  const [customPremades, setCustomPremades] = useState<PremadeTemplate[]>(
+    () => {
+      ensurePremadeSeeded();
+      return loadCustomPremades();
+    }
+  );
+  const [editingPremade, setEditingPremade] = useState<PremadeTemplate | null>(
+    null
+  );
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const rosterIds = new Set(roster.map((n) => n.id));
   const atCapacity = roster.length >= MAX_ROSTER;
+  const savedPremadeIds = new Set(customPremades.map((t) => t.id));
+
+  function refreshPremades() {
+    setCustomPremades(loadCustomPremades());
+  }
+
+  function handleSaveAsPremade(npc: NPC) {
+    saveCustomPremade(npcToPremadeTemplate(npc));
+    refreshPremades();
+  }
+
+  function handleConfirmDelete() {
+    if (confirmDeleteId) {
+      deleteCustomPremade(confirmDeleteId);
+      refreshPremades();
+      setConfirmDeleteId(null);
+    }
+  }
+
+  function handleEditSubmit(npc: NPC) {
+    if (editingPremade && editingPremade.id !== npc.id) {
+      deleteCustomPremade(editingPremade.id);
+    }
+    saveCustomPremade(npcToPremadeTemplate(npc));
+    refreshPremades();
+    setEditingPremade(null);
+  }
+
+  const deletingPremade = confirmDeleteId
+    ? customPremades.find((t) => t.id === confirmDeleteId)
+    : null;
+
+  // Collect all IDs for duplicate checking when editing
+  const allPremadeIds = [
+    ...customPremades.map((t) => t.id),
+    ...roster.map((n) => n.id),
+  ];
 
   return (
     <div className="setup-screen">
@@ -82,15 +138,39 @@ export function SetupScreen({
       {galleryOpen && (
         <div className="premade-gallery">
           <div className="premade-grid">
-            {initialNpcs.map((npc) => {
+            {customPremades.map((template) => {
+              const npc = premadeTemplateToNpc(template);
               const added = rosterIds.has(npc.id);
               return (
-                <button
-                  key={npc.id}
-                  className={`premade-card ${added ? "premade-card-added" : ""}`}
-                  disabled={added || atCapacity}
-                  onClick={() => onAddToRoster(npc)}
+                <div
+                  key={`custom-${template.id}`}
+                  className={`premade-card premade-card-custom ${added ? "premade-card-added" : ""} ${(added || atCapacity) ? "premade-card-disabled" : ""}`}
+                  onClick={() => {
+                    if (!added && !atCapacity) onAddToRoster(npc);
+                  }}
                 >
+                  <div className="premade-card-manage">
+                    <button
+                      className="premade-manage-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingPremade(template);
+                      }}
+                      title="Edit"
+                    >
+                      ✎
+                    </button>
+                    <button
+                      className="premade-manage-btn premade-manage-delete"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDeleteId(template.id);
+                      }}
+                      title="Delete"
+                    >
+                      ×
+                    </button>
+                  </div>
                   <span className="premade-card-avatar">{npc.avatar}</span>
                   <span
                     className="premade-card-name"
@@ -109,7 +189,7 @@ export function SetupScreen({
                     </span>
                   )}
                   {added && <span className="premade-card-badge">Added</span>}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -169,36 +249,46 @@ export function SetupScreen({
           </div>
         ) : (
           <div className="roster-grid">
-            {roster.map((npc) => (
-              <div key={npc.id} className="roster-card">
-                <button
-                  className="roster-card-remove"
-                  onClick={() => onRemoveFromRoster(npc.id)}
-                  title="Remove"
-                >
-                  ×
-                </button>
-                <div className="roster-card-avatar">{npc.avatar}</div>
-                <div
-                  className="roster-card-name"
-                  style={{ color: npc.color }}
-                >
-                  {npc.name}
-                </div>
-                <div className="roster-card-traits">
-                  {npc.personalityTraits.slice(0, 2).map((t) => (
-                    <span key={t} className="trait-chip">
-                      {t}
-                    </span>
-                  ))}
-                </div>
-                {npc.coreDesires[0] && (
-                  <div className="roster-card-desire">
-                    {npc.coreDesires[0]}
+            {roster.map((npc) => {
+              const isSaved = savedPremadeIds.has(npc.id);
+              return (
+                <div key={npc.id} className="roster-card">
+                  <button
+                    className="roster-card-remove"
+                    onClick={() => onRemoveFromRoster(npc.id)}
+                    title="Remove"
+                  >
+                    ×
+                  </button>
+                  <button
+                    className={`roster-card-save ${isSaved ? "saved" : ""}`}
+                    onClick={() => handleSaveAsPremade(npc)}
+                    title={isSaved ? "Saved as premade" : "Save as premade"}
+                  >
+                    {isSaved ? "★" : "☆"}
+                  </button>
+                  <div className="roster-card-avatar">{npc.avatar}</div>
+                  <div
+                    className="roster-card-name"
+                    style={{ color: npc.color }}
+                  >
+                    {npc.name}
                   </div>
-                )}
-              </div>
-            ))}
+                  <div className="roster-card-traits">
+                    {npc.personalityTraits.slice(0, 2).map((t) => (
+                      <span key={t} className="trait-chip">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                  {npc.coreDesires[0] && (
+                    <div className="roster-card-desire">
+                      {npc.coreDesires[0]}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -212,6 +302,46 @@ export function SetupScreen({
           }}
           existingIds={roster.map((n) => n.id)}
         />
+      )}
+
+      {editingPremade && (
+        <NpcCreator
+          onClose={() => setEditingPremade(null)}
+          onCreateNpc={handleEditSubmit}
+          existingIds={allPremadeIds}
+          initialNpc={premadeTemplateToNpc(editingPremade)}
+          title="Edit Premade"
+          submitLabel="Save"
+        />
+      )}
+
+      {confirmDeleteId && deletingPremade && (
+        <div className="modal-overlay" onClick={() => setConfirmDeleteId(null)}>
+          <div
+            className="modal-content confirm-delete-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Delete Premade</h3>
+            <p>
+              Are you sure you want to delete <strong>{deletingPremade.name}</strong>?
+              This cannot be undone.
+            </p>
+            <div className="confirm-delete-actions">
+              <button
+                className="btn"
+                onClick={() => setConfirmDeleteId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={handleConfirmDelete}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
