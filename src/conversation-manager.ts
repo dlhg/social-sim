@@ -321,10 +321,17 @@ export class ConversationManager {
     // Check for a prepared conversation for this pair
     const prepared = this.consumePrepared(npcAId, npcBId);
     if (prepared) {
-      this.log(`[director] Playing prepared conversation for ${npcAId} + ${npcBId}`);
+      this.log(`[director] Playing prepared conversation for ${this.npcName(npcAId)} + ${this.npcName(npcBId)}`);
       this.playPreparedConversation(prepared);
       return true;
     }
+
+    // If either NPC has a director seek override targeting someone else,
+    // don't let organic proximity hijack them — the director has plans.
+    const npcA = this.store.get(npcAId);
+    const npcB = this.store.get(npcBId);
+    if (npcA?.behavioralOverride?.mode === "seek" && npcA.behavioralOverride.targetNpcId !== npcBId) return false;
+    if (npcB?.behavioralOverride?.mode === "seek" && npcB.behavioralOverride.targetNpcId !== npcAId) return false;
 
     if (this._batchMode) {
       this.runBatchConversation(npcAId, npcBId);
