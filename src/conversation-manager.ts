@@ -51,6 +51,16 @@ const TURN_LIMITS: Record<ConversationType, [number, number]> = {
   gossip_session: [5, 10],
 };
 
+/** Pre-generated conversation ready for instant playback */
+interface PreparedConversation {
+  npcAId: string;
+  npcBId: string;
+  turns: BatchTurnData[];
+  audioBuffers: (ArrayBuffer | null)[];
+  convType: ConversationType;
+  preparedAt: number;
+}
+
 export class ConversationManager {
   private running = false;
   private paused = false;
@@ -77,6 +87,14 @@ export class ConversationManager {
   private language = "English";
   private _batchMode = false;
   private ttsService: TTSService | null = null;
+
+  // ── Director state (pre-generates conversations in background) ──
+  private directorTimer: ReturnType<typeof setInterval> | null = null;
+  private preparedConversation: PreparedConversation | null = null;
+  private preparingPairKey: string | null = null; // currently generating for this pair
+  private prepareAbort: AbortController | null = null;
+  private readonly DIRECTOR_INTERVAL_MS = 5_000;
+  private readonly PREPARED_MAX_AGE_MS = 120_000; // discard after 2 min
 
   constructor(
     private store: NpcStore,
@@ -114,6 +132,7 @@ export class ConversationManager {
     this.running = true;
     this.paused = false;
     this.log("Conversation engine started");
+    this.startDirector();
   }
 
   pause(): void {
@@ -129,6 +148,7 @@ export class ConversationManager {
   stop(): void {
     this.running = false;
     this.paused = false;
+    this.stopDirector();
     if (this.abortController) {
       this.abortController.abort();
       this.abortController = null;
@@ -164,6 +184,14 @@ export class ConversationManager {
     const pKey = this.pairKey(npcAId, npcBId);
     const lastTime = this.cooldowns.get(pKey) ?? 0;
     if (now - lastTime < this.COOLDOWN_MS) return false;
+
+    // Check for a prepared conversation for this pair
+    const prepared = this.consumePrepared(npcAId, npcBId);
+    if (prepared) {
+      this.log(`[director] Playing prepared conversation for ${npcAId} + ${npcBId}`);
+      this.playPreparedConversation(prepared);
+      return true;
+    }
 
     if (this._batchMode) {
       this.runBatchConversation(npcAId, npcBId);
@@ -384,8 +412,12 @@ export class ConversationManager {
 
     this.activeSession = session;
     this.conversationEavesdroppers.clear();
-    this.callbacks.onConversationStart(session);
-    this.log(`[batch] Conversation started between ${npcA.name} and ${npcB.name} [${convType}, ${minTurns}-${maxTurns} turns]`);
+    // NOTE: We intentionally delay onConversationStart (camera zoom, UI)
+    // until after LLM + TTS are ready, so the user doesn't see a long wait.
+    // Freeze NPCs silently so they stay near each other during generation.
+    this.worldSim?.freezeNpc(npcAId);
+    this.worldSim?.freezeNpc(npcBId);
+    this.log(`[batch] Generating conversation for ${npcA.name} and ${npcB.name} [${convType}, ${minTurns}-${maxTurns} turns]`);
 
     // ── 1. Build batch prompt ──
     const allNpcs = this.store.getAll().map(n => ({ id: n.id, name: n.name }));
@@ -435,14 +467,7 @@ export class ConversationManager {
       }
     );
 
-    // ── 2. Single LLM call ──
-    this.callbacks.onActivity({
-      timestamp: new Date(),
-      text: `${npcA.name} and ${npcB.name} are talking...`,
-      activityType: "thought",
-      npcId: npcAId,
-    });
-
+    // ── 2. Single LLM call (silent — no UI until ready) ──
     let turns: BatchTurnData[];
     try {
       const raw = await accumulateChat(messages, {
@@ -487,9 +512,17 @@ export class ConversationManager {
       audioBuffers.push(...results);
     }
 
-    this.log("[batch] TTS ready, starting playback...");
+    // ── 4. NOW show the conversation to the user ──
+    this.callbacks.onConversationStart(session);
+    this.callbacks.onActivity({
+      timestamp: new Date(),
+      text: `${npcA.name} and ${npcB.name} are talking...`,
+      activityType: "thought",
+      npcId: npcAId,
+    });
+    this.log(`[batch] Conversation started between ${npcA.name} and ${npcB.name} (${turns.length} turns, ready)`);
 
-    // ── 4. Playback loop ──
+    // ── 5. Playback loop ──
     for (let i = 0; i < turns.length; i++) {
       if (!this.running || session.status !== "active") break;
 
@@ -614,8 +647,411 @@ export class ConversationManager {
     this.activeSession = null;
     this.frozenRelationships.clear();
     this.cumulativeRelDeltas.clear();
+    // Unfreeze NPCs that may have been silently frozen during generation
+    this.worldSim?.unfreezeNpc(npcAId);
+    this.worldSim?.unfreezeNpc(npcBId);
     this.callbacks.onSpeakerChange(null);
     this.callbacks.onConversationEnd(session);
+  }
+
+  // ── Director: proactive conversation scheduling ──
+
+  private startDirector(): void {
+    if (!this._batchMode) return;
+    this.stopDirector();
+    this.directorTimer = setInterval(() => this.directorTick(), this.DIRECTOR_INTERVAL_MS);
+    this.log("[director] Started");
+  }
+
+  private stopDirector(): void {
+    if (this.directorTimer) {
+      clearInterval(this.directorTimer);
+      this.directorTimer = null;
+    }
+    if (this.prepareAbort) {
+      this.prepareAbort.abort();
+      this.prepareAbort = null;
+    }
+    this.preparedConversation = null;
+    this.preparingPairKey = null;
+  }
+
+  private directorTick(): void {
+    if (!this.running || this.paused) return;
+    if (this.activeSession) return; // conversation in progress
+    if (this.preparingPairKey) return; // already generating
+    if (this.preparedConversation) {
+      // Check if prepared conversation is stale
+      if (Date.now() - this.preparedConversation.preparedAt > this.PREPARED_MAX_AGE_MS) {
+        this.log("[director] Discarding stale prepared conversation");
+        this.preparedConversation = null;
+      } else {
+        return; // already have one ready
+      }
+    }
+
+    // Pick the most interesting pair
+    const pair = this.pickNextPair();
+    if (!pair) return;
+
+    const [npcAId, npcBId] = pair;
+    const pKey = this.pairKey(npcAId, npcBId);
+    this.preparingPairKey = pKey;
+
+    this.log(`[director] Pre-generating conversation for ${this.npcName(npcAId)} + ${this.npcName(npcBId)}`);
+
+    // Set seek overrides so they walk toward each other
+    this.store.setBehavioralOverride(npcAId, {
+      mode: "seek",
+      targetNpcId: npcBId,
+      expiresAt: Date.now() + 60_000,
+      reason: "Director: approaching for conversation",
+    });
+    this.store.setBehavioralOverride(npcBId, {
+      mode: "seek",
+      targetNpcId: npcAId,
+      expiresAt: Date.now() + 60_000,
+      reason: "Director: approaching for conversation",
+    });
+
+    // Generate in background
+    this.prepareConversation(npcAId, npcBId).then((prepared) => {
+      this.preparingPairKey = null;
+      if (prepared && this.running) {
+        this.preparedConversation = prepared;
+        this.log(`[director] Conversation ready for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${prepared.turns.length} turns)`);
+      }
+    }).catch(() => {
+      this.preparingPairKey = null;
+    });
+  }
+
+  /** Pick the most interesting NPC pair for the next conversation */
+  private pickNextPair(): [string, string] | null {
+    const allNpcs = this.store.getAll();
+    if (allNpcs.length < 2) return null;
+
+    const now = Date.now();
+    let bestPair: [string, string] | null = null;
+    let bestScore = -Infinity;
+
+    for (let i = 0; i < allNpcs.length; i++) {
+      for (let j = i + 1; j < allNpcs.length; j++) {
+        const a = allNpcs[i];
+        const b = allNpcs[j];
+        const pKey = this.pairKey(a.id, b.id);
+
+        // Skip if on cooldown
+        const lastTime = this.cooldowns.get(pKey) ?? 0;
+        if (now - lastTime < this.COOLDOWN_MS) continue;
+
+        // Skip if either is frozen or has an active override
+        if (a.behavioralOverride || b.behavioralOverride) continue;
+
+        let score = 0;
+
+        // Relationship velocity — fast-changing relationships are interesting
+        const velocity = this.store.getRelationshipVelocity(a.id, b.id);
+        if (velocity.trend === "improving" || velocity.trend === "declining") {
+          score += 3;
+        }
+
+        // Pending promises between them
+        const promises = this.store.getPromisesFor(a.id)
+          .filter(p => p.status === "active" &&
+            (p.promiseeId === b.id || p.promiserId === b.id));
+        score += promises.length * 2;
+
+        // Time since last conversation — longer gap = more interesting
+        const timeSince = now - lastTime;
+        score += Math.min(5, timeSince / 60_000); // up to 5 points for 5+ min gap
+
+        // Emotional intensity — emotional NPCs make for better conversations
+        const emoA = a.emotionalState;
+        const emoB = b.emotionalState;
+        const intensityA = Math.max(emoA.anger, emoA.joy, emoA.fear, emoA.sadness);
+        const intensityB = Math.max(emoB.anger, emoB.joy, emoB.fear, emoB.sadness);
+        score += (intensityA + intensityB) * 2;
+
+        // Relationship extremes are interesting
+        const regard = a.relationships[b.id]?.regard ?? 0;
+        score += Math.abs(regard) * 2;
+
+        // Small random factor to prevent always picking the same pair
+        score += Math.random() * 1.5;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestPair = [a.id, b.id];
+        }
+      }
+    }
+
+    return bestPair;
+  }
+
+  /** Pre-generate a full conversation and TTS in the background */
+  private async prepareConversation(
+    npcAId: string,
+    npcBId: string
+  ): Promise<PreparedConversation | null> {
+    const npcA = this.store.get(npcAId);
+    const npcB = this.store.get(npcBId);
+    if (!npcA || !npcB) return null;
+
+    this.prepareAbort = new AbortController();
+    const convType = this.classifyConversationType(npcA, npcB);
+    const maxTurns = this.rollMaxTurns(convType);
+    const minTurns = Math.max(this.MIN_TURNS, Math.floor(maxTurns * 0.6));
+
+    // Build context
+    const allNpcs = this.store.getAll().map(n => ({ id: n.id, name: n.name }));
+    const velocity = this.store.getRelationshipVelocity(npcAId, npcBId);
+    let trajectoryContext: string | undefined;
+    if (velocity.values.length >= 2) {
+      const descriptor = velocity.trend === "improving" ? "warming up"
+        : velocity.trend === "declining" ? "deteriorating" : "stable";
+      trajectoryContext = `Their relationship has been ${descriptor} over their last ${velocity.values.length} encounters.`;
+    }
+
+    const nearWp = this.worldSim?.getNearestWaypoint(npcAId);
+    const locationContext = nearWp?.description;
+    const timeOfDay = this.dayCycle?.getLabel();
+
+    const memoriesA = this.memory.retrieve(npcAId, { partnerId: npcBId, excludeAbout: npcBId });
+    const memoriesB = this.memory.retrieve(npcBId, { partnerId: npcAId, excludeAbout: npcAId });
+
+    const pendingPlansA = this.store.getPromisesFor(npcAId)
+      .filter(p => p.status === "active")
+      .map(p => {
+        const otherId = p.promiserId === npcAId ? p.promiseeId : p.promiserId;
+        return { withName: this.store.get(otherId)?.name ?? otherId, text: p.text };
+      });
+    const pendingPlansB = this.store.getPromisesFor(npcBId)
+      .filter(p => p.status === "active")
+      .map(p => {
+        const otherId = p.promiserId === npcBId ? p.promiseeId : p.promiserId;
+        return { withName: this.store.get(otherId)?.name ?? otherId, text: p.text };
+      });
+
+    const relAtoB = npcA.relationships[npcBId];
+    const relBtoA = npcB.relationships[npcAId];
+
+    const messages = buildBatchConversationMessages(
+      npcA, npcB, npcAId, minTurns, maxTurns,
+      {
+        allNpcs, trajectoryContext, locationContext,
+        memoriesA, memoriesB,
+        language: this.language, timeOfDay,
+        pendingPlansA, pendingPlansB,
+        conversationType: convType,
+        frozenRegardAtoB: relAtoB?.regard,
+        frozenAffectionAtoB: relAtoB?.affection,
+        frozenRegardBtoA: relBtoA?.regard,
+        frozenAffectionBtoA: relBtoA?.affection,
+      }
+    );
+
+    // LLM call
+    let turns: BatchTurnData[];
+    try {
+      const raw = await accumulateChat(messages, {
+        signal: this.prepareAbort.signal,
+        numPredict: 4096,
+      });
+      turns = parseBatchLLMResponse(raw, [npcAId, npcBId]);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return null;
+      this.log(`[director] LLM/parse error: ${e}`);
+      return null;
+    }
+
+    if (turns.length === 0) return null;
+
+    // Pre-fetch all TTS in parallel
+    let audioBuffers: (ArrayBuffer | null)[] = [];
+    if (this.ttsService) {
+      const promises = turns.map(turn => {
+        const speaker = this.store.get(turn.speaker_id)!;
+        return this.ttsService!.prefetch(
+          turn.speaker_id,
+          turn.speech,
+          speaker.emotionalState,
+          this.language
+        );
+      });
+      audioBuffers = await Promise.all(promises);
+    }
+
+    this.prepareAbort = null;
+
+    return {
+      npcAId, npcBId, turns, audioBuffers,
+      convType,
+      preparedAt: Date.now(),
+    };
+  }
+
+  /** Check if there's a prepared conversation for this pair and consume it */
+  private consumePrepared(npcAId: string, npcBId: string): PreparedConversation | null {
+    const p = this.preparedConversation;
+    if (!p) return null;
+
+    const matchesPair =
+      (p.npcAId === npcAId && p.npcBId === npcBId) ||
+      (p.npcAId === npcBId && p.npcBId === npcAId);
+
+    if (!matchesPair) return null;
+    if (Date.now() - p.preparedAt > this.PREPARED_MAX_AGE_MS) {
+      this.preparedConversation = null;
+      return null;
+    }
+
+    this.preparedConversation = null;
+    return p;
+  }
+
+  /** Play a pre-generated conversation with instant start */
+  private async playPreparedConversation(prepared: PreparedConversation): Promise<void> {
+    const { npcAId, npcBId, turns, audioBuffers, convType } = prepared;
+    const npcA = this.store.get(npcAId);
+    const npcB = this.store.get(npcBId);
+    if (!npcA || !npcB) return;
+
+    this.abortController = new AbortController();
+    this.store.recordRelationshipSnapshot(npcAId, npcBId);
+    this.activeConvType = convType;
+
+    // Clear seek overrides from director
+    this.store.setBehavioralOverride(npcAId, null);
+    this.store.setBehavioralOverride(npcBId, null);
+
+    // Freeze relationships
+    this.frozenRelationships.clear();
+    this.cumulativeRelDeltas.clear();
+    const relAtoB = npcA.relationships[npcBId];
+    const relBtoA = npcB.relationships[npcAId];
+    this.frozenRelationships.set(`${npcAId}->${npcBId}`, {
+      regard: relAtoB?.regard ?? 0,
+      affection: relAtoB?.affection ?? 0,
+    });
+    this.frozenRelationships.set(`${npcBId}->${npcAId}`, {
+      regard: relBtoA?.regard ?? 0,
+      affection: relBtoA?.affection ?? 0,
+    });
+    this.cumulativeRelDeltas.set(`${npcAId}->${npcBId}`, 0);
+    this.cumulativeRelDeltas.set(`${npcBId}->${npcAId}`, 0);
+
+    const session: ConversationSession = {
+      id: `conv_${Date.now()}`,
+      participantIds: [npcAId, npcBId],
+      messages: [],
+      turnCount: 0,
+      maxTurns: turns.length,
+      status: "active",
+      startedAt: Date.now(),
+    };
+
+    this.activeSession = session;
+    this.conversationEavesdroppers.clear();
+    this.callbacks.onConversationStart(session);
+    this.log(`[director] Playing ${turns.length}-turn conversation between ${npcA.name} and ${npcB.name} [${convType}]`);
+
+    // Playback loop (same as runBatchConversation)
+    for (let i = 0; i < turns.length; i++) {
+      if (!this.running || session.status !== "active") break;
+
+      while (this.paused && this.running) {
+        await this.sleep(200);
+      }
+      if (!this.running) break;
+
+      const turn = turns[i];
+      const speakerId = turn.speaker_id;
+      const listenerId = speakerId === npcAId ? npcBId : npcAId;
+      const speaker = this.store.get(speakerId)!;
+      const listener = this.store.get(listenerId)!;
+
+      this.callbacks.onSpeakerChange(speakerId);
+      await this.simulateStreaming(speakerId, turn.speech);
+
+      const response: LLMResponse = {
+        speech: turn.speech,
+        emotion_delta: turn.emotion_delta,
+        relationship_delta: turn.relationship_delta,
+        affection_delta: turn.affection_delta,
+        intent: turn.intent,
+        conversation_end: false,
+        mentioned_npcs: turn.mentioned_npcs,
+        secret_revealed: turn.secret_revealed,
+        promise: turn.promise,
+        action: turn.action,
+      };
+
+      this.store.batch(() => {
+        this.applyTurnEffects(speaker, listener, response);
+      });
+
+      if (response.action?.action === "storm_off") {
+        response.conversation_end = true;
+      }
+
+      const msg: ConversationMessage = {
+        npcId: speakerId,
+        npcName: speaker.name,
+        text: response.speech,
+        intent: response.intent,
+        rawResponse: response,
+      };
+
+      session.messages.push(msg);
+      session.turnCount++;
+
+      this.callbacks.onTurnComplete(msg);
+      this.callbacks.onStreamToken(speakerId, "");
+
+      this.logEmotionShifts(speaker, listener, response);
+      this.logRelationshipShift(speaker, listener, response);
+
+      if (this.worldSim && Math.random() < 0.5) {
+        this.checkEavesdroppers(speaker, listener, response);
+      }
+
+      if (audioBuffers[i]) {
+        await this.ttsService!.playBuffer(audioBuffers[i]!);
+      } else {
+        await this.sleep(Math.max(1500, turn.speech.length * 40));
+      }
+
+      if (response.conversation_end) {
+        this.log(`${speaker.name} ended the conversation`);
+        break;
+      }
+    }
+
+    // Cleanup
+    session.status = "completed";
+    this.store.recordRelationshipSnapshot(npcAId, npcBId);
+    this.activeSession = null;
+    this.frozenRelationships.clear();
+    this.cumulativeRelDeltas.clear();
+    this.lastConversationEnd = Date.now();
+    this.cooldowns.set(this.pairKey(npcAId, npcBId), Date.now());
+    this.callbacks.onSpeakerChange(null);
+    this.callbacks.onConversationEnd(session);
+    this.log(`[director] Conversation ended between ${npcA.name} and ${npcB.name} (${session.turnCount} turns)`);
+
+    this.store.batch(() => {
+      this.store.decayEmotions(npcAId);
+      this.store.decayEmotions(npcBId);
+      this.memory.decayAllRecency();
+    });
+
+    this.storeConversationSummaryMemory(npcAId, npcBId, session);
+    this.logConversationSummary(npcAId, npcBId);
+    this.applyEmotionalContagion(npcAId, npcBId, session);
+    this.triggerPostConversationBehavior(npcAId, npcBId, session);
+    this.runPostConversationReflection(npcAId, npcBId, session).catch(() => {});
   }
 
   private async executeTurn(
