@@ -678,7 +678,8 @@ export class ConversationManager {
 
   private directorTick(): void {
     if (!this.running || this.paused) return;
-    if (this.activeSession) return; // conversation in progress
+    // Don't block on activeSession — prepare the next conversation
+    // during playback so the LLM and TTS aren't sitting idle.
     if (this.preparingPairKey) return; // already generating
     if (this.preparedConversation) {
       // Check if prepared conversation is stale
@@ -731,6 +732,9 @@ export class ConversationManager {
     const allNpcs = this.store.getAll();
     if (allNpcs.length < 2) return null;
 
+    // Skip NPCs currently in a conversation
+    const busyIds = new Set(this.activeSession?.participantIds ?? []);
+
     const now = Date.now();
     let bestPair: [string, string] | null = null;
     let bestScore = -Infinity;
@@ -739,6 +743,7 @@ export class ConversationManager {
       for (let j = i + 1; j < allNpcs.length; j++) {
         const a = allNpcs[i];
         const b = allNpcs[j];
+        if (busyIds.has(a.id) || busyIds.has(b.id)) continue;
         const pKey = this.pairKey(a.id, b.id);
 
         // Skip if on cooldown
