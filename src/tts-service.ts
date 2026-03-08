@@ -8,7 +8,7 @@
 
 import type { EmotionalState } from "./types";
 
-const TTS_BASE = "http://localhost:8788";
+const TTS_BASE = "http://localhost:8787";
 
 // ── Voice pool (must match server's VOICE_POOL) ─────────
 const VOICE_POOL = [
