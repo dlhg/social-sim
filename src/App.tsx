@@ -402,33 +402,46 @@ function App() {
             }
             return [...prev, { npcId, text: speechText, type: "speech", startedAt: Date.now() }];
           });
-          // Stream TTS sentence-by-sentence as they complete
+          // Stream TTS: Chatterbox Turbo (English) sends the full message at
+          // once for better expressiveness; Kokoro (non-English) streams
+          // sentence-by-sentence for lower latency.
           const ttsEmotions = storeRef.current.get(npcId)?.emotionalState;
-          const cursor = ttsSentIndexRef.current.get(npcId) ?? 0;
-          const boundaryRegex = /[.!?]\s+/g;
-          boundaryRegex.lastIndex = cursor;
-          let newCursor = cursor;
-          let match: RegExpExecArray | null;
-          while ((match = boundaryRegex.exec(speechText)) !== null) {
-            const sentEnd = match.index + 1; // include punctuation
-            const sentence = speechText.slice(newCursor, sentEnd).trim();
-            if (sentence) {
+          const lang = (languageRef.current ?? "english").toLowerCase().trim();
+          const isEnglish = lang === "english" || lang === "british english";
+
+          if (isEnglish) {
+            // Chatterbox path: wait for complete text, send as one chunk.
+            // onTurnComplete will handle dispatching the full message.
+            if (complete && speechText.trim()) {
               ttsStreamedRef.current.add(npcId);
-              ttsRef.current.speak(npcId, sentence, ttsEmotions, languageRef.current);
+              ttsRef.current.speak(npcId, speechText.trim(), ttsEmotions, languageRef.current);
             }
-            newCursor = match.index + match[0].length;
-          }
-          ttsSentIndexRef.current.set(npcId, newCursor);
-          // When speech field closes, dispatch any remaining text
-          if (complete) {
-            const remaining = speechText.slice(newCursor).trim();
-            if (remaining) {
-              ttsStreamedRef.current.add(npcId);
-              ttsRef.current.speak(npcId, remaining, ttsEmotions, languageRef.current);
+          } else {
+            // Kokoro path: stream sentence-by-sentence as they complete
+            const cursor = ttsSentIndexRef.current.get(npcId) ?? 0;
+            const boundaryRegex = /[.!?]\s+/g;
+            boundaryRegex.lastIndex = cursor;
+            let newCursor = cursor;
+            let match: RegExpExecArray | null;
+            while ((match = boundaryRegex.exec(speechText)) !== null) {
+              const sentEnd = match.index + 1; // include punctuation
+              const sentence = speechText.slice(newCursor, sentEnd).trim();
+              if (sentence) {
+                ttsStreamedRef.current.add(npcId);
+                ttsRef.current.speak(npcId, sentence, ttsEmotions, languageRef.current);
+              }
+              newCursor = match.index + match[0].length;
             }
-            // Set cursor to end so subsequent calls (as remaining JSON streams)
-            // don't re-dispatch. Cleaned up in onTurnComplete.
-            ttsSentIndexRef.current.set(npcId, speechText.length);
+            ttsSentIndexRef.current.set(npcId, newCursor);
+            // When speech field closes, dispatch any remaining text
+            if (complete) {
+              const remaining = speechText.slice(newCursor).trim();
+              if (remaining) {
+                ttsStreamedRef.current.add(npcId);
+                ttsRef.current.speak(npcId, remaining, ttsEmotions, languageRef.current);
+              }
+              ttsSentIndexRef.current.set(npcId, speechText.length);
+            }
           }
         }
       },

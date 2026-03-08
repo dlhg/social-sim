@@ -71,24 +71,11 @@ def is_english(language: str | None) -> bool:
 
 # ── Chatterbox Turbo (English, via proxy) ─────────
 
-def compute_chatterbox_exaggeration(emotions: dict) -> float:
-    """Map emotional intensity to Chatterbox exaggeration parameter."""
-    if not emotions:
-        return 0.5
-    intensity = max(
-        emotions.get("anger", 0),
-        emotions.get("joy", 0),
-        emotions.get("fear", 0),
-        emotions.get("sadness", 0),
-    )
-    return min(1.0, 0.3 + intensity * 0.7)
-
-
-def synthesize_chatterbox(text: str, voice_id: str, exaggeration: float) -> bytes:
+def synthesize_chatterbox(text: str, voice_id: str) -> bytes:
     """Proxy synthesis request to the Chatterbox server."""
     resp = http_requests.post(
         f"{CHATTERBOX_URL}/speak",
-        json={"text": text, "voice": voice_id, "exaggeration": exaggeration},
+        json={"text": text, "voice": voice_id},
         timeout=300,
     )
     resp.raise_for_status()
@@ -230,9 +217,8 @@ def speak():
 
     if is_english(language):
         # ── Chatterbox Turbo path (proxy to port 8788) ──
-        exaggeration = compute_chatterbox_exaggeration(emotions)
         cache_key = hashlib.sha256(
-            f"cb:{voice}:{exaggeration:.2f}:{text}".encode()
+            f"cb:{voice}:{text}".encode()
         ).hexdigest()[:16]
         cache_path = CACHE_DIR / f"{cache_key}.wav"
 
@@ -244,7 +230,7 @@ def speak():
             )
 
         try:
-            wav_bytes = synthesize_chatterbox(text, voice, exaggeration)
+            wav_bytes = synthesize_chatterbox(text, voice)
         except http_requests.ConnectionError:
             return Response(
                 "Chatterbox server not running (start chatterbox_server.py)",
@@ -315,11 +301,9 @@ def speak_stream():
     final_speed = speed * emotion_speed
 
     if is_english(language):
-        exaggeration = compute_chatterbox_exaggeration(emotions)
-
         def generate():
             try:
-                yield synthesize_chatterbox(text, voice, exaggeration)
+                yield synthesize_chatterbox(text, voice)
             except Exception as e:
                 print(f"[tts] Chatterbox stream error: {e}")
 

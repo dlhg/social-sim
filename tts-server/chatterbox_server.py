@@ -56,7 +56,7 @@ def speak():
     Synthesize English speech with Chatterbox Turbo.
 
     JSON body:
-      { "text": "Hello", "voice": "voice_01", "exaggeration": 0.5 }
+      { "text": "Hello", "voice": "voice_01" }
 
     Returns: audio/wav
     """
@@ -65,7 +65,6 @@ def speak():
     data = request.get_json(force=True)
     text = data.get("text", "").strip()
     voice_id = data.get("voice", "voice_01")
-    exaggeration = float(data.get("exaggeration", 0.5))
 
     if not text:
         return Response("No text provided", status=400)
@@ -80,7 +79,6 @@ def speak():
         wav_tensor = model.generate(
             text,
             audio_prompt_path=str(ref_path),
-            exaggeration=exaggeration,
         )
     except Exception as e:
         import traceback
