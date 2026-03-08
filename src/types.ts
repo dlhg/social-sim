@@ -266,19 +266,11 @@ export interface Position {
   y: number;
 }
 
-export type WaypointMood =
-  | "social"
-  | "reflective"
-  | "intimate"
-  | "gathering"
-  | "mysterious"
-  | (string & {});
-
 export interface Waypoint {
   id: string;
   name: string;
   position: Position;
-  mood?: WaypointMood;
+  moods: string[];
   description?: string;
 }
 

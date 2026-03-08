@@ -5,7 +5,7 @@ import { ACTIVITIES, shouldDoActivity, pickActivity, activityDurationTicks, buil
 
 /** Fallback waypoints — used only if no tilemap waypoints are provided. */
 const FALLBACK_WAYPOINTS: Waypoint[] = [
-  { id: "center", name: "Center", position: { x: 36, y: 24 }, mood: "gathering", description: "the center of the map" },
+  { id: "center", name: "Center", position: { x: 36, y: 24 }, moods: ["gathering"], description: "the center of the map" },
 ];
 
 const PROXIMITY_THRESHOLD = 5;
@@ -425,32 +425,33 @@ export class WorldSimulation {
       }
 
       // 4. Waypoint mood matching
-      if (wp.mood) {
-        if (wp.mood === "reflective" && (emo.fear > 0.4 || emo.joy < 0.3))
+      const moods = wp.moods;
+      if (moods.length > 0) {
+        if (moods.includes("reflective") && (emo.fear > 0.4 || emo.joy < 0.3))
           score += 1.5;
-        if (wp.mood === "social" && emo.joy > 0.5) score += 1.5;
-        if (wp.mood === "intimate" && emo.trust > 0.6) score += 1;
-        if (wp.mood === "gathering" && traits.includes("enthusiastic"))
+        if (moods.includes("social") && emo.joy > 0.5) score += 1.5;
+        if (moods.includes("intimate") && emo.trust > 0.6) score += 1;
+        if (moods.includes("gathering") && traits.includes("enthusiastic"))
           score += 1;
-        if (wp.mood === "mysterious" && traits.includes("curious"))
+        if (moods.includes("mysterious") && traits.includes("curious"))
           score += 2;
       }
 
       // 5. Time-of-day preferences
       const phase = this.getPhase?.();
-      if (phase && wp.mood) {
+      if (phase && moods.length > 0) {
         if (phase === "morning") {
           // Morning: prefer reflective, peaceful spots
-          if (wp.mood === "reflective") score += 1.5;
-          if (wp.mood === "gathering") score -= 0.5;
+          if (moods.includes("reflective")) score += 1.5;
+          if (moods.includes("gathering")) score -= 0.5;
         } else if (phase === "afternoon") {
           // Afternoon: prefer social, busy spots
-          if (wp.mood === "social" || wp.mood === "gathering") score += 1;
+          if (moods.includes("social") || moods.includes("gathering")) score += 1;
         } else if (phase === "evening") {
           // Evening: prefer intimate, social spots (tavern, bench)
-          if (wp.mood === "intimate") score += 1.5;
-          if (wp.mood === "social") score += 1;
-          if (wp.mood === "mysterious") score += 1;
+          if (moods.includes("intimate")) score += 1.5;
+          if (moods.includes("social")) score += 1;
+          if (moods.includes("mysterious")) score += 1;
         }
       }
 

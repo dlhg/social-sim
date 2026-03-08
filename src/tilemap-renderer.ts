@@ -134,17 +134,18 @@ export class TilemapRenderer {
       // Derive id from name: lowercase, spaces to underscores
       const id = obj.name.toLowerCase().replace(/\s+/g, "_");
 
-      // Get mood from object properties, fall back to layer properties
+      // Get moods from object properties, fall back to layer properties
       const objMood = obj.properties?.find(p => p.name === "mood")?.value;
       const layerMood = layer.properties?.find(p => p.name === "mood")?.value;
-      const mood = objMood ?? layerMood ?? "social";
+      const raw = objMood ?? layerMood ?? "social";
+      const moods = raw.split(",").map(s => s.trim()).filter(Boolean);
 
       this.waypoints.push({
         id,
         name: obj.name,
         position: { x: gridX, y: gridY },
-        mood: mood as Waypoint["mood"],
-        description: `${obj.name}, a ${mood} spot`,
+        moods,
+        description: `${obj.name}, a ${moods.join(", ")} spot`,
       });
     }
   }

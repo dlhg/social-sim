@@ -113,7 +113,7 @@ export function MapTestMode({ onExit }: MapTestModeProps) {
           wp => Math.abs(wp.position.x - newX) + Math.abs(wp.position.y - newY) <= 3
         );
         setInfo(nearWp
-          ? `(${newX}, ${newY}) near "${nearWp.name}" [${nearWp.mood}]`
+          ? `(${newX}, ${newY}) near "${nearWp.name}" [${nearWp.moods.join(", ")}]`
           : `(${newX}, ${newY})`
         );
       }
