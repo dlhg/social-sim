@@ -119,11 +119,19 @@ function App() {
 
   // ── Interaction system ───────────────────────
   const interactionCooldowns = useRef<Map<string, number>>(new Map());
-  const INTERACTION_COOLDOWN_MS = 20_000;
-  const INTERACTION_CHANCE = 0.35; // 35% chance per proximity tick when conv doesn't fire
+  const npcInteractionCooldowns = useRef<Map<string, number>>(new Map());
+  const lastGlobalInteraction = useRef(0);
+  const INTERACTION_COOLDOWN_MS = 30_000;    // per-pair cooldown
+  const NPC_INTERACTION_COOLDOWN_MS = 15_000; // per-NPC actor cooldown
+  const GLOBAL_INTERACTION_COOLDOWN_MS = 4_000; // global cooldown across all interactions
+  const INTERACTION_CHANCE = 0.25; // 25% chance per proximity tick when conv doesn't fire
 
   const tryInteraction = useCallback((aId: string, bId: string) => {
     const now = Date.now();
+
+    // Global cooldown: only one interaction across the entire sim every N seconds
+    if (now - lastGlobalInteraction.current < GLOBAL_INTERACTION_COOLDOWN_MS) return;
+
     const pairKey = [aId, bId].sort().join(":");
     const last = interactionCooldowns.current.get(pairKey) ?? 0;
     if (now - last < INTERACTION_COOLDOWN_MS) return;
@@ -138,10 +146,16 @@ function App() {
       ? [actorNpc, targetNpc]
       : [targetNpc, actorNpc];
 
+    // Per-NPC actor cooldown: each NPC can only initiate one interaction every N seconds
+    const actorLast = npcInteractionCooldowns.current.get(actor.id) ?? 0;
+    if (now - actorLast < NPC_INTERACTION_COOLDOWN_MS) return;
+
     const result = pickInteraction(actor, target);
     if (!result) return;
 
     interactionCooldowns.current.set(pairKey, now);
+    npcInteractionCooldowns.current.set(actor.id, now);
+    lastGlobalInteraction.current = now;
 
     // Execute effects
     executeInteraction(result, storeRef.current, memoryRef.current);

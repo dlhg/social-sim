@@ -246,11 +246,12 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
     importance: 0.4,
     condition: (actor, target) => {
       const rel = actor.relationships[target.id]?.regard ?? 0;
-      return rel > 0;
+      // Need a meaningful relationship before asking favors
+      return rel > 0.15;
     },
     weight: (actor, target) => {
       const rel = actor.relationships[target.id]?.regard ?? 0;
-      return Math.max(0, rel * 3);
+      return Math.max(0, rel * 2);
     },
   },
 
@@ -267,13 +268,14 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
     importance: 0.3,
     condition: (actor, target) => {
       const rel = actor.relationships[target.id]?.regard ?? 0;
-      return rel > -0.1;
+      // Require at least slightly positive relationship or positive mood
+      return rel > 0.05 || actor.emotionalState.joy > 0.5;
     },
     weight: (actor, _target) => {
       const traits = actor.personalityTraits.map(t => t.toLowerCase());
-      if (traits.some(t => ["flattering", "charming", "kind"].includes(t))) return 3;
-      if (traits.some(t => ["two-faced", "calculating"].includes(t))) return 2;
-      return 1;
+      if (traits.some(t => ["flattering", "charming", "kind"].includes(t))) return 2;
+      if (traits.some(t => ["two-faced", "calculating"].includes(t))) return 1.5;
+      return 0.5;
     },
   },
 
