@@ -26,7 +26,7 @@ def get_model():
     global _model
     if _model is None:
         import torch
-        from chatterbox.tts import ChatterboxTTS
+        from chatterbox.tts_turbo import ChatterboxTurboTTS
         # Patch out watermarker — resemble-perth native lib fails on Apple Silicon
         import perth
         if perth.PerthImplicitWatermarker is None:
@@ -40,7 +40,7 @@ def get_model():
             device = "cuda"
         else:
             device = "cpu"
-        _model = ChatterboxTTS.from_pretrained(device=device)
+        _model = ChatterboxTurboTTS.from_pretrained(device=device)
         print(f"[chatterbox] Model loaded on {device}")
     return _model
 
@@ -83,7 +83,8 @@ def speak():
             exaggeration=exaggeration,
         )
     except Exception as e:
-        print(f"[chatterbox] Synthesis error: {e}")
+        import traceback
+        traceback.print_exc()
         return Response(f"Synthesis failed: {e}", status=500)
 
     buf = io.BytesIO()
