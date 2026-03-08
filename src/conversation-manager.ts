@@ -328,6 +328,20 @@ export class ConversationManager {
       return true;
     }
 
+    // If there are prepared conversations ready, play the oldest eligible one instead of
+    // generating a new batch for this organic pair — prepared convos are instant, batch is slow.
+    for (let i = 0; i < this.preparedConversations.length; i++) {
+      const p = this.preparedConversations[i];
+      const ppKey = this.pairKey(p.npcAId, p.npcBId);
+      const pLastTime = this.cooldowns.get(ppKey) ?? 0;
+      if (now - pLastTime < this.COOLDOWN_MS) continue;
+      this.preparedConversations.splice(i, 1);
+      this.preparedConsumed++;
+      this.log(`[director] Playing prepared conversation for ${this.npcName(p.npcAId)} + ${this.npcName(p.npcBId)} (instead of generating ${this.npcName(npcAId)} + ${this.npcName(npcBId)})`);
+      this.playPreparedConversation(p);
+      return true;
+    }
+
     // If either NPC has a director seek override targeting someone else,
     // don't let organic proximity hijack them — the director has plans.
     const npcA = this.store.get(npcAId);
