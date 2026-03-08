@@ -3,7 +3,7 @@ Dual-engine TTS server: proxies to Chatterbox Turbo for English,
 uses Kokoro directly for other languages.
 
 The Chatterbox server runs in its own venv on port 8788.
-This server handles routing, caching, and emotion mapping.
+This server handles routing and emotion mapping.
 
 Install (Kokoro venv):
   pip install kokoro soundfile flask flask-cors requests
@@ -19,7 +19,6 @@ Usage:
 """
 
 import io
-import hashlib
 import os
 from pathlib import Path
 from flask import Flask, request, Response, jsonify
@@ -29,10 +28,6 @@ import requests as http_requests
 
 app = Flask(__name__)
 CORS(app)
-
-# On-disk cache to avoid re-synthesizing identical lines
-CACHE_DIR = Path(__file__).parent / ".tts-cache"
-CACHE_DIR.mkdir(exist_ok=True)
 
 # Chatterbox Turbo server URL
 CHATTERBOX_URL = os.environ.get("CHATTERBOX_URL", "http://localhost:8788")
@@ -227,18 +222,6 @@ def speak():
 
     if use_chatterbox(language, engine):
         # ── Chatterbox Turbo path (proxy to port 8788) ──
-        cache_key = hashlib.sha256(
-            f"cb:{voice}:{text}".encode()
-        ).hexdigest()[:16]
-        cache_path = CACHE_DIR / f"{cache_key}.wav"
-
-        if cache_path.exists():
-            return Response(
-                cache_path.read_bytes(),
-                mimetype="audio/wav",
-                headers={"X-TTS-Cached": "true"},
-            )
-
         try:
             wav_bytes = synthesize_chatterbox(text, voice)
         except http_requests.ConnectionError:
@@ -250,14 +233,9 @@ def speak():
             print(f"[tts] Chatterbox error: {e}")
             return Response(f"Synthesis failed: {e}", status=500)
 
-        cache_path.write_bytes(wav_bytes)
-        return Response(
-            wav_bytes,
-            mimetype="audio/wav",
-            headers={"X-TTS-Cached": "false"},
-        )
+        return Response(wav_bytes, mimetype="audio/wav")
     else:
-        # ── Kokoro fallback path ──
+        # ── Kokoro path ──
         lang_code = resolve_lang_code(language)
         if lang_code is None:
             return Response(f"Language not supported for TTS: {language}", status=400)
@@ -268,30 +246,13 @@ def speak():
             voice_idx = 0
         kokoro_voice = KOKORO_VOICES[voice_idx % len(KOKORO_VOICES)]
 
-        cache_key = hashlib.sha256(
-            f"ko:{lang_code}:{kokoro_voice}:{final_speed:.3f}:{text}".encode()
-        ).hexdigest()[:16]
-        cache_path = CACHE_DIR / f"{cache_key}.wav"
-
-        if cache_path.exists():
-            return Response(
-                cache_path.read_bytes(),
-                mimetype="audio/wav",
-                headers={"X-TTS-Cached": "true"},
-            )
-
         try:
             wav_bytes = synthesize_kokoro(text, kokoro_voice, final_speed, lang_code)
         except Exception as e:
             print(f"[tts] Kokoro error: {e}")
             return Response(f"Synthesis failed: {e}", status=500)
 
-        cache_path.write_bytes(wav_bytes)
-        return Response(
-            wav_bytes,
-            mimetype="audio/wav",
-            headers={"X-TTS-Cached": "false"},
-        )
+        return Response(wav_bytes, mimetype="audio/wav")
 
 
 @app.route("/speak-stream", methods=["POST"])
@@ -344,7 +305,6 @@ if __name__ == "__main__":
     print(f"[tts] Starting dual-engine TTS server on http://localhost:{port}")
     print(f"[tts] English: Chatterbox Turbo (via {CHATTERBOX_URL})")
     print(f"[tts] Non-English: Kokoro (local)")
-    print(f"[tts] Cache dir: {CACHE_DIR}")
     print(f"[tts] Voice pool: {len(VOICE_POOL)} voices")
     print(f"[tts] Supported languages: {', '.join(LANGUAGE_TO_LANG_CODE.keys())}")
     app.run(host="127.0.0.1", port=port, threaded=True)
