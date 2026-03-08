@@ -181,7 +181,7 @@ export interface ConversationSession {
 }
 
 // ── Activity ──────────────────────────────────
-export type ActivityType = "thought" | "gossip" | "eavesdrop" | "dm" | "action";
+export type ActivityType = "thought" | "eavesdrop" | "action";
 
 export interface ActivityEvent {
   timestamp: Date;

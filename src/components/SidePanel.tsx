@@ -16,9 +16,7 @@ type FilterKey = "chat" | ActivityType | "system" | "prompt";
 const FILTER_LABELS: Record<FilterKey, string> = {
   chat: "Chat",
   thought: "Thoughts",
-  gossip: "Gossip",
   eavesdrop: "Eavesdrop",
-  dm: "DMs",
   action: "Actions",
   system: "System",
   prompt: "Prompts",
@@ -27,15 +25,13 @@ const FILTER_LABELS: Record<FilterKey, string> = {
 const FILTER_COLORS: Record<FilterKey, string> = {
   chat: "#e2e0ea",
   thought: "#b0a0cc",
-  gossip: "#e0a84c",
   eavesdrop: "#a876c4",
-  dm: "#5cb87a",
   action: "#e0a84c",
   system: "#9896a8",
   prompt: "#6ca6d9",
 };
 
-const ALL_FILTERS: FilterKey[] = ["chat", "thought", "gossip", "eavesdrop", "dm", "action", "system", "prompt"];
+const ALL_FILTERS: FilterKey[] = ["chat", "thought", "eavesdrop", "action", "system", "prompt"];
 
 function getFilterKey(item: FeedItem): FilterKey {
   if (item.type === "chat") return "chat";
