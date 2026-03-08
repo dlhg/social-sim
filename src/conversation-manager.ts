@@ -120,7 +120,7 @@ export class ConversationManager {
   private cooldowns: Map<string, number> = new Map();
   private lastConversationEnd = 0;
 
-  private readonly MIN_TURNS = 3;
+  private readonly MIN_TURNS = 4;
   private readonly MAX_TURNS = 18;
   private readonly COOLDOWN_MS = 30_000;
   private readonly GLOBAL_COOLDOWN_MS = 5_000;
@@ -144,6 +144,8 @@ export class ConversationManager {
   private preparedConversations: PreparedConversation[] = [];
   private readonly DIRECTOR_INTERVAL_MS = 5_000;
   private readonly PREPARED_MAX_AGE_MS = 600_000; // discard after 10 min
+  private readonly PREPARED_FORCE_PLAY_MS = 20_000; // force-play after 20s even if not close
+  private readonly DIRECTOR_PROXIMITY_THRESHOLD = 12; // wider trigger radius for prepared convos
 
   // LLM generation slot (freed as soon as LLM finishes, before TTS)
   private llmPairKey: string | null = null;
@@ -836,6 +838,45 @@ export class ConversationManager {
       }
       return true;
     });
+
+    // ── Proactively play prepared conversations ──
+    // Don't wait for organic proximity — use wider threshold + force-play timer
+    if (!this.activeSession && this.preparedConversations.length > 0) {
+      for (let i = 0; i < this.preparedConversations.length; i++) {
+        const p = this.preparedConversations[i];
+        const pKey = this.pairKey(p.npcAId, p.npcBId);
+        const lastTime = this.cooldowns.get(pKey) ?? 0;
+        if (now - lastTime < this.COOLDOWN_MS) continue;
+        if (now - this.lastConversationEnd < this.GLOBAL_COOLDOWN_MS) continue;
+
+        let shouldPlay = false;
+
+        // Wide proximity: play if NPCs are within 12 tiles (vs normal 5)
+        if (this.worldSim) {
+          const posA = this.worldSim.getNpcPosition(p.npcAId);
+          const posB = this.worldSim.getNpcPosition(p.npcBId);
+          if (posA && posB) {
+            const dist = Math.abs(posA.x - posB.x) + Math.abs(posA.y - posB.y);
+            if (dist <= this.DIRECTOR_PROXIMITY_THRESHOLD) {
+              shouldPlay = true;
+            }
+          }
+        }
+
+        // Force-play: if ready for >20s, play regardless of distance
+        if (!shouldPlay && now - p.preparedAt > this.PREPARED_FORCE_PLAY_MS) {
+          shouldPlay = true;
+        }
+
+        if (shouldPlay) {
+          this.preparedConversations.splice(i, 1);
+          this.preparedConsumed++;
+          this.log(`[director] Proactively playing conversation for ${this.npcName(p.npcAId)} + ${this.npcName(p.npcBId)}`);
+          this.playPreparedConversation(p);
+          return; // only play one per tick
+        }
+      }
+    }
 
     // Only start a new LLM generation if the LLM slot is free.
     // TTS runs independently and doesn't block this.

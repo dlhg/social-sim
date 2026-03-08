@@ -428,12 +428,13 @@ ${trajectoryBlock}${locationBlock}${timeBlock}${otherNpcsBlock}
 
 ${PREAMBLES[ctx.conversationType ?? "casual"]}
 
-Generate a conversation of ${minTurns}-${maxTurns} turns. ${firstSpeaker.name} speaks first, then they alternate.
+Generate a conversation of EXACTLY ${maxTurns} turns (minimum ${minTurns}, aim for ${maxTurns}). ${firstSpeaker.name} speaks first, then they alternate.
 
-CONVERSATION ARC:
-- Early turns: establish the scene, greet or react naturally
-- Middle turns: develop the interaction — introduce new topics, share memories, react emotionally
-- Late turns: wrap up naturally — a parting thought, a resolution, or a lingering question
+CONVERSATION ARC (plan all ${maxTurns} turns):
+- Turns 1-2: establish the scene, greet or react naturally
+- Turns 3-${Math.max(3, maxTurns - 1)}: develop the interaction — introduce new topics, share memories, react emotionally, go deeper
+- Turn ${maxTurns}: wrap up naturally — a farewell, a parting thought, or a resolution. The LAST speaker must close the conversation, not ask an unanswered question.
+- DO NOT end the conversation early. You MUST write at least ${minTurns} turns. Aim for ${maxTurns}.
 
 RESPONSE FORMAT — respond with ONLY a JSON object:
 {
