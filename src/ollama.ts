@@ -1,5 +1,12 @@
+/**
+ * LLM client — supports both local Ollama and cloud Groq (OpenAI-compatible).
+ * The provider is selected at call time via the persisted LlmConfig.
+ */
+
+import { loadLlmConfig } from "./llm-config";
+
 const OLLAMA_URL = "/api/chat";
-const MODEL = "qwen2.5:7b";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -30,8 +37,25 @@ export async function accumulateChat(
     numPredict = onProgressOrOpts.numPredict;
   }
 
+  const config = loadLlmConfig();
+
+  if (config.provider === "groq") {
+    return accumulateGroq(messages, config.groqApiKey, config.groqModel, numPredict, onProgress, abortSignal);
+  }
+  return accumulateOllama(messages, config.ollamaModel, numPredict, onProgress, abortSignal);
+}
+
+// ── Ollama (local, NDJSON stream) ──────────────
+
+async function accumulateOllama(
+  messages: ChatMessage[],
+  model: string,
+  numPredict: number | undefined,
+  onProgress: ((accumulated: string) => void) | undefined,
+  signal: AbortSignal | undefined,
+): Promise<string> {
   const body: Record<string, unknown> = {
-    model: MODEL,
+    model,
     messages,
     stream: true,
     format: "json",
@@ -44,12 +68,12 @@ export async function accumulateChat(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal: abortSignal,
+    signal,
   });
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Ollama error: ${res.status} ${res.statusText}${body ? ` — ${body}` : ""}`);
+    const text = await res.text().catch(() => "");
+    throw new Error(`Ollama error: ${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`);
   }
 
   const reader = res.body!.getReader();
@@ -71,6 +95,79 @@ export async function accumulateChat(
         }
       } catch {
         // skip malformed NDJSON lines
+      }
+    }
+  }
+
+  return full;
+}
+
+// ── Groq (cloud, SSE stream) ───────────────────
+
+async function accumulateGroq(
+  messages: ChatMessage[],
+  apiKey: string,
+  model: string,
+  numPredict: number | undefined,
+  onProgress: ((accumulated: string) => void) | undefined,
+  signal: AbortSignal | undefined,
+): Promise<string> {
+  if (!apiKey) {
+    throw new Error("Groq API key is not set. Configure it in the setup screen.");
+  }
+
+  const body: Record<string, unknown> = {
+    model,
+    messages,
+    stream: true,
+    response_format: { type: "json_object" },
+  };
+  if (numPredict) {
+    body.max_tokens = numPredict;
+  }
+
+  const res = await fetch(GROQ_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Groq error: ${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`);
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let full = "";
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed === "data: [DONE]") continue;
+      if (!trimmed.startsWith("data: ")) continue;
+
+      try {
+        const json = JSON.parse(trimmed.slice(6));
+        const content = json.choices?.[0]?.delta?.content;
+        if (content) {
+          full += content;
+          onProgress?.(full);
+        }
+      } catch {
+        // skip malformed SSE lines
       }
     }
   }

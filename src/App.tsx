@@ -8,6 +8,8 @@ import { SetupScreen } from "./components/SetupScreen";
 import { MapTestMode } from "./components/MapTestMode";
 import { DmTools } from "./components/DmTools";
 import { DirectorDashboard } from "./components/DirectorDashboard";
+import { loadLlmConfig, saveLlmConfig } from "./llm-config";
+import type { LlmConfig } from "./llm-config";
 import { NpcStore } from "./npc-store";
 import { MemoryService } from "./memory-service";
 import { ConversationManager } from "./conversation-manager";
@@ -62,6 +64,7 @@ function App() {
   const [ttsEngine, setTtsEngine] = useState<"chatterbox" | "kokoro">("chatterbox");
   const ttsEngineRef = useRef(ttsEngine);
   ttsEngineRef.current = ttsEngine;
+  const [llmConfig, setLlmConfig] = useState<LlmConfig>(() => loadLlmConfig());
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [dmToolsOpen, setDmToolsOpen] = useState(false);
   const [npcViewerOpen, setNpcViewerOpen] = useState(false);
@@ -785,6 +788,7 @@ function App() {
           roster={roster}
           language={language}
           ttsEngine={ttsEngine}
+          llmConfig={llmConfig}
           onAddToRoster={handleAddToRoster}
           onRemoveFromRoster={handleRemoveFromRoster}
           onLanguageChange={(lang) => {
@@ -794,6 +798,13 @@ function App() {
               setTtsEngine("kokoro");
               ttsRef.current.setOptions({ engine: "kokoro" });
             }
+          }}
+          onLlmConfigChange={(updates) => {
+            setLlmConfig((prev) => {
+              const next = { ...prev, ...updates };
+              saveLlmConfig(next);
+              return next;
+            });
           }}
           onTtsEngineChange={(engine) => {
             setTtsEngine(engine);

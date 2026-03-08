@@ -11,6 +11,8 @@ import {
   npcToPremadeTemplate,
 } from "../premade-storage";
 import type { PremadeTemplate } from "../premade-storage";
+import type { LlmProvider, LlmConfig } from "../llm-config";
+import { GROQ_MODELS } from "../llm-config";
 
 const MAX_ROSTER = 13;
 
@@ -35,10 +37,12 @@ interface SetupScreenProps {
   roster: NPC[];
   language: string;
   ttsEngine: TTSEngine;
+  llmConfig: LlmConfig;
   onAddToRoster: (npc: NPC) => void;
   onRemoveFromRoster: (npcId: string) => void;
   onLanguageChange: (language: string) => void;
   onTtsEngineChange: (engine: TTSEngine) => void;
+  onLlmConfigChange: (updates: Partial<LlmConfig>) => void;
   onTestTts: (text: string, engine: TTSEngine) => void;
   onStartSimulation: () => void;
   onTestMap?: () => void;
@@ -48,10 +52,12 @@ export function SetupScreen({
   roster,
   language,
   ttsEngine,
+  llmConfig,
   onAddToRoster,
   onRemoveFromRoster,
   onLanguageChange,
   onTtsEngineChange,
+  onLlmConfigChange,
   onTestTts,
   onStartSimulation,
   onTestMap,
@@ -223,6 +229,55 @@ export function SetupScreen({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="setup-llm-provider">
+        <span className="setup-tts-engine-label">LLM Provider</span>
+        <div className="setup-tts-engine-options">
+          <button
+            className={`tts-engine-btn ${llmConfig.provider === "ollama" ? "active" : ""}`}
+            onClick={() => onLlmConfigChange({ provider: "ollama" as LlmProvider })}
+          >
+            Local (Ollama)
+          </button>
+          <button
+            className={`tts-engine-btn ${llmConfig.provider === "groq" ? "active" : ""}`}
+            onClick={() => onLlmConfigChange({ provider: "groq" as LlmProvider })}
+          >
+            Cloud (Groq)
+          </button>
+        </div>
+        {llmConfig.provider === "ollama" && (
+          <div className="llm-detail">
+            <input
+              className="llm-input"
+              type="text"
+              value={llmConfig.ollamaModel}
+              onChange={(e) => onLlmConfigChange({ ollamaModel: e.target.value })}
+              placeholder="Model name"
+            />
+          </div>
+        )}
+        {llmConfig.provider === "groq" && (
+          <div className="llm-detail">
+            <input
+              className="llm-input"
+              type="password"
+              value={llmConfig.groqApiKey}
+              onChange={(e) => onLlmConfigChange({ groqApiKey: e.target.value })}
+              placeholder="Groq API key"
+            />
+            <select
+              className="llm-select"
+              value={llmConfig.groqModel}
+              onChange={(e) => onLlmConfigChange({ groqModel: e.target.value })}
+            >
+              {GROQ_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {(() => {
