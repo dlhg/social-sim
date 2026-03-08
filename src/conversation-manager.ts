@@ -250,6 +250,15 @@ export class ConversationManager {
     };
   }
 
+  /** Play a specific turn's audio from a prepared conversation (for dashboard preview) */
+  async playPreparedTurnAudio(convIndex: number, turnIndex: number): Promise<void> {
+    const conv = this.preparedConversations[convIndex];
+    if (!conv) return;
+    const buffer = conv.audioBuffers[turnIndex];
+    if (!buffer || !this.ttsService) return;
+    await this.ttsService.playBuffer(buffer);
+  }
+
   // ── Lifecycle ────────────────────────────────
 
   start(): void {
@@ -836,17 +845,17 @@ export class ConversationManager {
 
     this.log(`[director] Pre-generating conversation for ${this.npcName(npcAId)} + ${this.npcName(npcBId)}`);
 
-    // Set seek overrides so they walk toward each other
+    // Set seek overrides so they walk toward each other (match max age so they keep seeking)
     this.store.setBehavioralOverride(npcAId, {
       mode: "seek",
       targetNpcId: npcBId,
-      expiresAt: Date.now() + 60_000,
+      expiresAt: Date.now() + this.PREPARED_MAX_AGE_MS,
       reason: "Director: approaching for conversation",
     });
     this.store.setBehavioralOverride(npcBId, {
       mode: "seek",
       targetNpcId: npcAId,
-      expiresAt: Date.now() + 60_000,
+      expiresAt: Date.now() + this.PREPARED_MAX_AGE_MS,
       reason: "Director: approaching for conversation",
     });
 
@@ -978,6 +987,26 @@ export class ConversationManager {
       llmDurationMs, ttsDurationMs,
     });
     this.log(`[director] Conversation ready for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns)`);
+
+    // Refresh seek overrides in case they expired during generation
+    const freshA = this.store.get(npcAId);
+    const freshB = this.store.get(npcBId);
+    if (freshA && !freshA.behavioralOverride) {
+      this.store.setBehavioralOverride(npcAId, {
+        mode: "seek",
+        targetNpcId: npcBId,
+        expiresAt: Date.now() + this.PREPARED_MAX_AGE_MS,
+        reason: "Director: approaching for conversation",
+      });
+    }
+    if (freshB && !freshB.behavioralOverride) {
+      this.store.setBehavioralOverride(npcBId, {
+        mode: "seek",
+        targetNpcId: npcAId,
+        expiresAt: Date.now() + this.PREPARED_MAX_AGE_MS,
+        reason: "Director: approaching for conversation",
+      });
+    }
   }
 
   private clearLlmSlot(): void {

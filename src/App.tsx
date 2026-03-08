@@ -956,6 +956,9 @@ function App() {
         <DirectorDashboard
           getStatus={() => managerRef.current!.getDirectorStatus()}
           onClose={() => setDirectorOpen(false)}
+          onPlayTurnAudio={(convIdx, turnIdx) =>
+            managerRef.current?.playPreparedTurnAudio(convIdx, turnIdx)
+          }
         />
       )}
     </div>

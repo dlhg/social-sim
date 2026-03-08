@@ -4,6 +4,7 @@ import type { DirectorStatus, PreparedConversationInfo } from "../conversation-m
 interface DirectorDashboardProps {
   getStatus: () => DirectorStatus;
   onClose: () => void;
+  onPlayTurnAudio?: (convIndex: number, turnIndex: number) => void;
 }
 
 function formatDuration(ms: number): string {
@@ -31,7 +32,11 @@ function StalenessBar({ ageMs, maxAgeMs }: { ageMs: number; maxAgeMs: number }) 
   );
 }
 
-function PreparedCard({ info }: { info: PreparedConversationInfo }) {
+function PreparedCard({ info, convIndex, onPlayTurn }: {
+  info: PreparedConversationInfo;
+  convIndex: number;
+  onPlayTurn?: (convIndex: number, turnIndex: number) => void;
+}) {
   return (
     <div className="dd-card dd-card-ready">
       <div className="dd-pair-names">
@@ -42,13 +47,20 @@ function PreparedCard({ info }: { info: PreparedConversationInfo }) {
         &middot; LLM {formatDuration(info.llmDurationMs)} + TTS {formatDuration(info.ttsDurationMs)}
       </div>
       <StalenessBar ageMs={info.ageMs} maxAgeMs={info.maxAgeMs} />
-      <div className="dd-turns-preview">
+      <div className="dd-turns-scroll">
         {info.speeches.map((speech, i) => (
           <div key={i} className="dd-turn-line">
+            {onPlayTurn && (
+              <button
+                className="dd-play-btn"
+                onClick={() => onPlayTurn(convIndex, i)}
+                title="Play audio"
+              >
+                &#9654;
+              </button>
+            )}
             <span className="dd-turn-speaker">{info.speakerNames[i]}:</span>{" "}
-            <span className="dd-turn-text">
-              {speech.length > 80 ? speech.slice(0, 80) + "..." : speech}
-            </span>
+            <span className="dd-turn-text">{speech}</span>
           </div>
         ))}
       </div>
@@ -56,7 +68,7 @@ function PreparedCard({ info }: { info: PreparedConversationInfo }) {
   );
 }
 
-export function DirectorDashboard({ getStatus, onClose }: DirectorDashboardProps) {
+export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: DirectorDashboardProps) {
   const [status, setStatus] = useState<DirectorStatus>(getStatus);
 
   useEffect(() => {
@@ -161,7 +173,7 @@ export function DirectorDashboard({ getStatus, onClose }: DirectorDashboardProps
               Ready for Playback ({status.preparedConversations.length})
             </div>
             {status.preparedConversations.map((info, i) => (
-              <PreparedCard key={i} info={info} />
+              <PreparedCard key={i} info={info} convIndex={i} onPlayTurn={onPlayTurnAudio} />
             ))}
           </div>
         )}
