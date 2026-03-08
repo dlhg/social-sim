@@ -252,20 +252,11 @@ export function SetupScreen({
               </span>
             )}
             <div className="tts-test-area">
-              <input
-                type="text"
+              <textarea
                 className="tts-test-input"
                 placeholder="Type a phrase to test..."
                 value={testPhrase}
                 onChange={(e) => setTestPhrase(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && testPhrase.trim() && !testPlaying) {
-                    setTestPlaying(true);
-                    onTestTts(testPhrase.trim(), ttsEngine);
-                    if (testTimeout.current) clearTimeout(testTimeout.current);
-                    testTimeout.current = window.setTimeout(() => setTestPlaying(false), 5000);
-                  }
-                }}
               />
               <button
                 className="btn tts-test-btn"

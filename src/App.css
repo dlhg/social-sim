@@ -2104,6 +2104,7 @@
 
 .tts-test-area {
   display: flex;
+  flex-direction: column;
   gap: 6px;
   margin-top: 4px;
   width: 100%;
@@ -2111,14 +2112,17 @@
 }
 
 .tts-test-input {
-  flex: 1;
+  width: 100%;
+  min-height: 5lh;
   background: var(--bg-surface);
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: 4px;
   padding: 6px 10px;
   font-size: 12px;
+  font-family: inherit;
   outline: none;
+  resize: vertical;
   transition: border-color var(--duration-fast) var(--ease-in-out);
 }
 
@@ -2127,6 +2131,7 @@
 }
 
 .tts-test-btn {
+  align-self: flex-end;
   padding: 6px 12px;
   font-size: 12px;
   white-space: nowrap;
