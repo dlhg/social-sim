@@ -151,6 +151,21 @@ export interface LLMResponse {
   action?: ActionData;
 }
 
+// ── Batch Conversation (full-conversation-in-one-shot) ──
+
+export interface BatchTurnData {
+  speaker_id: string;
+  speech: string;
+  emotion_delta: EmotionalState;
+  relationship_delta: number;
+  affection_delta: number;
+  intent: string;
+  mentioned_npcs?: MentionedNpc[];
+  secret_revealed?: string;
+  promise?: string;
+  action?: ActionData;
+}
+
 // ── Conversation Types ───────────────────────
 export type ConversationType =
   | "casual"

@@ -317,6 +317,165 @@ export function buildConversationMessages(
   return msgs;
 }
 
+// ── Batch conversation prompt (full conversation in one shot) ──
+
+export interface BatchPromptContext {
+  allNpcs?: Array<{ id: string; name: string }>;
+  trajectoryContext?: string;
+  locationContext?: string;
+  memoriesA?: RetrievedMemories;
+  memoriesB?: RetrievedMemories;
+  language?: string;
+  timeOfDay?: string;
+  pendingPlansA?: Array<{ withName: string; text: string }>;
+  pendingPlansB?: Array<{ withName: string; text: string }>;
+  conversationType?: ConversationType;
+  frozenRegardAtoB?: number;
+  frozenAffectionAtoB?: number;
+  frozenRegardBtoA?: number;
+  frozenAffectionBtoA?: number;
+}
+
+export function buildBatchConversationMessages(
+  npcA: NPC,
+  npcB: NPC,
+  firstSpeakerId: string,
+  minTurns: number,
+  maxTurns: number,
+  ctx: BatchPromptContext = {}
+): ChatMessage[] {
+  const relAtoB = ctx.frozenRegardAtoB ?? npcA.relationships[npcB.id]?.regard ?? 0;
+  const affAtoB = ctx.frozenAffectionAtoB ?? npcA.relationships[npcB.id]?.affection ?? 0;
+  const relBtoA = ctx.frozenRegardBtoA ?? npcB.relationships[npcA.id]?.regard ?? 0;
+  const affBtoA = ctx.frozenAffectionBtoA ?? npcB.relationships[npcA.id]?.affection ?? 0;
+
+  const emotionsA = describeEmotions(npcA.emotionalState);
+  const emotionsB = describeEmotions(npcB.emotionalState);
+
+  const guidanceA = [...emotionBehavioralGuidance(npcA.emotionalState), ...relationshipBehavioralGuidance(relAtoB, npcB.name)];
+  const guidanceB = [...emotionBehavioralGuidance(npcB.emotionalState), ...relationshipBehavioralGuidance(relBtoA, npcA.name)];
+
+  const memA = ctx.memoriesA;
+  const memB = ctx.memoriesB;
+
+  const otherNpcs = (ctx.allNpcs ?? []).filter(n => n.id !== npcA.id && n.id !== npcB.id);
+  const otherNpcsBlock = otherNpcs.length > 0
+    ? `\nOTHER PEOPLE THEY KNOW:\n${otherNpcs.map(n => `- ${n.name} (id: "${n.id}")`).join("\n")}`
+    : "";
+
+  const actionHintsA = buildActionGuidance(npcA, npcB);
+  const actionHintsB = buildActionGuidance(npcB, npcA);
+
+  const firstSpeaker = firstSpeakerId === npcA.id ? npcA : npcB;
+  const secondSpeaker = firstSpeakerId === npcA.id ? npcB : npcA;
+
+  const locationBlock = ctx.locationContext ? `\nLOCATION: ${ctx.locationContext}` : "";
+  const timeBlock = ctx.timeOfDay ? `\nTIME: ${ctx.timeOfDay}` : "";
+  const trajectoryBlock = ctx.trajectoryContext ? `\nRELATIONSHIP TRAJECTORY: ${ctx.trajectoryContext}` : "";
+
+  const plansA = ctx.pendingPlansA ?? [];
+  const plansB = ctx.pendingPlansB ?? [];
+  const plansBlockA = plansA.length > 0
+    ? `\nPENDING PLANS: ${plansA.map(p => `With ${p.withName}: "${p.text}"`).join("; ")}`
+    : "";
+  const plansBlockB = plansB.length > 0
+    ? `\nPENDING PLANS: ${plansB.map(p => `With ${p.withName}: "${p.text}"`).join("; ")}`
+    : "";
+
+  const secretsA = npcA.secrets.length > 0
+    ? `\nSECRETS: ${npcA.secrets.join("; ")}${npcA.emotionalState.trust >= 0.7 ? " (trust is high — may reveal)" : ""}`
+    : "";
+  const secretsB = npcB.secrets.length > 0
+    ? `\nSECRETS: ${npcB.secrets.join("; ")}${npcB.emotionalState.trust >= 0.7 ? " (trust is high — may reveal)" : ""}`
+    : "";
+
+  const inventoryA = npcA.inventory.length > 0
+    ? `\nINVENTORY: ${npcA.inventory.map(i => `${i.emoji} ${i.label}`).join(", ")}`
+    : "";
+  const inventoryB = npcB.inventory.length > 0
+    ? `\nINVENTORY: ${npcB.inventory.map(i => `${i.emoji} ${i.label}`).join(", ")}`
+    : "";
+
+  const memDirectA = memA?.direct.map(m => `- ${m.text}`).join("\n") ?? "(none)";
+  const memGossipA = memA?.gossip.map(m => `- ${m.text}`).join("\n") ?? "";
+  const memAboutA = memA?.aboutPartner.map(m => `- ${m.text}`).join("\n") ?? "";
+  const memDirectB = memB?.direct.map(m => `- ${m.text}`).join("\n") ?? "(none)";
+  const memGossipB = memB?.gossip.map(m => `- ${m.text}`).join("\n") ?? "";
+  const memAboutB = memB?.aboutPartner.map(m => `- ${m.text}`).join("\n") ?? "";
+
+  const system = `You are a dialogue writer. Generate a complete conversation between two characters.
+
+CHARACTER A: ${npcA.name} (id: "${npcA.id}")
+Personality: ${npcA.personalityTraits.join(", ")}
+Core desires: ${npcA.coreDesires.join(", ")}
+Emotional state: ${emotionsA}
+Current goal: ${npcA.currentGoal ?? "none"}${secretsA}${inventoryA}${plansBlockA}
+Relationship with ${npcB.name}: ${relationshipLabel(relAtoB)} (regard: ${relAtoB.toFixed(2)})${affAtoB > 0.15 ? ` | Romantic: ${describeAffection(affAtoB)}` : ""}
+Memories of ${npcB.name}:
+${memDirectA}${memAboutA ? `\nThings heard about ${npcB.name}:\n${memAboutA}` : ""}${memGossipA ? `\nGossip heard:\n${memGossipA}` : ""}
+${guidanceA.length > 0 ? `Behavioral guidance for ${npcA.name}:\n${guidanceA.map(g => `- ${g}`).join("\n")}` : ""}${actionHintsA}
+
+CHARACTER B: ${npcB.name} (id: "${npcB.id}")
+Personality: ${npcB.personalityTraits.join(", ")}
+Core desires: ${npcB.coreDesires.join(", ")}
+Emotional state: ${emotionsB}
+Current goal: ${npcB.currentGoal ?? "none"}${secretsB}${inventoryB}${plansBlockB}
+Relationship with ${npcA.name}: ${relationshipLabel(relBtoA)} (regard: ${relBtoA.toFixed(2)})${affBtoA > 0.15 ? ` | Romantic: ${describeAffection(affBtoA)}` : ""}
+Memories of ${npcA.name}:
+${memDirectB}${memAboutB ? `\nThings heard about ${npcA.name}:\n${memAboutB}` : ""}${memGossipB ? `\nGossip heard:\n${memGossipB}` : ""}
+${guidanceB.length > 0 ? `Behavioral guidance for ${npcB.name}:\n${guidanceB.map(g => `- ${g}`).join("\n")}` : ""}${actionHintsB}
+${trajectoryBlock}${locationBlock}${timeBlock}${otherNpcsBlock}
+
+${PREAMBLES[ctx.conversationType ?? "casual"]}
+
+Generate a conversation of ${minTurns}-${maxTurns} turns. ${firstSpeaker.name} speaks first, then they alternate.
+
+CONVERSATION ARC:
+- Early turns: establish the scene, greet or react naturally
+- Middle turns: develop the interaction — introduce new topics, share memories, react emotionally
+- Late turns: wrap up naturally — a parting thought, a resolution, or a lingering question
+
+RESPONSE FORMAT — respond with ONLY a JSON object:
+{
+  "turns": [
+    {
+      "speaker_id": "${firstSpeaker.id}",
+      "speech": "spoken words only — no narration",
+      "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0, "sadness": 0, "curiosity": 0, "disgust": 0, "guilt": 0 },
+      "relationship_delta": 0,
+      "affection_delta": 0,
+      "intent": "brief intent",
+      "mentioned_npcs": [],
+      "secret_revealed": null,
+      "promise": null,
+      "action": null
+    }
+  ]
+}
+
+RULES FOR DELTAS:
+- emotion_delta values: -0.2 to +0.2 per turn
+- relationship_delta: -0.1 to +0.1 per turn
+- affection_delta: -0.1 to +0.1 (only if romantic feelings are relevant)
+- mentioned_npcs: only if talking about someone not in this conversation. Format: [{"npc_id": "id", "sentiment": 0.3, "what_was_said": "summary"}]
+- secret_revealed: exact text of a secret being revealed, or null
+- promise: what is promised, or null. Promises are remembered and breaking them has consequences
+- action: one of give_gift, embrace, mock, threaten, storm_off, conspire, spread_rumor — or null. Most turns should have NO action. At most 1-2 actions in the entire conversation.
+
+SPEECH RULES:
+- "speech" must contain ONLY spoken dialog — no narration, no "she laughs", no third-person text
+- Vary message length naturally — sometimes just a few words, sometimes a paragraph
+- Use punctuation expressively: ellipses for hesitation, em-dashes for mid-thought changes, exclamation marks for emphasis
+- Embed vocal sounds naturally: [laugh], [chuckle], [sigh], [gasp], [cough], [groan], [sniff], [clear throat], [pause]. Don't overuse — 1-2 per turn at most.
+- Characters must strictly alternate. speaker_id alternates between "${firstSpeaker.id}" and "${secondSpeaker.id}".
+- NEVER repeat topics. Each turn must introduce something new.
+- Each character stays in character — their personality, emotions, and relationship color everything they say.
+- You MUST write ALL speech in ${ctx.language ?? "English"}. Never use any other language.
+- Output ONLY the JSON object. No markdown, no code fences, no extra text.`;
+
+  return [{ role: "system", content: system }, { role: "user", content: "Generate the conversation now." }];
+}
+
 // ── Reflection prompt (inner monologue) ─────────
 
 export function buildReflectionMessages(

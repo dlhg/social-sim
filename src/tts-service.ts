@@ -119,6 +119,34 @@ export class TTSService {
     });
   }
 
+  /** Pre-fetch TTS audio without queuing playback. Returns raw WAV bytes. */
+  async prefetch(npcId: string, text: string, emotions?: EmotionalState, language?: string): Promise<ArrayBuffer | null> {
+    if (!this.options.enabled || this.serverAvailable === false) return null;
+
+    if (this.serverAvailable === null) {
+      await this.checkServer();
+      if (!this.serverAvailable) return null;
+    }
+
+    const voice = this.assignVoice(npcId);
+    return this.fetchSpeech(text, voice, emotions, language);
+  }
+
+  /** Play a pre-fetched audio buffer. Returns a promise that resolves when playback ends. */
+  async playBuffer(buffer: ArrayBuffer): Promise<void> {
+    if (!this.options.enabled) return;
+    // Wait for any queued speech to finish first
+    while (this.playing) {
+      await new Promise(r => setTimeout(r, 50));
+    }
+    this.playing = true;
+    try {
+      await this.playAudio(buffer);
+    } finally {
+      this.playing = false;
+    }
+  }
+
   /** Stop current playback and clear the queue */
   stop() {
     this.queue = [];

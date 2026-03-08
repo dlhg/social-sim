@@ -1,4 +1,4 @@
-import type { LLMResponse, MentionedNpc, ActionData, ActionType } from "./types";
+import type { LLMResponse, BatchTurnData, MentionedNpc, ActionData, ActionType } from "./types";
 
 export function parseLLMResponse(raw: string): LLMResponse {
   const cleaned = extractJson(raw);
@@ -163,6 +163,63 @@ function validate(obj: unknown): LLMResponse {
     promise,
     action,
   };
+}
+
+// ── Batch conversation parser ────────────────────
+
+export function parseBatchLLMResponse(raw: string, validSpeakerIds: [string, string]): BatchTurnData[] {
+  const cleaned = extractJson(raw);
+  let obj: unknown;
+  try {
+    obj = JSON.parse(cleaned);
+  } catch {
+    obj = JSON.parse(repairJson(cleaned));
+  }
+
+  if (typeof obj !== "object" || obj === null) {
+    throw new Error("Batch response is not an object");
+  }
+
+  const o = obj as Record<string, unknown>;
+  const turns = o.turns;
+  if (!Array.isArray(turns) || turns.length === 0) {
+    throw new Error("Batch response has no turns array");
+  }
+
+  return turns.map((t: unknown, i: number) => {
+    if (typeof t !== "object" || t === null) {
+      throw new Error(`Turn ${i} is not an object`);
+    }
+    const turn = t as Record<string, unknown>;
+
+    const speakerId = String(turn.speaker_id ?? "");
+    if (!validSpeakerIds.includes(speakerId as typeof validSpeakerIds[number])) {
+      throw new Error(`Turn ${i} has invalid speaker_id: ${speakerId}`);
+    }
+
+    if (typeof turn.speech !== "string" || turn.speech.length === 0) {
+      throw new Error(`Turn ${i} has missing or empty speech`);
+    }
+
+    // Reuse the same validation logic as single-turn
+    const validated = validate({
+      ...turn,
+      conversation_end: false,
+    });
+
+    return {
+      speaker_id: speakerId,
+      speech: validated.speech,
+      emotion_delta: validated.emotion_delta,
+      relationship_delta: validated.relationship_delta,
+      affection_delta: validated.affection_delta,
+      intent: validated.intent,
+      mentioned_npcs: validated.mentioned_npcs,
+      secret_revealed: validated.secret_revealed,
+      promise: validated.promise,
+      action: validated.action,
+    };
+  });
 }
 
 function toNumber(val: unknown, fallback: number): number {

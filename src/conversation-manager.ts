@@ -5,6 +5,7 @@ import type {
   ActivityEvent,
   LLMResponse,
   ConversationType,
+  BatchTurnData,
   ActionData,
   ActionType,
   FloaterData,
@@ -14,9 +15,10 @@ import type { NpcStore } from "./npc-store";
 import type { MemoryService } from "./memory-service";
 import type { WorldSimulation } from "./world-simulation";
 import type { DayCycle } from "./day-cycle";
-import { buildConversationMessages, buildReflectionMessages } from "./prompt-builder";
+import type { TTSService } from "./tts-service";
+import { buildConversationMessages, buildBatchConversationMessages, buildReflectionMessages } from "./prompt-builder";
 import { accumulateChat } from "./ollama";
-import { parseLLMResponse, extractJson } from "./response-parser";
+import { parseLLMResponse, parseBatchLLMResponse, extractJson } from "./response-parser";
 
 export interface ConversationManagerCallbacks {
   onStreamToken: (npcId: string, fullText: string) => void;
@@ -73,6 +75,8 @@ export class ConversationManager {
   private dayCycle: DayCycle | null = null;
   private conversationEavesdroppers: Set<string> = new Set();
   private language = "English";
+  private _batchMode = false;
+  private ttsService: TTSService | null = null;
 
   constructor(
     private store: NpcStore,
@@ -90,6 +94,18 @@ export class ConversationManager {
 
   setDayCycle(dayCycle: DayCycle): void {
     this.dayCycle = dayCycle;
+  }
+
+  setTTSService(tts: TTSService): void {
+    this.ttsService = tts;
+  }
+
+  set batchMode(enabled: boolean) {
+    this._batchMode = enabled;
+  }
+
+  get batchMode(): boolean {
+    return this._batchMode;
   }
 
   // ── Lifecycle ────────────────────────────────
@@ -132,7 +148,11 @@ export class ConversationManager {
 
   forceConversation(npcAId: string, npcBId: string): void {
     if (this.activeSession || !this.running) return;
-    this.runConversation(npcAId, npcBId);
+    if (this._batchMode) {
+      this.runBatchConversation(npcAId, npcBId);
+    } else {
+      this.runConversation(npcAId, npcBId);
+    }
   }
 
   triggerConversation(npcAId: string, npcBId: string): boolean {
@@ -145,7 +165,11 @@ export class ConversationManager {
     const lastTime = this.cooldowns.get(pKey) ?? 0;
     if (now - lastTime < this.COOLDOWN_MS) return false;
 
-    this.runConversation(npcAId, npcBId);
+    if (this._batchMode) {
+      this.runBatchConversation(npcAId, npcBId);
+    } else {
+      this.runConversation(npcAId, npcBId);
+    }
     return true;
   }
 
@@ -312,6 +336,286 @@ export class ConversationManager {
     this.runPostConversationReflection(npcAId, npcBId, session).catch(
       () => {}
     );
+  }
+
+  // ── Batch Conversation (full conversation in one LLM call) ──
+
+  private async runBatchConversation(
+    npcAId: string,
+    npcBId: string
+  ): Promise<void> {
+    const npcA = this.store.get(npcAId);
+    const npcB = this.store.get(npcBId);
+    if (!npcA || !npcB) return;
+
+    this.abortController = new AbortController();
+    this.store.recordRelationshipSnapshot(npcAId, npcBId);
+    const convType = this.classifyConversationType(npcA, npcB);
+    this.activeConvType = convType;
+
+    // Freeze relationships (same as per-turn mode)
+    this.frozenRelationships.clear();
+    this.cumulativeRelDeltas.clear();
+    const relAtoB = npcA.relationships[npcBId];
+    const relBtoA = npcB.relationships[npcAId];
+    this.frozenRelationships.set(`${npcAId}->${npcBId}`, {
+      regard: relAtoB?.regard ?? 0,
+      affection: relAtoB?.affection ?? 0,
+    });
+    this.frozenRelationships.set(`${npcBId}->${npcAId}`, {
+      regard: relBtoA?.regard ?? 0,
+      affection: relBtoA?.affection ?? 0,
+    });
+    this.cumulativeRelDeltas.set(`${npcAId}->${npcBId}`, 0);
+    this.cumulativeRelDeltas.set(`${npcBId}->${npcAId}`, 0);
+
+    const maxTurns = this.rollMaxTurns(convType);
+    const minTurns = Math.max(this.MIN_TURNS, Math.floor(maxTurns * 0.6));
+
+    const session: ConversationSession = {
+      id: `conv_${Date.now()}`,
+      participantIds: [npcAId, npcBId],
+      messages: [],
+      turnCount: 0,
+      maxTurns,
+      status: "active",
+      startedAt: Date.now(),
+    };
+
+    this.activeSession = session;
+    this.conversationEavesdroppers.clear();
+    this.callbacks.onConversationStart(session);
+    this.log(`[batch] Conversation started between ${npcA.name} and ${npcB.name} [${convType}, ${minTurns}-${maxTurns} turns]`);
+
+    // ── 1. Build batch prompt ──
+    const allNpcs = this.store.getAll().map(n => ({ id: n.id, name: n.name }));
+    const velocity = this.store.getRelationshipVelocity(npcAId, npcBId);
+    let trajectoryContext: string | undefined;
+    if (velocity.values.length >= 2) {
+      const descriptor = velocity.trend === "improving" ? "warming up"
+        : velocity.trend === "declining" ? "deteriorating" : "stable";
+      trajectoryContext = `Their relationship has been ${descriptor} over their last ${velocity.values.length} encounters.`;
+    }
+
+    const nearWp = this.worldSim?.getNearestWaypoint(npcAId);
+    const locationContext = nearWp?.description;
+    const timeOfDay = this.dayCycle?.getLabel();
+
+    const memoriesA = this.memory.retrieve(npcAId, { partnerId: npcBId, excludeAbout: npcBId });
+    const memoriesB = this.memory.retrieve(npcBId, { partnerId: npcAId, excludeAbout: npcAId });
+
+    const pendingPlansA = this.store.getPromisesFor(npcAId)
+      .filter(p => p.status === "active")
+      .map(p => {
+        const otherId = p.promiserId === npcAId ? p.promiseeId : p.promiserId;
+        return { withName: this.store.get(otherId)?.name ?? otherId, text: p.text };
+      });
+    const pendingPlansB = this.store.getPromisesFor(npcBId)
+      .filter(p => p.status === "active")
+      .map(p => {
+        const otherId = p.promiserId === npcBId ? p.promiseeId : p.promiserId;
+        return { withName: this.store.get(otherId)?.name ?? otherId, text: p.text };
+      });
+
+    const frozenAtoB = this.frozenRelationships.get(`${npcAId}->${npcBId}`);
+    const frozenBtoA = this.frozenRelationships.get(`${npcBId}->${npcAId}`);
+
+    const messages = buildBatchConversationMessages(
+      npcA, npcB, npcAId, minTurns, maxTurns,
+      {
+        allNpcs, trajectoryContext, locationContext,
+        memoriesA, memoriesB,
+        language: this.language, timeOfDay,
+        pendingPlansA, pendingPlansB,
+        conversationType: convType,
+        frozenRegardAtoB: frozenAtoB?.regard,
+        frozenAffectionAtoB: frozenAtoB?.affection,
+        frozenRegardBtoA: frozenBtoA?.regard,
+        frozenAffectionBtoA: frozenBtoA?.affection,
+      }
+    );
+
+    // ── 2. Single LLM call ──
+    this.callbacks.onActivity({
+      timestamp: new Date(),
+      text: `${npcA.name} and ${npcB.name} are talking...`,
+      activityType: "thought",
+      npcId: npcAId,
+    });
+
+    let turns: BatchTurnData[];
+    try {
+      const raw = await accumulateChat(messages, {
+        signal: this.abortController!.signal,
+        numPredict: 4096,
+      });
+      turns = parseBatchLLMResponse(raw, [npcAId, npcBId]);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        this.cleanupSession(session, npcAId, npcBId);
+        return;
+      }
+      this.log(`[batch] LLM/parse error, falling back to per-turn mode: ${e}`);
+      this.cleanupSession(session, npcAId, npcBId);
+      // Fallback to per-turn mode
+      this.runConversation(npcAId, npcBId);
+      return;
+    }
+
+    if (turns.length === 0) {
+      this.log("[batch] No turns generated, falling back to per-turn mode");
+      this.cleanupSession(session, npcAId, npcBId);
+      this.runConversation(npcAId, npcBId);
+      return;
+    }
+
+    this.log(`[batch] Generated ${turns.length} turns, pre-fetching TTS...`);
+
+    // ── 3. Pre-fetch all TTS in parallel ──
+    const audioBuffers: (ArrayBuffer | null)[] = [];
+    if (this.ttsService) {
+      const promises = turns.map(turn => {
+        const speaker = this.store.get(turn.speaker_id)!;
+        return this.ttsService!.prefetch(
+          turn.speaker_id,
+          turn.speech,
+          speaker.emotionalState,
+          this.language
+        );
+      });
+      const results = await Promise.all(promises);
+      audioBuffers.push(...results);
+    }
+
+    this.log("[batch] TTS ready, starting playback...");
+
+    // ── 4. Playback loop ──
+    for (let i = 0; i < turns.length; i++) {
+      if (!this.running || session.status !== "active") break;
+
+      // Wait while paused
+      while (this.paused && this.running) {
+        await this.sleep(200);
+      }
+      if (!this.running) break;
+
+      const turn = turns[i];
+      const speakerId = turn.speaker_id;
+      const listenerId = speakerId === npcAId ? npcBId : npcAId;
+      const speaker = this.store.get(speakerId)!;
+      const listener = this.store.get(listenerId)!;
+
+      this.callbacks.onSpeakerChange(speakerId);
+
+      // Simulate streaming so speech bubbles type in naturally
+      await this.simulateStreaming(speakerId, turn.speech);
+
+      // Build LLMResponse from batch turn data
+      const response: LLMResponse = {
+        speech: turn.speech,
+        emotion_delta: turn.emotion_delta,
+        relationship_delta: turn.relationship_delta,
+        affection_delta: turn.affection_delta,
+        intent: turn.intent,
+        conversation_end: false,
+        mentioned_npcs: turn.mentioned_npcs,
+        secret_revealed: turn.secret_revealed,
+        promise: turn.promise,
+        action: turn.action,
+      };
+
+      // Apply side effects during playback (same as per-turn)
+      this.store.batch(() => {
+        this.applyTurnEffects(speaker, listener, response);
+      });
+
+      if (response.action?.action === "storm_off") {
+        response.conversation_end = true;
+      }
+
+      const msg: ConversationMessage = {
+        npcId: speakerId,
+        npcName: speaker.name,
+        text: response.speech,
+        intent: response.intent,
+        rawResponse: response,
+      };
+
+      session.messages.push(msg);
+      session.turnCount++;
+
+      this.callbacks.onTurnComplete(msg);
+      this.callbacks.onStreamToken(speakerId, "");
+
+      this.logEmotionShifts(speaker, listener, response);
+      this.logRelationshipShift(speaker, listener, response);
+
+      // Eavesdropping (50% chance per turn)
+      if (this.worldSim && Math.random() < 0.5) {
+        this.checkEavesdroppers(speaker, listener, response);
+      }
+
+      // Play audio and wait for it to finish
+      if (audioBuffers[i]) {
+        await this.ttsService!.playBuffer(audioBuffers[i]!);
+      } else {
+        // No audio: wait based on text length so user can read
+        await this.sleep(Math.max(1500, turn.speech.length * 40));
+      }
+
+      // storm_off ends the conversation
+      if (response.conversation_end) {
+        this.log(`${speaker.name} ended the conversation`);
+        break;
+      }
+    }
+
+    // ── 5. Cleanup (same as per-turn) ──
+    session.status = "completed";
+    this.store.recordRelationshipSnapshot(npcAId, npcBId);
+    this.activeSession = null;
+    this.frozenRelationships.clear();
+    this.cumulativeRelDeltas.clear();
+    this.lastConversationEnd = Date.now();
+    this.cooldowns.set(this.pairKey(npcAId, npcBId), Date.now());
+    this.callbacks.onSpeakerChange(null);
+    this.callbacks.onConversationEnd(session);
+    this.log(`[batch] Conversation ended between ${npcA.name} and ${npcB.name} (${session.turnCount} turns)`);
+
+    this.store.batch(() => {
+      this.store.decayEmotions(npcAId);
+      this.store.decayEmotions(npcBId);
+      this.memory.decayAllRecency();
+    });
+
+    this.storeConversationSummaryMemory(npcAId, npcBId, session);
+    this.logConversationSummary(npcAId, npcBId);
+    this.applyEmotionalContagion(npcAId, npcBId, session);
+    this.triggerPostConversationBehavior(npcAId, npcBId, session);
+    this.runPostConversationReflection(npcAId, npcBId, session).catch(() => {});
+  }
+
+  /** Simulate streaming by progressively revealing speech text */
+  private async simulateStreaming(npcId: string, speech: string): Promise<void> {
+    // Build a partial JSON string that extractSpeechFromStream can parse
+    const fullJson = JSON.stringify({ speech });
+    const chunkSize = Math.max(3, Math.ceil(fullJson.length / 20));
+    for (let pos = 0; pos < fullJson.length; pos += chunkSize) {
+      this.callbacks.onStreamToken(npcId, fullJson.slice(0, pos + chunkSize));
+      await this.sleep(50);
+    }
+    // Final complete token
+    this.callbacks.onStreamToken(npcId, fullJson);
+  }
+
+  /** Clean up session state without running post-conversation hooks */
+  private cleanupSession(session: ConversationSession, npcAId: string, npcBId: string): void {
+    session.status = "aborted";
+    this.activeSession = null;
+    this.frozenRelationships.clear();
+    this.cumulativeRelDeltas.clear();
+    this.callbacks.onSpeakerChange(null);
+    this.callbacks.onConversationEnd(session);
   }
 
   private async executeTurn(

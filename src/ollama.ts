@@ -6,21 +6,45 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface AccumulateChatOptions {
+  onProgress?: (accumulated: string) => void;
+  signal?: AbortSignal;
+  numPredict?: number;
+}
+
 export async function accumulateChat(
   messages: ChatMessage[],
-  onProgress?: (accumulated: string) => void,
+  onProgressOrOpts?: ((accumulated: string) => void) | AccumulateChatOptions,
   signal?: AbortSignal
 ): Promise<string> {
+  // Support both old (positional) and new (options object) calling styles
+  let onProgress: ((accumulated: string) => void) | undefined;
+  let abortSignal = signal;
+  let numPredict: number | undefined;
+
+  if (typeof onProgressOrOpts === "function") {
+    onProgress = onProgressOrOpts;
+  } else if (onProgressOrOpts) {
+    onProgress = onProgressOrOpts.onProgress;
+    abortSignal = onProgressOrOpts.signal ?? signal;
+    numPredict = onProgressOrOpts.numPredict;
+  }
+
+  const body: Record<string, unknown> = {
+    model: MODEL,
+    messages,
+    stream: true,
+    format: "json",
+  };
+  if (numPredict) {
+    body.options = { num_predict: numPredict };
+  }
+
   const res = await fetch(OLLAMA_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: MODEL,
-      messages,
-      stream: true,
-      format: "json",
-    }),
-    signal,
+    body: JSON.stringify(body),
+    signal: abortSignal,
   });
 
   if (!res.ok) {

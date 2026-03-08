@@ -405,44 +405,46 @@ function App() {
             }
             return [...prev, { npcId, text: speechText, type: "speech", startedAt: Date.now() }];
           });
-          // Stream TTS: Chatterbox Turbo sends the full message at once for
-          // better expressiveness; Kokoro streams sentence-by-sentence for
-          // lower latency.
-          const ttsEmotions = storeRef.current.get(npcId)?.emotionalState;
+          // In batch mode, TTS is handled by the conversation manager's
+          // playback loop — skip TTS dispatch here entirely.
+          if (!managerRef.current?.batchMode) {
+            const ttsEmotions = storeRef.current.get(npcId)?.emotionalState;
 
-          if (ttsEngineRef.current === "chatterbox") {
-            // Chatterbox path: wait for complete text, send as one chunk.
-            // onTurnComplete will handle dispatching the full message.
-            if (complete && speechText.trim()) {
-              ttsStreamedRef.current.add(npcId);
-              ttsRef.current.speak(npcId, speechText.trim(), ttsEmotions, languageRef.current);
+            if (ttsEngineRef.current === "chatterbox") {
+              // Chatterbox path: wait for complete text, send as one chunk.
+              if (complete && speechText.trim()) {
+                ttsStreamedRef.current.add(npcId);
+                ttsRef.current.speak(npcId, speechText.trim(), ttsEmotions, languageRef.current);
+              }
+            } else {
+              // Kokoro path: stream sentence-by-sentence as they complete
+              const cursor = ttsSentIndexRef.current.get(npcId) ?? 0;
+              const boundaryRegex = /[.!?]\s+/g;
+              boundaryRegex.lastIndex = cursor;
+              let newCursor = cursor;
+              let match: RegExpExecArray | null;
+              while ((match = boundaryRegex.exec(speechText)) !== null) {
+                const sentEnd = match.index + 1; // include punctuation
+                const sentence = speechText.slice(newCursor, sentEnd).trim();
+                if (sentence) {
+                  ttsStreamedRef.current.add(npcId);
+                  ttsRef.current.speak(npcId, sentence, ttsEmotions, languageRef.current);
+                }
+                newCursor = match.index + match[0].length;
+              }
+              ttsSentIndexRef.current.set(npcId, newCursor);
+              if (complete) {
+                const remaining = speechText.slice(newCursor).trim();
+                if (remaining) {
+                  ttsStreamedRef.current.add(npcId);
+                  ttsRef.current.speak(npcId, remaining, ttsEmotions, languageRef.current);
+                }
+                ttsSentIndexRef.current.set(npcId, speechText.length);
+              }
             }
           } else {
-            // Kokoro path: stream sentence-by-sentence as they complete
-            const cursor = ttsSentIndexRef.current.get(npcId) ?? 0;
-            const boundaryRegex = /[.!?]\s+/g;
-            boundaryRegex.lastIndex = cursor;
-            let newCursor = cursor;
-            let match: RegExpExecArray | null;
-            while ((match = boundaryRegex.exec(speechText)) !== null) {
-              const sentEnd = match.index + 1; // include punctuation
-              const sentence = speechText.slice(newCursor, sentEnd).trim();
-              if (sentence) {
-                ttsStreamedRef.current.add(npcId);
-                ttsRef.current.speak(npcId, sentence, ttsEmotions, languageRef.current);
-              }
-              newCursor = match.index + match[0].length;
-            }
-            ttsSentIndexRef.current.set(npcId, newCursor);
-            // When speech field closes, dispatch any remaining text
-            if (complete) {
-              const remaining = speechText.slice(newCursor).trim();
-              if (remaining) {
-                ttsStreamedRef.current.add(npcId);
-                ttsRef.current.speak(npcId, remaining, ttsEmotions, languageRef.current);
-              }
-              ttsSentIndexRef.current.set(npcId, speechText.length);
-            }
+            // Batch mode: mark as streamed so onTurnComplete skips TTS too
+            ttsStreamedRef.current.add(npcId);
           }
         }
       },
@@ -610,6 +612,8 @@ function App() {
     manager.setWorldSimulation(world);
     manager.setDayCycle(dayCycle);
     manager.setLanguage(languageRef.current);
+    manager.setTTSService(ttsRef.current);
+    manager.batchMode = true;
 
     // Pre-assign TTS voices to all NPCs
     for (const npc of allNpcs) {
