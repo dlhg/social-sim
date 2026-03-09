@@ -312,6 +312,31 @@ export function getVoicePreviewUrl(voiceId: string): string {
   return `${TTS_BASE}/voice-preview/${voiceId}`;
 }
 
+/** Extract audio from a YouTube URL for voice cloning. */
+export async function youtubeVoiceClip(
+  url: string,
+  start: number,
+  end: number,
+  voiceId: string,
+): Promise<{ voice_id: string; duration_seconds: number } | null> {
+  try {
+    const res = await fetch(`${TTS_BASE}/youtube-voice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, start, end, voice_id: voiceId }),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text);
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn("[tts] youtube voice error:", err);
+    return null;
+  }
+}
+
 /** Delete a custom voice from the TTS server. */
 export async function deleteVoice(voiceId: string): Promise<boolean> {
   try {

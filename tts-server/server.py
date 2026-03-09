@@ -20,7 +20,11 @@ Usage:
 
 import io
 import os
+import sys
 import uuid
+import subprocess
+import tempfile
+import threading
 from pathlib import Path
 from flask import Flask, request, Response, jsonify, send_file
 from flask_cors import CORS
@@ -192,6 +196,48 @@ def compute_emotion_speed(emotions: dict) -> float:
     return max(0.85, min(1.25, 1.0 + speed_delta))
 
 
+# ── Audio processing helpers ──────────────────────
+
+def process_voice_audio(audio_data: np.ndarray, sample_rate: int) -> tuple[np.ndarray, int]:
+    """Convert to mono, resample to 24kHz, cap at 30 seconds."""
+    if len(audio_data.shape) > 1:
+        audio_data = audio_data.mean(axis=1)
+
+    if sample_rate != 24000:
+        duration = len(audio_data) / sample_rate
+        new_length = int(duration * 24000)
+        audio_data = np.interp(
+            np.linspace(0, len(audio_data), new_length),
+            np.arange(len(audio_data)),
+            audio_data,
+        )
+        sample_rate = 24000
+
+    max_samples = 30 * sample_rate
+    audio_data = audio_data[:max_samples]
+    return audio_data, sample_rate
+
+
+def save_voice(voice_id: str, audio_data: np.ndarray, sample_rate: int) -> float:
+    """Save processed audio as WAV and kick off preview generation. Returns duration."""
+    out_path = VOICES_DIR / f"{voice_id}.wav"
+    sf.write(str(out_path), audio_data, sample_rate, subtype="PCM_16")
+    duration = round(len(audio_data) / sample_rate, 2)
+    print(f"[tts] Saved custom voice: {voice_id} ({duration}s)")
+
+    def _generate_preview():
+        try:
+            wav_bytes = synthesize_chatterbox(PREVIEW_TEXT, voice_id)
+            preview_path = PREVIEW_DIR / f"{voice_id}.wav"
+            preview_path.write_bytes(wav_bytes)
+            print(f"[tts] Generated preview for custom voice: {voice_id}")
+        except Exception as e:
+            print(f"[tts] Preview generation failed for {voice_id}: {e}")
+    threading.Thread(target=_generate_preview, daemon=True).start()
+
+    return duration
+
+
 # ── Endpoints ─────────────────────────────────────
 
 @app.route("/health", methods=["GET"])
@@ -353,8 +399,6 @@ def upload_voice():
     Accepts multipart/form-data with:
       - file: audio file (WAV or MP3)
       - voice_id (optional): custom ID, defaults to custom_<uuid>
-
-    Resamples to 24kHz mono WAV, trims to 10s max.
     """
     if "file" not in request.files:
         return Response("No file provided", status=400)
@@ -367,42 +411,79 @@ def upload_voice():
     except Exception as e:
         return Response(f"Could not read audio file: {e}", status=400)
 
-    # Convert to mono if stereo
-    if len(audio_data.shape) > 1:
-        audio_data = audio_data.mean(axis=1)
+    audio_data, sample_rate = process_voice_audio(audio_data, sample_rate)
+    duration = save_voice(voice_id, audio_data, sample_rate)
 
-    # Resample to 24kHz if needed
-    if sample_rate != 24000:
-        duration = len(audio_data) / sample_rate
-        new_length = int(duration * 24000)
-        audio_data = np.interp(
-            np.linspace(0, len(audio_data), new_length),
-            np.arange(len(audio_data)),
-            audio_data,
-        )
-        sample_rate = 24000
+    return jsonify({
+        "voice_id": voice_id,
+        "duration_seconds": duration,
+    })
 
-    # Cap at 30 seconds to avoid huge files — longer clips are fine for quality
-    max_samples = 30 * sample_rate
-    audio_data = audio_data[:max_samples]
 
-    out_path = VOICES_DIR / f"{voice_id}.wav"
-    sf.write(str(out_path), audio_data, sample_rate, subtype="PCM_16")
+@app.route("/youtube-voice", methods=["POST"])
+def youtube_voice():
+    """
+    Extract audio from a YouTube URL for voice cloning.
 
-    duration = round(len(audio_data) / sample_rate, 2)
-    print(f"[tts] Saved custom voice: {voice_id} ({duration}s)")
+    JSON body:
+      { "url": "https://...", "start": 10.0, "end": 25.0, "voice_id": "custom_foo" }
 
-    # Auto-generate a Chatterbox preview clip in the background
-    import threading
-    def _generate_preview():
+    start/end are in seconds. Duration capped at 30s.
+    """
+    data = request.get_json(force=True)
+    url = data.get("url", "").strip()
+    start = float(data.get("start", 0))
+    end = float(data.get("end", 30))
+    voice_id = data.get("voice_id", f"custom_{uuid.uuid4().hex[:8]}")
+
+    if not url:
+        return Response("No URL provided", status=400)
+    if end <= start:
+        return Response("End time must be after start time", status=400)
+    if end - start > 30:
+        end = start + 30  # cap at 30s
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_file = os.path.join(tmpdir, "audio.wav")
+
+        # Use python -m yt_dlp so it works inside the venv regardless of PATH
+        section = f"*{start}-{end}"
+        cmd = [
+            sys.executable, "-m", "yt_dlp",
+            "--no-playlist",
+            "--download-sections", section,
+            "--extract-audio",
+            "--audio-format", "wav",
+            "--audio-quality", "0",
+            "--output", out_file,
+            "--force-overwrites",
+            "--quiet",
+            url,
+        ]
+
         try:
-            wav_bytes = synthesize_chatterbox(PREVIEW_TEXT, voice_id)
-            preview_path = PREVIEW_DIR / f"{voice_id}.wav"
-            preview_path.write_bytes(wav_bytes)
-            print(f"[tts] Generated preview for custom voice: {voice_id}")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            return Response("Download timed out", status=504)
+
+        if result.returncode != 0:
+            err = result.stderr.strip()[-200:] if result.stderr else "Unknown error"
+            print(f"[tts] yt-dlp error: {result.stderr}")
+            return Response(f"yt-dlp failed: {err}", status=502)
+
+        # yt-dlp may append codec info to filename — find the actual output
+        candidates = list(Path(tmpdir).glob("audio*"))
+        if not candidates:
+            return Response("No audio file produced", status=500)
+        actual_file = candidates[0]
+
+        try:
+            audio_data, sample_rate = sf.read(actual_file)
         except Exception as e:
-            print(f"[tts] Preview generation failed for {voice_id}: {e}")
-    threading.Thread(target=_generate_preview, daemon=True).start()
+            return Response(f"Could not read extracted audio: {e}", status=500)
+
+    audio_data, sample_rate = process_voice_audio(audio_data, sample_rate)
+    duration = save_voice(voice_id, audio_data, sample_rate)
 
     return jsonify({
         "voice_id": voice_id,

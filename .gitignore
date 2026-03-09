@@ -27,3 +27,5 @@ dist-ssr
 tts-server/.tts-cache/
 tts-server/.venv/
 tts-server/.venv-chatterbox/
+tts-server/voices/
+tts-server/__pycache__/

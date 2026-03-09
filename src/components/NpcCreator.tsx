@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { createNpc, randomizeFields, AVATAR_OPTIONS, COLOR_SWATCHES, RANDOM_ITEMS } from "../npcs";
 import type { NPC, InventoryItem, ItemCategory, EmotionalState } from "../types";
 import { ITEM_LIFETIME_BY_CATEGORY } from "../types";
-import { uploadVoiceClip, fetchVoices, getVoicePreviewUrl, deleteVoice } from "../tts-service";
+import { uploadVoiceClip, fetchVoices, getVoicePreviewUrl, deleteVoice, youtubeVoiceClip } from "../tts-service";
 import type { VoiceInfo } from "../tts-service";
 
 interface NpcCreatorProps {
@@ -84,6 +84,12 @@ export function NpcCreator({
   );
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // ── YouTube extraction state ───────────────────
+  const [ytUrl, setYtUrl] = useState("");
+  const [ytStart, setYtStart] = useState("0");
+  const [ytEnd, setYtEnd] = useState("30");
+  const [ytLoading, setYtLoading] = useState(false);
 
   // If editing an NPC with a custom voice, show its existing clip
   const hasExistingVoice = voiceMode === "custom" && !!customVoiceId && !audioBlob;
@@ -261,6 +267,43 @@ export function NpcCreator({
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     setAudioUrl(null);
     setCustomVoiceId(undefined);
+  }
+
+  async function handleYoutubeExtract() {
+    if (!ytUrl.trim()) {
+      setError("Enter a YouTube URL");
+      return;
+    }
+    const start = parseFloat(ytStart) || 0;
+    const end = parseFloat(ytEnd) || 30;
+    if (end <= start) {
+      setError("End time must be after start time");
+      return;
+    }
+
+    setYtLoading(true);
+    setError("");
+    const currentId = name.trim().toLowerCase().replace(/\s+/g, "-");
+    const voiceId = `custom_${currentId || "yt_" + Date.now()}`;
+    const result = await youtubeVoiceClip(ytUrl.trim(), start, end, voiceId);
+    setYtLoading(false);
+
+    if (!result) {
+      setError("Failed to extract audio from YouTube. Check the URL and time range.");
+      return;
+    }
+
+    setCustomVoiceId(result.voice_id);
+    setAudioBlob(null); // no local blob — it's already on the server
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    // Fetch the extracted clip from the server so the audio player shows up
+    try {
+      const clipRes = await fetch(`http://localhost:8787/voice-clip/${result.voice_id}`);
+      if (clipRes.ok) {
+        const blob = await clipRes.blob();
+        setAudioUrl(URL.createObjectURL(blob));
+      }
+    } catch { /* preview will still work via Test button */ }
   }
 
   async function playPreview(voiceId: string) {
@@ -616,15 +659,16 @@ export function NpcCreator({
                   </button>
                 </div>
               ) : (
+                <>
                 <div className="voice-controls">
                   <button
                     className={`btn voice-record-btn ${isRecording ? "recording" : ""}`}
                     onClick={isRecording ? stopRecording : startRecording}
                   >
-                    {isRecording ? `Stop (${recordingTime}s)` : "Record Voice"}
+                    {isRecording ? `Stop (${recordingTime}s)` : "Record"}
                   </button>
                   <label className="btn voice-upload-btn">
-                    Upload Clip
+                    Upload
                     <input
                       type="file"
                       accept="audio/wav,audio/mpeg,audio/mp3,audio/m4a,audio/webm,.wav,.mp3,.m4a"
@@ -633,6 +677,47 @@ export function NpcCreator({
                     />
                   </label>
                 </div>
+                <div className="voice-yt-section">
+                  <input
+                    type="text"
+                    className="voice-yt-url"
+                    value={ytUrl}
+                    onChange={(e) => setYtUrl(e.target.value)}
+                    placeholder="YouTube URL"
+                  />
+                  <div className="voice-yt-times">
+                    <label className="voice-yt-time-label">
+                      Start (s)
+                      <input
+                        type="number"
+                        className="voice-yt-time"
+                        value={ytStart}
+                        onChange={(e) => setYtStart(e.target.value)}
+                        min="0"
+                        step="0.1"
+                      />
+                    </label>
+                    <label className="voice-yt-time-label">
+                      End (s)
+                      <input
+                        type="number"
+                        className="voice-yt-time"
+                        value={ytEnd}
+                        onChange={(e) => setYtEnd(e.target.value)}
+                        min="0"
+                        step="0.1"
+                      />
+                    </label>
+                    <button
+                      className="btn voice-yt-extract-btn"
+                      onClick={handleYoutubeExtract}
+                      disabled={ytLoading}
+                    >
+                      {ytLoading ? "Extracting..." : "Extract"}
+                    </button>
+                  </div>
+                </div>
+                </>
               )}
             </>
           )}

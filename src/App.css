@@ -1489,6 +1489,76 @@
   gap: 8px;
 }
 
+.voice-yt-section {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.voice-yt-url {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.voice-yt-url::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.voice-yt-times {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.voice-yt-time-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.voice-yt-time {
+  padding: 5px 6px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-size: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.voice-yt-extract-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--accent-info);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent-info);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--duration-fast);
+}
+
+.voice-yt-extract-btn:hover:not(:disabled) {
+  background: rgba(77, 208, 225, 0.1);
+}
+
+.voice-yt-extract-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .voice-record-btn,
 .voice-upload-btn {
   flex: 1;
