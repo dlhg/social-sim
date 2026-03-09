@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "start": "npm run tts & npm run dev",
+    "start": "npm run tts & npm run tts:main & npm run dev",
     "tts": "tts-server/.venv-chatterbox/bin/python tts-server/chatterbox_server.py",
+    "tts:main": "tts-server/.venv/bin/python tts-server/server.py",
     "tts:restart": "pkill -f 'chatterbox_server.py' 2>/dev/null; sleep 1 && npm run tts",
     "tts:clear": "rm -rf tts-server/.tts-cache && echo 'TTS cache cleared'",
     "build": "tsc -b && vite build",
