@@ -334,6 +334,8 @@ export interface BatchPromptContext {
   frozenAffectionAtoB?: number;
   frozenRegardBtoA?: number;
   frozenAffectionBtoA?: number;
+  /** Summary of the immediately preceding conversation between these two, for continuity */
+  previousConversation?: string;
 }
 
 export function buildBatchConversationMessages(
@@ -372,6 +374,9 @@ export function buildBatchConversationMessages(
   const locationBlock = ctx.locationContext ? `\nLOCATION: ${ctx.locationContext}` : "";
   const timeBlock = ctx.timeOfDay ? `\nTIME: ${ctx.timeOfDay}` : "";
   const trajectoryBlock = ctx.trajectoryContext ? `\nRELATIONSHIP TRAJECTORY: ${ctx.trajectoryContext}` : "";
+  const prevConvBlock = ctx.previousConversation
+    ? `\nPREVIOUS CONVERSATION (just ended — continue naturally from where they left off, do NOT repeat or rehash the same topics):\n${ctx.previousConversation}`
+    : "";
 
   const plansA = ctx.pendingPlansA ?? [];
   const plansB = ctx.pendingPlansB ?? [];
@@ -424,7 +429,7 @@ Relationship with ${npcA.name}: ${relationshipLabel(relBtoA)} (regard: ${relBtoA
 Memories of ${npcA.name}:
 ${memDirectB}${memAboutB ? `\nThings heard about ${npcA.name}:\n${memAboutB}` : ""}${memGossipB ? `\nGossip heard:\n${memGossipB}` : ""}
 ${guidanceB.length > 0 ? `Behavioral guidance for ${npcB.name}:\n${guidanceB.map(g => `- ${g}`).join("\n")}` : ""}${actionHintsB}
-${trajectoryBlock}${locationBlock}${timeBlock}${otherNpcsBlock}
+${trajectoryBlock}${locationBlock}${timeBlock}${otherNpcsBlock}${prevConvBlock}
 
 ${PREAMBLES[ctx.conversationType ?? "casual"]}
 

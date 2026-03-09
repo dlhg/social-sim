@@ -2830,6 +2830,31 @@
   opacity: 0.5;
 }
 
+.dd-turn-pending {
+  opacity: 0.35;
+}
+
+.dd-turn-tts-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+}
+
+.dd-tts-ready {
+  background: #7ec87e;
+}
+
+.dd-tts-generating {
+  background: #e0a84c;
+  animation: pulse-recording 1s ease-in-out infinite;
+}
+
+.dd-tts-pending {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 .dd-pair-names {
   font-size: 14px;
   font-weight: 600;

@@ -33,33 +33,49 @@ function StalenessBar({ ageMs, maxAgeMs }: { ageMs: number; maxAgeMs: number }) 
   );
 }
 
-function TurnList({ speeches, speakerNames, convIndex, onPlayTurn, currentTurn }: {
+function TurnList({ speeches, speakerNames, convIndex, onPlayTurn, currentTurn, ttsCompletedTurns }: {
   speeches: string[];
   speakerNames: string[];
   convIndex?: number;
   onPlayTurn?: (convIndex: number, turnIndex: number) => void;
   currentTurn?: number;
+  /** How many turns have finished TTS (undefined = all done or not applicable) */
+  ttsCompletedTurns?: number;
 }) {
   return (
     <div className="dd-turns-scroll">
-      {speeches.map((speech, i) => (
-        <div
-          key={i}
-          className={`dd-turn-line${currentTurn !== undefined && i === currentTurn ? " dd-turn-current" : ""}${currentTurn !== undefined && i < currentTurn ? " dd-turn-played" : ""}`}
-        >
-          {onPlayTurn && convIndex !== undefined && (
-            <button
-              className="dd-play-btn"
-              onClick={() => onPlayTurn(convIndex, i)}
-              title="Play audio"
-            >
-              &#9654;
-            </button>
-          )}
-          <span className="dd-turn-speaker">{speakerNames[i]}:</span>{" "}
-          <span className="dd-turn-text">{speech}</span>
-        </div>
-      ))}
+      {speeches.map((speech, i) => {
+        const audioReady = ttsCompletedTurns === undefined || i < ttsCompletedTurns;
+        const generating = ttsCompletedTurns !== undefined && i === ttsCompletedTurns;
+        return (
+          <div
+            key={i}
+            className={[
+              "dd-turn-line",
+              currentTurn !== undefined && i === currentTurn ? "dd-turn-current" : "",
+              currentTurn !== undefined && i < currentTurn ? "dd-turn-played" : "",
+              !audioReady && !generating ? "dd-turn-pending" : "",
+            ].filter(Boolean).join(" ")}
+          >
+            {ttsCompletedTurns !== undefined && (
+              <span className={`dd-turn-tts-dot ${audioReady ? "dd-tts-ready" : generating ? "dd-tts-generating" : "dd-tts-pending"}`}
+                title={audioReady ? "Audio ready" : generating ? "Generating..." : "Pending"}
+              />
+            )}
+            {onPlayTurn && convIndex !== undefined && audioReady && (
+              <button
+                className="dd-play-btn"
+                onClick={() => onPlayTurn(convIndex, i)}
+                title="Play audio"
+              >
+                &#9654;
+              </button>
+            )}
+            <span className="dd-turn-speaker">{speakerNames[i]}:</span>{" "}
+            <span className="dd-turn-text">{speech}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -72,6 +88,7 @@ function PreparedCard({ info, convIndex, onPlayTurn }: {
   const isTts = info.phase === "generating_tts";
   const isQueued = info.phase === "queued_for_tts";
   const isPending = isTts || isQueued;
+  const allTtsDone = info.ttsCompletedTurns === undefined || info.ttsCompletedTurns >= info.turnCount;
   return (
     <div className={`dd-card ${isPending ? "dd-card-preparing" : "dd-card-ready"}`}>
       <div className="dd-card-header">
@@ -80,7 +97,7 @@ function PreparedCard({ info, convIndex, onPlayTurn }: {
         </div>
         {isTts && (
           <span className="dd-phase-badge dd-phase-tts">
-            TTS {formatDuration(info.ttsElapsedMs ?? 0)}
+            TTS {info.ttsCompletedTurns ?? 0}/{info.ttsTotalTurns ?? info.turnCount}
           </span>
         )}
         {isQueued && (
@@ -88,18 +105,24 @@ function PreparedCard({ info, convIndex, onPlayTurn }: {
             queued
           </span>
         )}
+        {!isPending && !allTtsDone && (
+          <span className="dd-phase-badge dd-phase-tts">
+            TTS {info.ttsCompletedTurns}/{info.turnCount}
+          </span>
+        )}
       </div>
       <div className="dd-card-meta">
         {info.convType} &middot; {info.turnCount} turns
         &middot; LLM {formatDuration(info.llmDurationMs)}
-        {!isPending && <> + TTS {formatDuration(info.ttsDurationMs)}</>}
+        {allTtsDone && info.ttsDurationMs > 0 && <> + TTS {formatDuration(info.ttsDurationMs)}</>}
       </div>
-      {!isPending && <StalenessBar ageMs={info.ageMs} maxAgeMs={info.maxAgeMs} />}
+      {allTtsDone && !isPending && <StalenessBar ageMs={info.ageMs} maxAgeMs={info.maxAgeMs} />}
       <TurnList
         speeches={info.speeches}
         speakerNames={info.speakerNames}
-        convIndex={isPending ? undefined : convIndex}
-        onPlayTurn={isPending ? undefined : onPlayTurn}
+        convIndex={convIndex}
+        onPlayTurn={onPlayTurn}
+        ttsCompletedTurns={allTtsDone ? undefined : (info.ttsCompletedTurns ?? 0)}
       />
     </div>
   );

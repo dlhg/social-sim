@@ -65,6 +65,10 @@ interface PreparedConversation {
   preparedAt: number;
   llmDurationMs: number;
   ttsDurationMs: number;
+  /** How many turns have finished TTS. When < turns.length, TTS is still running. */
+  ttsCompletedCount: number;
+  /** Whether all TTS is done */
+  ttsComplete: boolean;
 }
 
 export type DirectorPhase = "idle" | "llm_generating" | "tts_prefetching" | "ready";
@@ -198,6 +202,9 @@ export class ConversationManager {
   // Rate limit backoff — don't retry LLM until this timestamp
   private llmBackoffUntil = 0;
 
+  // Last conversation dialogue per pair — used for continuity when re-queuing the same pair
+  private lastConversationDialogue = new Map<string, string>();
+
   // Model auto-downgrade tracking
   private activeGroqModel: string | null = null;
   private modelDowngraded = false;
@@ -297,7 +304,7 @@ export class ConversationManager {
       });
     }
 
-    // Fully ready conversations
+    // Ready (or partially buffered) conversations
     for (const p of this.preparedConversations) {
       preparedConversations.push({
         npcAName: this.npcName(p.npcAId),
@@ -311,7 +318,9 @@ export class ConversationManager {
         maxAgeMs: this.PREPARED_MAX_AGE_MS,
         llmDurationMs: p.llmDurationMs,
         ttsDurationMs: p.ttsDurationMs,
-        phase: "ready",
+        phase: p.ttsComplete ? "ready" : "generating_tts",
+        ttsCompletedTurns: p.ttsCompletedCount,
+        ttsTotalTurns: p.turns.length,
       });
     }
 
@@ -936,7 +945,10 @@ export class ConversationManager {
         const p = this.preparedConversations[i];
         const pKey = this.pairKey(p.npcAId, p.npcBId);
         const lastTime = this.cooldowns.get(pKey) ?? 0;
-        if (now - lastTime < this.COOLDOWN_MS) continue;
+        // Skip pair cooldown if this conversation was pre-generated after the last one ended
+        // (it already accounts for the previous dialogue, so it's safe to play immediately)
+        const preGeneratedAfterCooldown = p.preparedAt > lastTime;
+        if (!preGeneratedAfterCooldown && now - lastTime < this.COOLDOWN_MS) continue;
 
         // Wait for NPCs to be near each other before playing
         if (this.worldSim) {
@@ -1038,6 +1050,10 @@ export class ConversationManager {
     const relAtoB = npcA.relationships[npcBId];
     const relBtoA = npcB.relationships[npcAId];
 
+    // Check for a previous conversation between this pair (for continuity)
+    const prevPKey = this.pairKey(npcAId, npcBId);
+    const previousConversation = this.lastConversationDialogue.get(prevPKey);
+
     const messages = buildBatchConversationMessages(
       npcA, npcB, npcAId, minTurns, maxTurns,
       {
@@ -1050,6 +1066,7 @@ export class ConversationManager {
         frozenAffectionAtoB: relAtoB?.affection,
         frozenRegardBtoA: relBtoA?.regard,
         frozenAffectionBtoA: relBtoA?.affection,
+        previousConversation,
       }
     );
 
@@ -1112,8 +1129,15 @@ export class ConversationManager {
     this.clearLlmSlot();
     this.kickNextLlm();
 
-    // ── Phase 2: Queue for TTS (serialized — GPU processes one at a time) ──
+    // ── Stash dialogue for continuity if this pair gets re-queued ──
     const pKey = this.pairKey(npcAId, npcBId);
+    const dialogueSummary = turns.map(t => {
+      const name = this.npcName(t.speaker_id);
+      return `${name}: ${t.speech}`;
+    }).join("\n");
+    this.lastConversationDialogue.set(pKey, dialogueSummary);
+
+    // ── Phase 2: Queue for TTS (serialized — GPU processes one at a time) ──
     this.ttsQueue.push({ pKey, npcAId, npcBId, turns, convType, llmDurationMs });
     this.processNextTts();
   }
@@ -1143,10 +1167,24 @@ export class ConversationManager {
     };
     this.ttsInFlight.set(pKey, inFlightEntry);
 
-    const audioBuffers: (ArrayBuffer | null)[] = [];
+    // Create a shared PreparedConversation that playback can start consuming
+    // before all TTS is done. audioBuffers is filled progressively.
+    const audioBuffers: (ArrayBuffer | null)[] = new Array(turns.length).fill(null);
+    const prepared: PreparedConversation = {
+      npcAId, npcBId, turns, audioBuffers,
+      convType, preparedAt: Date.now(),
+      llmDurationMs, ttsDurationMs: 0,
+      ttsCompletedCount: 0,
+      ttsComplete: false,
+    };
+
+    let pushedToPrepared = false;
+    const bufferThreshold = Math.min(this.TTS_BUFFER_THRESHOLD, turns.length);
+
     if (this.ttsService) {
-      for (const turn of turns) {
+      for (let i = 0; i < turns.length; i++) {
         if (!this.running) break;
+        const turn = turns[i];
         const speaker = this.store.get(turn.speaker_id)!;
         const buf = await this.ttsService.prefetch(
           turn.speaker_id,
@@ -1154,24 +1192,34 @@ export class ConversationManager {
           speaker.emotionalState,
           this.language
         );
+        audioBuffers[i] = buf;
         inFlightEntry.completedTurns++;
-        audioBuffers.push(buf);
+        prepared.ttsCompletedCount = i + 1;
+
+        // After enough turns are buffered, make the conversation available for playback
+        if (!pushedToPrepared && prepared.ttsCompletedCount >= bufferThreshold) {
+          this.preparedConversations.push(prepared);
+          pushedToPrepared = true;
+          this.log(`[director] Conversation playable for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${bufferThreshold}/${turns.length} turns buffered)`);
+        }
       }
     }
 
     const ttsDurationMs = Date.now() - ttsStart;
     this.ttsDurations.push(ttsDurationMs);
+    prepared.ttsDurationMs = ttsDurationMs;
+    prepared.ttsComplete = true;
     this.ttsInFlight.delete(pKey);
 
     if (!this.running) return;
 
-    // Store as ready
-    this.preparedConversations.push({
-      npcAId, npcBId, turns, audioBuffers,
-      convType, preparedAt: Date.now(),
-      llmDurationMs, ttsDurationMs,
-    });
-    this.log(`[director] Conversation ready for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns)`);
+    // If we never hit the threshold (e.g. very short conversation), push now
+    if (!pushedToPrepared) {
+      this.preparedConversations.push(prepared);
+      this.log(`[director] Conversation ready for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns)`);
+    } else {
+      this.log(`[director] TTS complete for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns, ${Math.round(ttsDurationMs / 1000)}s)`);
+    }
 
     // Process next queued conversation
     this.processNextTts();
@@ -1183,6 +1231,8 @@ export class ConversationManager {
   }
 
   private readonly MAX_PIPELINE_DEPTH = 3;
+  /** Minimum TTS turns buffered before a conversation can start playing */
+  private readonly TTS_BUFFER_THRESHOLD = 2;
 
   /** Pick the best Groq model based on remaining rate limit quota.
    *  Falls back to the fast 8B model when tokens are running low. */
@@ -1323,7 +1373,21 @@ export class ConversationManager {
     scored.sort((a, b) => b.score - a.score);
     this.lastScoredPairs = scored.slice(0, 5);
 
-    return scored.length > 0 ? [scored[0].npcAId, scored[0].npcBId] : null;
+    if (scored.length > 0) return [scored[0].npcAId, scored[0].npcBId];
+
+    // Fallback: if no pairs passed filters, allow re-queuing the only available pair
+    // (e.g. 2-NPC sim where the pair is on cooldown or already in pipeline).
+    // Skip cooldown and dedup checks, but still skip busy/overridden NPCs.
+    const available = allNpcs.filter(n => !busyIds.has(n.id) && !n.behavioralOverride);
+    if (available.length >= 2) {
+      // Don't re-queue if there's already one in the pipeline for this pair
+      const pKey = this.pairKey(available[0].id, available[1].id);
+      if (!preparedPairKeys.has(pKey)) {
+        return [available[0].id, available[1].id];
+      }
+    }
+
+    return null;
   }
 
   /** Check if there's a prepared conversation for this pair and consume it */
@@ -1453,6 +1517,13 @@ export class ConversationManager {
 
       if (this.worldSim && Math.random() < 0.5) {
         this.checkEavesdroppers(speaker, listener, response);
+      }
+
+      // Wait for this turn's audio if TTS is still generating
+      if (!audioBuffers[i] && !prepared.ttsComplete) {
+        while (!audioBuffers[i] && !prepared.ttsComplete && this.running) {
+          await this.sleep(50);
+        }
       }
 
       if (audioBuffers[i]) {
