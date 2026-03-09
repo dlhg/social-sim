@@ -53,6 +53,27 @@ VOICE_POOL = [
     "voice_13",   # smooth female
 ]
 
+VOICE_DESCRIPTIONS = {
+    "voice_01": "Warm Female",
+    "voice_02": "Neutral Male",
+    "voice_03": "British Female",
+    "voice_04": "Deep Male",
+    "voice_05": "Energetic Female",
+    "voice_06": "British Male",
+    "voice_07": "Clear Female",
+    "voice_08": "Playful Male",
+    "voice_09": "Soft Female",
+    "voice_10": "Steady Male",
+    "voice_11": "Bright Female",
+    "voice_12": "Calm Male",
+    "voice_13": "Smooth Female",
+}
+
+PREVIEW_DIR = VOICES_DIR / "previews"
+PREVIEW_DIR.mkdir(exist_ok=True)
+
+PREVIEW_TEXT = "Hello there! This is what I sound like. Nice to meet you."
+
 # Kokoro voice names — used only for non-English fallback
 KOKORO_VOICES = [
     "af_heart", "am_adam", "bf_emma", "am_fenrir", "af_bella",
@@ -196,7 +217,28 @@ def health():
 
 @app.route("/voices", methods=["GET"])
 def voices():
-    return jsonify({"voices": VOICE_POOL})
+    """Return all available voices with metadata."""
+    result = []
+    for v in VOICE_POOL:
+        result.append({
+            "id": v,
+            "name": VOICE_DESCRIPTIONS.get(v, v),
+            "custom": False,
+        })
+
+    # Include custom voices (any .wav not in the pool)
+    for wav_file in sorted(VOICES_DIR.glob("*.wav")):
+        voice_id = wav_file.stem
+        if voice_id not in VOICE_POOL:
+            # Derive a readable name from the ID
+            display = voice_id.replace("custom_", "").replace("-", " ").replace("_", " ").title()
+            result.append({
+                "id": voice_id,
+                "name": display,
+                "custom": True,
+            })
+
+    return jsonify({"voices": result})
 
 
 @app.route("/speak", methods=["POST"])
@@ -347,10 +389,24 @@ def upload_voice():
     out_path = VOICES_DIR / f"{voice_id}.wav"
     sf.write(str(out_path), audio_data, sample_rate, subtype="PCM_16")
 
-    print(f"[tts] Saved custom voice: {voice_id} ({len(audio_data)/sample_rate:.1f}s)")
+    duration = round(len(audio_data) / sample_rate, 2)
+    print(f"[tts] Saved custom voice: {voice_id} ({duration}s)")
+
+    # Auto-generate a Chatterbox preview clip in the background
+    import threading
+    def _generate_preview():
+        try:
+            wav_bytes = synthesize_chatterbox(PREVIEW_TEXT, voice_id)
+            preview_path = PREVIEW_DIR / f"{voice_id}.wav"
+            preview_path.write_bytes(wav_bytes)
+            print(f"[tts] Generated preview for custom voice: {voice_id}")
+        except Exception as e:
+            print(f"[tts] Preview generation failed for {voice_id}: {e}")
+    threading.Thread(target=_generate_preview, daemon=True).start()
+
     return jsonify({
         "voice_id": voice_id,
-        "duration_seconds": round(len(audio_data) / sample_rate, 2),
+        "duration_seconds": duration,
     })
 
 
@@ -361,6 +417,32 @@ def voice_clip(voice_id: str):
     if not path.exists():
         return Response("Voice not found", status=404)
     return send_file(str(path), mimetype="audio/wav")
+
+
+@app.route("/voice-preview/<voice_id>", methods=["GET"])
+def voice_preview(voice_id: str):
+    """
+    Serve a pre-rendered Chatterbox preview clip for a voice.
+    Generates and caches on first request.
+    """
+    preview_path = PREVIEW_DIR / f"{voice_id}.wav"
+    if preview_path.exists():
+        return send_file(str(preview_path), mimetype="audio/wav")
+
+    # Verify the voice reference clip exists
+    ref_path = VOICES_DIR / f"{voice_id}.wav"
+    if not ref_path.exists():
+        return Response("Voice not found", status=404)
+
+    # Generate via Chatterbox
+    try:
+        wav_bytes = synthesize_chatterbox(PREVIEW_TEXT, voice_id)
+        preview_path.write_bytes(wav_bytes)
+        print(f"[tts] Generated preview for {voice_id}")
+        return send_file(str(preview_path), mimetype="audio/wav")
+    except Exception as e:
+        print(f"[tts] Preview generation failed for {voice_id}: {e}")
+        return Response(f"Preview generation failed: {e}", status=503)
 
 
 if __name__ == "__main__":

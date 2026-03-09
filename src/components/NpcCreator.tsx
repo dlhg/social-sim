@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { createNpc, randomizeFields, AVATAR_OPTIONS, COLOR_SWATCHES, RANDOM_ITEMS } from "../npcs";
 import type { NPC, InventoryItem, ItemCategory, EmotionalState } from "../types";
 import { ITEM_LIFETIME_BY_CATEGORY } from "../types";
-import { uploadVoiceClip } from "../tts-service";
+import { uploadVoiceClip, fetchVoices, getVoicePreviewUrl } from "../tts-service";
+import type { VoiceInfo } from "../tts-service";
 
 interface NpcCreatorProps {
   onClose: () => void;
@@ -69,8 +70,28 @@ export function NpcCreator({
   const timerRef = useRef<number | null>(null);
   const testAudioCtxRef = useRef<AudioContext | null>(null);
 
+  // ── Voice selector state ────────────────────────
+  const [availableVoices, setAvailableVoices] = useState<VoiceInfo[]>([]);
+  const [voiceMode, setVoiceMode] = useState<"auto" | "select" | "custom">(
+    initialNpc?.customVoiceId
+      ? initialNpc.customVoiceId.startsWith("custom_") ? "custom" : "select"
+      : "auto"
+  );
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string | undefined>(
+    initialNpc?.customVoiceId && !initialNpc.customVoiceId.startsWith("custom_")
+      ? initialNpc.customVoiceId
+      : undefined
+  );
+  const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // If editing an NPC with a custom voice, show its existing clip
-  const hasExistingVoice = !!customVoiceId && !audioBlob;
+  const hasExistingVoice = voiceMode === "custom" && !!customVoiceId && !audioBlob;
+
+  // Fetch available voices on mount
+  useEffect(() => {
+    fetchVoices().then(setAvailableVoices);
+  }, []);
 
   // Clean up object URLs on unmount
   useEffect(() => {
@@ -78,6 +99,10 @@ export function NpcCreator({
       if (audioUrl) URL.revokeObjectURL(audioUrl);
       if (timerRef.current) clearInterval(timerRef.current);
       if (testAudioCtxRef.current) testAudioCtxRef.current.close();
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        previewAudioRef.current = null;
+      }
     };
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -238,6 +263,40 @@ export function NpcCreator({
     setCustomVoiceId(undefined);
   }
 
+  async function playPreview(voiceId: string) {
+    // Stop any current preview
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+    }
+    if (previewingVoice === voiceId) {
+      setPreviewingVoice(null);
+      return;
+    }
+
+    setPreviewingVoice(voiceId);
+    try {
+      // Fetch with a long timeout — first request triggers Chatterbox generation
+      const res = await fetch(getVoicePreviewUrl(voiceId), {
+        signal: AbortSignal.timeout(60000),
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      previewAudioRef.current = audio;
+      audio.onended = () => {
+        setPreviewingVoice(null);
+        previewAudioRef.current = null;
+        URL.revokeObjectURL(url);
+      };
+      audio.play();
+    } catch {
+      setPreviewingVoice(null);
+      setError("Preview not available — is the TTS server running?");
+    }
+  }
+
   async function handleTestVoice() {
     setIsTesting(true);
     const currentId = name.trim().toLowerCase().replace(/\s+/g, "-");
@@ -331,18 +390,23 @@ export function NpcCreator({
       .map((s) => s.trim())
       .filter(Boolean);
 
-    // Upload custom voice if we have a new recording/upload
-    let finalVoiceId = customVoiceId;
-    if (audioBlob && !customVoiceId) {
-      setIsSubmitting(true);
-      const voiceId = `custom_${derivedId || "npc_" + Date.now()}`;
-      const result = await uploadVoiceClip(audioBlob, voiceId);
-      setIsSubmitting(false);
-      if (!result) {
-        setError("Failed to upload voice clip. Is the TTS server running?");
-        return;
+    // Determine final voice ID based on mode
+    let finalVoiceId: string | undefined;
+    if (voiceMode === "select" && selectedVoiceId) {
+      finalVoiceId = selectedVoiceId;
+    } else if (voiceMode === "custom") {
+      finalVoiceId = customVoiceId;
+      if (audioBlob && !customVoiceId) {
+        setIsSubmitting(true);
+        const voiceId = `custom_${derivedId || "npc_" + Date.now()}`;
+        const result = await uploadVoiceClip(audioBlob, voiceId);
+        setIsSubmitting(false);
+        if (!result) {
+          setError("Failed to upload voice clip. Is the TTS server running?");
+          return;
+        }
+        finalVoiceId = result.voice_id;
       }
-      finalVoiceId = result.voice_id;
     }
 
     const npc = createNpc({
@@ -451,45 +515,105 @@ export function NpcCreator({
           className="secrets-textarea"
         />
 
-        <label>Voice Reference <span style={{ opacity: 0.5, fontWeight: 400 }}>(optional, Chatterbox only)</span></label>
+        <label>Voice</label>
         <div className="voice-section">
-          {audioUrl || hasExistingVoice ? (
-            <div className="voice-preview">
-              {audioUrl && (
-                <audio src={audioUrl} controls className="voice-audio" />
-              )}
-              {hasExistingVoice && !audioUrl && (
-                <span className="voice-existing-label">Custom voice set</span>
-              )}
-              <button
-                className="btn voice-test-btn"
-                disabled={isTesting}
-                onClick={handleTestVoice}
-              >
-                {isTesting ? "Testing..." : "Test"}
-              </button>
-              <button className="btn voice-clear-btn" onClick={clearVoice}>
-                Remove
-              </button>
+          <div className="voice-mode-tabs">
+            <button
+              className={`voice-mode-tab ${voiceMode === "auto" ? "active" : ""}`}
+              onClick={() => { setVoiceMode("auto"); setSelectedVoiceId(undefined); }}
+            >
+              Auto
+            </button>
+            <button
+              className={`voice-mode-tab ${voiceMode === "select" ? "active" : ""}`}
+              onClick={() => setVoiceMode("select")}
+            >
+              Choose Voice
+            </button>
+            <button
+              className={`voice-mode-tab ${voiceMode === "custom" ? "active" : ""}`}
+              onClick={() => setVoiceMode("custom")}
+            >
+              Clone Voice
+            </button>
+          </div>
+
+          {voiceMode === "auto" && (
+            <div className="voice-auto-hint">
+              A voice will be assigned automatically when the simulation starts.
             </div>
-          ) : (
-            <div className="voice-controls">
-              <button
-                className={`btn voice-record-btn ${isRecording ? "recording" : ""}`}
-                onClick={isRecording ? stopRecording : startRecording}
-              >
-                {isRecording ? `Stop (${recordingTime}s)` : "Record Voice"}
-              </button>
-              <label className="btn voice-upload-btn">
-                Upload Clip
-                <input
-                  type="file"
-                  accept="audio/wav,audio/mpeg,audio/mp3,audio/m4a,audio/webm,.wav,.mp3,.m4a"
-                  onChange={handleFileUpload}
-                  hidden
-                />
-              </label>
+          )}
+
+          {voiceMode === "select" && (
+            <div className="voice-picker">
+              {availableVoices.map((v) => (
+                <div
+                  key={v.id}
+                  className={`voice-option ${selectedVoiceId === v.id ? "selected" : ""}`}
+                  onClick={() => setSelectedVoiceId(v.id)}
+                >
+                  <span className="voice-option-name">
+                    {v.custom && <span className="voice-custom-badge">clone</span>}
+                    {v.name}
+                  </span>
+                  <button
+                    className="voice-preview-btn"
+                    onClick={(e) => { e.stopPropagation(); playPreview(v.id); }}
+                    title="Preview voice"
+                  >
+                    {previewingVoice === v.id ? "\u25A0" : "\u25B6"}
+                  </button>
+                </div>
+              ))}
+              {availableVoices.length === 0 && (
+                <div className="voice-auto-hint">
+                  No voices available — is the TTS server running?
+                </div>
+              )}
             </div>
+          )}
+
+          {voiceMode === "custom" && (
+            <>
+              {audioUrl || hasExistingVoice ? (
+                <div className="voice-preview">
+                  {audioUrl && (
+                    <audio src={audioUrl} controls className="voice-audio" />
+                  )}
+                  {hasExistingVoice && !audioUrl && (
+                    <span className="voice-existing-label">Custom voice set</span>
+                  )}
+                  <button
+                    className="btn voice-test-btn"
+                    disabled={isTesting}
+                    onClick={handleTestVoice}
+                  >
+                    {isTesting ? "Testing..." : "Test"}
+                  </button>
+                  <button className="btn voice-clear-btn" onClick={clearVoice}>
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="voice-controls">
+                  <button
+                    className={`btn voice-record-btn ${isRecording ? "recording" : ""}`}
+                    onClick={isRecording ? stopRecording : startRecording}
+                  >
+                    {isRecording ? `Stop (${recordingTime}s)` : "Record Voice"}
+                  </button>
+                  <label className="btn voice-upload-btn">
+                    Upload Clip
+                    <input
+                      type="file"
+                      accept="audio/wav,audio/mpeg,audio/mp3,audio/m4a,audio/webm,.wav,.mp3,.m4a"
+                      onChange={handleFileUpload}
+                      hidden
+                    />
+                  </label>
+                </div>
+              )}
+            </>
           )}
         </div>
 

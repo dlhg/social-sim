@@ -280,6 +280,38 @@ export class TTSService {
   }
 }
 
+export interface VoiceInfo {
+  id: string;
+  name: string;
+  custom: boolean;
+}
+
+/** Fetch the list of available voices from the TTS server. */
+export async function fetchVoices(): Promise<VoiceInfo[]> {
+  try {
+    const res = await fetch(`${TTS_BASE}/voices`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const raw: unknown[] = data.voices ?? [];
+    // Normalize: server may return strings (old) or objects (new)
+    return raw.map((v) => {
+      if (typeof v === "string") {
+        return { id: v, name: v, custom: v.startsWith("custom_") };
+      }
+      return v as VoiceInfo;
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** Get the URL for a voice's pre-rendered preview clip. */
+export function getVoicePreviewUrl(voiceId: string): string {
+  return `${TTS_BASE}/voice-preview/${voiceId}`;
+}
+
 /** Upload a voice reference clip to the TTS server for Chatterbox voice cloning. */
 export async function uploadVoiceClip(
   audioBlob: Blob,

@@ -1352,6 +1352,110 @@
   margin-bottom: 8px;
 }
 
+.voice-mode-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.voice-mode-tab {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-in-out);
+}
+
+.voice-mode-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.voice-mode-tab.active {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent-info);
+  color: var(--text-primary);
+}
+
+.voice-auto-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 6px 0;
+  opacity: 0.7;
+}
+
+.voice-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.voice-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-in-out);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.voice-option:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.voice-option.selected {
+  border-color: var(--accent-info);
+  background: rgba(77, 208, 225, 0.08);
+  color: var(--text-primary);
+}
+
+.voice-option-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.voice-custom-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(168, 118, 196, 0.2);
+  color: #a876c4;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.voice-preview-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration-fast);
+  flex-shrink: 0;
+}
+
+.voice-preview-btn:hover {
+  border-color: var(--accent-info);
+  color: var(--accent-info);
+}
+
 .voice-controls {
   display: flex;
   gap: 8px;
