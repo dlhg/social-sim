@@ -59,6 +59,7 @@ export class WorldSimulation {
   private activityCooldowns: Map<string, number> = new Map();
   private readonly ACTIVITY_COOLDOWN_MS = 300_000; // 5 minutes before repeating same activity
   private lastItemDecay = 0;
+  private lastCooldownPurge = 0;
   private getPhase: (() => DayPhase) | null;
   private npcStore: NpcStore | null;
   private memoryService: MemoryService | null;
@@ -324,6 +325,7 @@ export class WorldSimulation {
     this.checkActivityObservations();
     this.decayItems(now);
     this.checkDrives(now);
+    this.purgeStaleCooldowns(now);
     this.onTickCallback?.();
   }
 
@@ -986,6 +988,33 @@ export class WorldSimulation {
       for (const item of expired) {
         this.npcStore.removeItem(npc.id, item.id);
       }
+    }
+  }
+
+  /** Periodically prune expired entries from cooldown/history maps to prevent unbounded growth. */
+  private purgeStaleCooldowns(now: number): void {
+    // Run every 60 seconds
+    if (now - this.lastCooldownPurge < 60_000) return;
+    this.lastCooldownPurge = now;
+
+    const activeNpcIds = new Set(this.npcs.keys());
+
+    // Purge observation cooldowns older than 3 min or for removed NPCs
+    for (const [key, timestamp] of this.observationCooldowns) {
+      if (now - timestamp > 180_000) this.observationCooldowns.delete(key);
+    }
+
+    // Purge activity cooldowns older than 5 min or for removed NPCs
+    for (const [key, timestamp] of this.activityCooldowns) {
+      if (now - timestamp > this.ACTIVITY_COOLDOWN_MS) this.activityCooldowns.delete(key);
+    }
+
+    // Purge visit history and lastInteractionTime for removed NPCs
+    for (const id of this.visitHistory.keys()) {
+      if (!activeNpcIds.has(id)) this.visitHistory.delete(id);
+    }
+    for (const id of this.lastInteractionTime.keys()) {
+      if (!activeNpcIds.has(id)) this.lastInteractionTime.delete(id);
     }
   }
 

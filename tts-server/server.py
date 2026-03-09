@@ -299,69 +299,8 @@ def voices():
     return jsonify({"voices": result})
 
 
-@app.route("/speak", methods=["POST"])
-def speak():
-    """
-    Synthesize speech and return WAV audio.
-
-    JSON body:
-      { "text": "Hello world", "voice": "voice_01", "speed": 1.0,
-        "emotions": {"anger": 0, "joy": 0.5, ...},
-        "language": "English" }
-    """
-    data = request.get_json(force=True)
-    text = data.get("text", "").strip()
-    voice = data.get("voice", VOICE_POOL[0])
-    speed = float(data.get("speed", 1.0))
-    emotions = data.get("emotions")
-    language = data.get("language")
-    engine = data.get("engine")  # "chatterbox" | "kokoro" | None (auto)
-
-    if not text:
-        return Response("No text provided", status=400)
-
-    emotion_speed = compute_emotion_speed(emotions)
-    final_speed = speed * emotion_speed
-
-    if use_chatterbox(language, engine):
-        # ── Chatterbox Turbo path (proxy to port 8788) ──
-        try:
-            wav_bytes = synthesize_chatterbox(text, voice)
-        except http_requests.ConnectionError:
-            return Response(
-                "Chatterbox server not running (start chatterbox_server.py)",
-                status=503,
-            )
-        except Exception as e:
-            print(f"[tts] Chatterbox error: {e}")
-            return Response(f"Synthesis failed: {e}", status=500)
-
-        return Response(wav_bytes, mimetype="audio/wav")
-    else:
-        # ── Kokoro path ──
-        lang_code = resolve_lang_code(language)
-        if lang_code is None:
-            return Response(f"Language not supported for TTS: {language}", status=400)
-
-        try:
-            voice_idx = VOICE_POOL.index(voice)
-        except ValueError:
-            voice_idx = 0
-        kokoro_voice = KOKORO_VOICES[voice_idx % len(KOKORO_VOICES)]
-
-        try:
-            wav_bytes = synthesize_kokoro(text, kokoro_voice, final_speed, lang_code)
-        except Exception as e:
-            print(f"[tts] Kokoro error: {e}")
-            return Response(f"Synthesis failed: {e}", status=500)
-
-        return Response(wav_bytes, mimetype="audio/wav")
-
-
-@app.route("/speak-stream", methods=["POST"])
-def speak_stream():
-    """Same as /speak but streams the response."""
-    data = request.get_json(force=True)
+def _parse_speak_params(data: dict) -> tuple[str, str, float, str | None, str | None] | Response:
+    """Extract and validate shared params for /speak and /speak-stream. Returns (text, voice, speed, language, engine) or a Response on error."""
     text = data.get("text", "").strip()
     voice = data.get("voice", VOICE_POOL[0])
     speed = float(data.get("speed", 1.0))
@@ -375,18 +314,23 @@ def speak_stream():
     emotion_speed = compute_emotion_speed(emotions)
     final_speed = speed * emotion_speed
 
-    if use_chatterbox(language, engine):
-        def generate():
-            try:
-                yield synthesize_chatterbox(text, voice)
-            except Exception as e:
-                print(f"[tts] Chatterbox stream error: {e}")
+    return text, voice, final_speed, language, engine
 
-        return Response(generate(), mimetype="audio/wav")
+
+def _synthesize(text: str, voice: str, speed: float, language: str | None, engine: str | None) -> bytes | Response:
+    """Run synthesis via the appropriate engine. Returns WAV bytes or an error Response."""
+    if use_chatterbox(language, engine):
+        try:
+            return synthesize_chatterbox(text, voice)
+        except http_requests.ConnectionError:
+            return Response("Chatterbox server not running (start chatterbox_server.py)", status=503)
+        except Exception as e:
+            print(f"[tts] Chatterbox error: {e}")
+            return Response(f"Synthesis failed: {e}", status=500)
     else:
         lang_code = resolve_lang_code(language)
         if lang_code is None:
-            return Response(f"Language not supported: {language}", status=400)
+            return Response(f"Language not supported for TTS: {language}", status=400)
 
         try:
             voice_idx = VOICE_POOL.index(voice)
@@ -394,13 +338,51 @@ def speak_stream():
             voice_idx = 0
         kokoro_voice = KOKORO_VOICES[voice_idx % len(KOKORO_VOICES)]
 
-        def generate():
-            try:
-                yield synthesize_kokoro(text, kokoro_voice, final_speed, lang_code)
-            except Exception as e:
-                print(f"[tts] Kokoro stream error: {e}")
+        try:
+            return synthesize_kokoro(text, kokoro_voice, speed, lang_code)
+        except Exception as e:
+            print(f"[tts] Kokoro error: {e}")
+            return Response(f"Synthesis failed: {e}", status=500)
 
-        return Response(generate(), mimetype="audio/wav")
+
+@app.route("/speak", methods=["POST"])
+def speak():
+    """
+    Synthesize speech and return WAV audio.
+
+    JSON body:
+      { "text": "Hello world", "voice": "voice_01", "speed": 1.0,
+        "emotions": {"anger": 0, "joy": 0.5, ...},
+        "language": "English" }
+    """
+    params = _parse_speak_params(request.get_json(force=True))
+    if isinstance(params, Response):
+        return params
+    text, voice, speed, language, engine = params
+
+    result = _synthesize(text, voice, speed, language, engine)
+    if isinstance(result, Response):
+        return result
+    return Response(result, mimetype="audio/wav")
+
+
+@app.route("/speak-stream", methods=["POST"])
+def speak_stream():
+    """Same as /speak but streams the response."""
+    params = _parse_speak_params(request.get_json(force=True))
+    if isinstance(params, Response):
+        return params
+    text, voice, speed, language, engine = params
+
+    def generate():
+        try:
+            result = _synthesize(text, voice, speed, language, engine)
+            if isinstance(result, bytes):
+                yield result
+        except Exception as e:
+            print(f"[tts] Stream error: {e}")
+
+    return Response(generate(), mimetype="audio/wav")
 
 
 @app.route("/upload-voice", methods=["POST"])

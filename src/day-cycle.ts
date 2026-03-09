@@ -11,6 +11,8 @@ const STALE_PHASE_THRESHOLD = 6; // promises without resolveAtPhase auto-break a
 
 export interface DayCycleOptions {
   ticksPerPhase?: number;
+  /** Tick interval in ms — used to estimate promise age. Should match WorldSimulation's tick rate. */
+  tickIntervalMs?: number;
   onPhaseChange?: (state: DayCycleState) => void;
   onPlanResolved?: (promise: NpcPromise, outcome: string, promiserName: string, promiseeName: string) => void;
   npcStore: NpcStore;
@@ -33,9 +35,11 @@ export class DayCycle {
   private memory: MemoryService;
   private resolving = false;
   private language: string;
+  private tickIntervalMs: number;
 
   constructor(options: DayCycleOptions) {
     this.ticksPerPhase = options.ticksPerPhase ?? DEFAULT_TICKS_PER_PHASE;
+    this.tickIntervalMs = options.tickIntervalMs ?? 285;
     this.onPhaseChange = options.onPhaseChange ?? null;
     this.onPlanResolved = options.onPlanResolved ?? null;
     this.store = options.npcStore;
@@ -115,7 +119,7 @@ export class DayCycle {
   /** Estimate which phase a promise was created in based on its madeAt timestamp. */
   private estimateCreationPhase(promise: NpcPromise): number {
     const ageMs = Date.now() - promise.madeAt;
-    const ageTicks = ageMs / 285; // approximate ticks since creation
+    const ageTicks = ageMs / this.tickIntervalMs;
     const agePhases = Math.floor(ageTicks / this.ticksPerPhase);
     return Math.max(0, this.state.phaseIndex - agePhases);
   }

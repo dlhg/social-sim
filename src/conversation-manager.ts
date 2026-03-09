@@ -1138,6 +1138,11 @@ export class ConversationManager {
       return `${name}: ${t.speech}`;
     }).join("\n");
     this.lastConversationDialogue.set(pKey, dialogueSummary);
+    // Cap stored dialogues to prevent unbounded growth
+    if (this.lastConversationDialogue.size > 50) {
+      const oldest = this.lastConversationDialogue.keys().next().value!;
+      this.lastConversationDialogue.delete(oldest);
+    }
 
     // ── Phase 2: Queue for TTS (serialized — GPU processes one at a time) ──
     this.ttsQueue.push({ pKey, npcAId, npcBId, turns, convType, llmDurationMs });

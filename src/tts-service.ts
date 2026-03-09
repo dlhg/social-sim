@@ -187,7 +187,7 @@ export class TTSService {
 
   // ── Private ────────────────────────────────────
 
-  private ensureAudioContext() {
+  private async ensureAudioContext() {
     if (!this.audioCtx) {
       this.audioCtx = new AudioContext({ sampleRate: 24000 });
       this.gainNode = this.audioCtx.createGain();
@@ -196,7 +196,7 @@ export class TTSService {
     }
     // Resume if suspended (browser autoplay policy)
     if (this.audioCtx.state === "suspended") {
-      this.audioCtx.resume();
+      await this.audioCtx.resume();
     }
   }
 
@@ -260,11 +260,22 @@ export class TTSService {
   }
 
   private async playAudio(wavBytes: ArrayBuffer): Promise<void> {
-    this.ensureAudioContext();
+    await this.ensureAudioContext();
     const ctx = this.audioCtx!;
     const gain = this.gainNode!;
 
-    const audioBuffer = await ctx.decodeAudioData(wavBytes.slice(0));
+    let audioBuffer: AudioBuffer;
+    try {
+      audioBuffer = await ctx.decodeAudioData(wavBytes.slice(0));
+    } catch (err) {
+      console.warn("[tts] failed to decode audio:", err);
+      return;
+    }
+    // Stop any still-playing source to prevent orphaned playback
+    if (this.currentSource) {
+      try { this.currentSource.stop(); } catch { /* already stopped */ }
+    }
+
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(gain);
@@ -275,7 +286,13 @@ export class TTSService {
         this.currentSource = null;
         resolve();
       };
-      source.start();
+      try {
+        source.start();
+      } catch (err) {
+        console.warn("[tts] failed to start playback:", err);
+        this.currentSource = null;
+        resolve();
+      }
     });
   }
 }

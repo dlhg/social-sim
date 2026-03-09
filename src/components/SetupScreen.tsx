@@ -78,6 +78,11 @@ export function SetupScreen({
   const [testPlaying, setTestPlaying] = useState(false);
   const testTimeout = useRef<number | null>(null);
 
+  // Clean up test timer on unmount
+  useEffect(() => {
+    return () => { if (testTimeout.current) clearTimeout(testTimeout.current); };
+  }, []);
+
   const rosterIds = new Set(roster.map((n) => n.id));
   const atCapacity = roster.length >= MAX_ROSTER;
   const savedPremadeIds = new Set(customPremades.map((t) => t.id));

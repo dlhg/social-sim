@@ -569,9 +569,11 @@ function App() {
       },
       onFloater: (floater) => {
         setFloaters(prev => [...prev, floater]);
-        setTimeout(() => {
+        const fTimer = window.setTimeout(() => {
           setFloaters(prev => prev.filter(f => f.id !== floater.id));
+          bubbleTimersRef.current.delete(`floater:${floater.id}`);
         }, 4700 + floater.delay);
+        bubbleTimersRef.current.set(`floater:${floater.id}`, fTimer);
       },
       onEavesdropReaction: (eavesdropperId, text) => {
         const now = Date.now();
@@ -597,6 +599,7 @@ function App() {
       npcStore: storeRef.current,
       memoryService: memoryRef.current,
       language: languageRef.current,
+      tickIntervalMs: 285,
       onPhaseChange: (state) => {
         setDayLabel(dayCycle.getLabel());
         setDayPhase(state.phase);
