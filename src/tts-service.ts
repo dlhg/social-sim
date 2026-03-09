@@ -312,6 +312,16 @@ export function getVoicePreviewUrl(voiceId: string): string {
   return `${TTS_BASE}/voice-preview/${voiceId}`;
 }
 
+/** Delete a custom voice from the TTS server. */
+export async function deleteVoice(voiceId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${TTS_BASE}/voice/${voiceId}`, { method: "DELETE" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Upload a voice reference clip to the TTS server for Chatterbox voice cloning. */
 export async function uploadVoiceClip(
   audioBlob: Blob,

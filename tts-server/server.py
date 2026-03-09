@@ -410,6 +410,26 @@ def upload_voice():
     })
 
 
+@app.route("/voice/<voice_id>", methods=["DELETE"])
+def delete_voice(voice_id: str):
+    """Delete a custom voice and its preview clip."""
+    if voice_id in VOICE_POOL:
+        return Response("Cannot delete built-in voices", status=403)
+
+    voice_path = VOICES_DIR / f"{voice_id}.wav"
+    preview_path = PREVIEW_DIR / f"{voice_id}.wav"
+
+    if not voice_path.exists():
+        return Response("Voice not found", status=404)
+
+    voice_path.unlink()
+    if preview_path.exists():
+        preview_path.unlink()
+
+    print(f"[tts] Deleted custom voice: {voice_id}")
+    return jsonify({"deleted": voice_id})
+
+
 @app.route("/voice-clip/<voice_id>", methods=["GET"])
 def voice_clip(voice_id: str):
     """Serve a reference audio clip back to the client for preview."""

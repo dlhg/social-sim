@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { createNpc, randomizeFields, AVATAR_OPTIONS, COLOR_SWATCHES, RANDOM_ITEMS } from "../npcs";
 import type { NPC, InventoryItem, ItemCategory, EmotionalState } from "../types";
 import { ITEM_LIFETIME_BY_CATEGORY } from "../types";
-import { uploadVoiceClip, fetchVoices, getVoicePreviewUrl } from "../tts-service";
+import { uploadVoiceClip, fetchVoices, getVoicePreviewUrl, deleteVoice } from "../tts-service";
 import type { VoiceInfo } from "../tts-service";
 
 interface NpcCreatorProps {
@@ -297,6 +297,16 @@ export function NpcCreator({
     }
   }
 
+  async function handleDeleteVoice(voiceId: string) {
+    const ok = await deleteVoice(voiceId);
+    if (ok) {
+      setAvailableVoices((prev) => prev.filter((v) => v.id !== voiceId));
+      if (selectedVoiceId === voiceId) setSelectedVoiceId(undefined);
+    } else {
+      setError("Failed to delete voice");
+    }
+  }
+
   async function handleTestVoice() {
     setIsTesting(true);
     const currentId = name.trim().toLowerCase().replace(/\s+/g, "-");
@@ -556,13 +566,24 @@ export function NpcCreator({
                     {v.custom && <span className="voice-custom-badge">clone</span>}
                     {v.name}
                   </span>
-                  <button
-                    className="voice-preview-btn"
-                    onClick={(e) => { e.stopPropagation(); playPreview(v.id); }}
-                    title="Preview voice"
-                  >
-                    {previewingVoice === v.id ? "\u25A0" : "\u25B6"}
-                  </button>
+                  <span className="voice-option-actions">
+                    <button
+                      className="voice-preview-btn"
+                      onClick={(e) => { e.stopPropagation(); playPreview(v.id); }}
+                      title="Preview voice"
+                    >
+                      {previewingVoice === v.id ? "\u25A0" : "\u25B6"}
+                    </button>
+                    {v.custom && (
+                      <button
+                        className="voice-delete-btn"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteVoice(v.id); }}
+                        title="Delete voice"
+                      >
+                        &times;
+                      </button>
+                    )}
+                  </span>
                 </div>
               ))}
               {availableVoices.length === 0 && (
