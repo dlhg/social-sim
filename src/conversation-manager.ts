@@ -928,6 +928,8 @@ export class ConversationManager {
     const now = Date.now();
     const before = this.preparedConversations.length;
     this.preparedConversations = this.preparedConversations.filter(p => {
+      // Don't expire conversations still being TTS'd — processNextTts holds a reference
+      if (!p.ttsComplete) return true;
       if (now - p.preparedAt > this.PREPARED_MAX_AGE_MS) {
         this.log(`[director] Discarding stale conversation for ${this.npcName(p.npcAId)} + ${this.npcName(p.npcBId)}`);
         this.preparedExpired++;
@@ -1181,44 +1183,47 @@ export class ConversationManager {
     let pushedToPrepared = false;
     const bufferThreshold = Math.min(this.TTS_BUFFER_THRESHOLD, turns.length);
 
-    if (this.ttsService) {
-      for (let i = 0; i < turns.length; i++) {
-        if (!this.running) break;
-        const turn = turns[i];
-        const speaker = this.store.get(turn.speaker_id)!;
-        const buf = await this.ttsService.prefetch(
-          turn.speaker_id,
-          turn.speech,
-          speaker.emotionalState,
-          this.language
-        );
-        audioBuffers[i] = buf;
-        inFlightEntry.completedTurns++;
-        prepared.ttsCompletedCount = i + 1;
+    try {
+      if (this.ttsService) {
+        for (let i = 0; i < turns.length; i++) {
+          if (!this.running) break;
+          const turn = turns[i];
+          const speaker = this.store.get(turn.speaker_id)!;
+          const buf = await this.ttsService.prefetch(
+            turn.speaker_id,
+            turn.speech,
+            speaker.emotionalState,
+            this.language
+          );
+          audioBuffers[i] = buf;
+          inFlightEntry.completedTurns++;
+          prepared.ttsCompletedCount = i + 1;
 
-        // After enough turns are buffered, make the conversation available for playback
-        if (!pushedToPrepared && prepared.ttsCompletedCount >= bufferThreshold) {
-          this.preparedConversations.push(prepared);
-          pushedToPrepared = true;
-          this.log(`[director] Conversation playable for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${bufferThreshold}/${turns.length} turns buffered)`);
+          // After enough turns are buffered, make the conversation available for playback
+          if (!pushedToPrepared && prepared.ttsCompletedCount >= bufferThreshold) {
+            this.preparedConversations.push(prepared);
+            pushedToPrepared = true;
+            this.log(`[director] Conversation playable for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${bufferThreshold}/${turns.length} turns buffered)`);
+          }
         }
       }
-    }
 
-    const ttsDurationMs = Date.now() - ttsStart;
-    this.ttsDurations.push(ttsDurationMs);
-    prepared.ttsDurationMs = ttsDurationMs;
-    prepared.ttsComplete = true;
-    this.ttsInFlight.delete(pKey);
+      const ttsDurationMs = Date.now() - ttsStart;
+      this.ttsDurations.push(ttsDurationMs);
+      prepared.ttsDurationMs = ttsDurationMs;
+      prepared.ttsComplete = true;
 
-    if (!this.running) return;
+      if (!this.running) return;
 
-    // If we never hit the threshold (e.g. very short conversation), push now
-    if (!pushedToPrepared) {
-      this.preparedConversations.push(prepared);
-      this.log(`[director] Conversation ready for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns)`);
-    } else {
-      this.log(`[director] TTS complete for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns, ${Math.round(ttsDurationMs / 1000)}s)`);
+      // If we never hit the threshold (e.g. very short conversation), push now
+      if (!pushedToPrepared) {
+        this.preparedConversations.push(prepared);
+        this.log(`[director] Conversation ready for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns)`);
+      } else {
+        this.log(`[director] TTS complete for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns, ${Math.round(ttsDurationMs / 1000)}s)`);
+      }
+    } finally {
+      this.ttsInFlight.delete(pKey);
     }
 
     // Process next queued conversation

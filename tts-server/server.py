@@ -20,6 +20,7 @@ Usage:
 
 import io
 import os
+import re
 import sys
 import uuid
 import subprocess
@@ -75,6 +76,15 @@ VOICE_DESCRIPTIONS = {
 
 PREVIEW_DIR = VOICES_DIR / "previews"
 PREVIEW_DIR.mkdir(exist_ok=True)
+
+_SAFE_VOICE_ID = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def validate_voice_id(voice_id: str) -> str | None:
+    """Return an error message if voice_id is unsafe, or None if OK."""
+    if not voice_id or len(voice_id) > 64 or not _SAFE_VOICE_ID.match(voice_id):
+        return "Invalid voice_id: must be 1-64 alphanumeric/dash/underscore characters"
+    return None
 
 PREVIEW_TEXT = "Hello there! This is what I sound like. Nice to meet you."
 
@@ -132,25 +142,27 @@ LANGUAGE_TO_LANG_CODE = {
 
 _pipelines: dict = {}  # lang_code -> KPipeline
 _kokoro_model = None
+_pipeline_lock = threading.Lock()
 
 
 def get_pipeline(lang_code: str = "a"):
     global _kokoro_model
     from kokoro import KPipeline
 
-    if lang_code in _pipelines:
-        return _pipelines[lang_code]
+    with _pipeline_lock:
+        if lang_code in _pipelines:
+            return _pipelines[lang_code]
 
-    if _kokoro_model is None:
-        pipeline = KPipeline(lang_code=lang_code)
-        _kokoro_model = pipeline.model
-        print(f"[tts] Kokoro model loaded, first pipeline: {lang_code}")
-    else:
-        pipeline = KPipeline(lang_code=lang_code, model=_kokoro_model)
-        print(f"[tts] Added Kokoro pipeline for lang_code={lang_code}")
+        if _kokoro_model is None:
+            pipeline = KPipeline(lang_code=lang_code)
+            _kokoro_model = pipeline.model
+            print(f"[tts] Kokoro model loaded, first pipeline: {lang_code}")
+        else:
+            pipeline = KPipeline(lang_code=lang_code, model=_kokoro_model)
+            print(f"[tts] Added Kokoro pipeline for lang_code={lang_code}")
 
-    _pipelines[lang_code] = pipeline
-    return pipeline
+        _pipelines[lang_code] = pipeline
+        return pipeline
 
 
 def resolve_lang_code(language: str | None) -> str | None:
@@ -405,6 +417,9 @@ def upload_voice():
 
     file = request.files["file"]
     voice_id = request.form.get("voice_id", f"custom_{uuid.uuid4().hex[:8]}")
+    err = validate_voice_id(voice_id)
+    if err:
+        return Response(err, status=400)
 
     try:
         audio_data, sample_rate = sf.read(io.BytesIO(file.read()))
@@ -435,6 +450,9 @@ def youtube_voice():
     start = float(data.get("start", 0))
     end = float(data.get("end", 30))
     voice_id = data.get("voice_id", f"custom_{uuid.uuid4().hex[:8]}")
+    err = validate_voice_id(voice_id)
+    if err:
+        return Response(err, status=400)
 
     if not url:
         return Response("No URL provided", status=400)
@@ -494,6 +512,9 @@ def youtube_voice():
 @app.route("/voice/<voice_id>", methods=["DELETE"])
 def delete_voice(voice_id: str):
     """Delete a custom voice and its preview clip."""
+    err = validate_voice_id(voice_id)
+    if err:
+        return Response(err, status=400)
     if voice_id in VOICE_POOL:
         return Response("Cannot delete built-in voices", status=403)
 
@@ -514,6 +535,9 @@ def delete_voice(voice_id: str):
 @app.route("/voice-clip/<voice_id>", methods=["GET"])
 def voice_clip(voice_id: str):
     """Serve a reference audio clip back to the client for preview."""
+    err = validate_voice_id(voice_id)
+    if err:
+        return Response(err, status=400)
     path = VOICES_DIR / f"{voice_id}.wav"
     if not path.exists():
         return Response("Voice not found", status=404)
@@ -526,6 +550,9 @@ def voice_preview(voice_id: str):
     Serve a pre-rendered Chatterbox preview clip for a voice.
     Generates and caches on first request.
     """
+    err = validate_voice_id(voice_id)
+    if err:
+        return Response(err, status=400)
     preview_path = PREVIEW_DIR / f"{voice_id}.wav"
     if preview_path.exists():
         return send_file(str(preview_path), mimetype="audio/wav")

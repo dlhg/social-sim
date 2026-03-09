@@ -54,6 +54,20 @@ export class MemoryService {
       // Promote important memories to long-term instead of discarding
       if (evicted.importance >= 0.7) {
         npc.longTermMemory.push(evicted);
+        // Cap long-term memory too — evict lowest scoring when over limit
+        if (npc.longTermMemory.length > 100) {
+          let ltMinIdx = 0;
+          let ltMinScore = Infinity;
+          for (let i = 0; i < npc.longTermMemory.length; i++) {
+            const m = npc.longTermMemory[i];
+            const score = m.recency * m.importance;
+            if (score < ltMinScore) {
+              ltMinScore = score;
+              ltMinIdx = i;
+            }
+          }
+          npc.longTermMemory.splice(ltMinIdx, 1);
+        }
       }
     }
     this._memoryVersion++;

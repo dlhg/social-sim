@@ -10,6 +10,8 @@ Listens on http://localhost:8788
 
 import io
 import os
+import re
+import threading
 from pathlib import Path
 from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
@@ -19,30 +21,34 @@ CORS(app)
 
 VOICES_DIR = Path(__file__).parent / "voices"
 
+_SAFE_VOICE_ID = re.compile(r"^[a-zA-Z0-9_-]+$")
+
 _model = None
+_model_lock = threading.Lock()
 
 
 def get_model():
     global _model
-    if _model is None:
-        import torch
-        from chatterbox.tts_turbo import ChatterboxTurboTTS
-        # Patch out watermarker — resemble-perth native lib fails on Apple Silicon
-        import perth
-        if perth.PerthImplicitWatermarker is None:
-            class _NoOpWatermarker:
-                def apply_watermark(self, wav, sample_rate=None):
-                    return wav
-            perth.PerthImplicitWatermarker = _NoOpWatermarker
-        if torch.backends.mps.is_available():
-            device = "mps"
-        elif torch.cuda.is_available():
-            device = "cuda"
-        else:
-            device = "cpu"
-        _model = ChatterboxTurboTTS.from_pretrained(device=device)
-        print(f"[chatterbox] Model loaded on {device}")
-    return _model
+    with _model_lock:
+        if _model is None:
+            import torch
+            from chatterbox.tts_turbo import ChatterboxTurboTTS
+            # Patch out watermarker — resemble-perth native lib fails on Apple Silicon
+            import perth
+            if perth.PerthImplicitWatermarker is None:
+                class _NoOpWatermarker:
+                    def apply_watermark(self, wav, sample_rate=None):
+                        return wav
+                perth.PerthImplicitWatermarker = _NoOpWatermarker
+            if torch.backends.mps.is_available():
+                device = "mps"
+            elif torch.cuda.is_available():
+                device = "cuda"
+            else:
+                device = "cpu"
+            _model = ChatterboxTurboTTS.from_pretrained(device=device)
+            print(f"[chatterbox] Model loaded on {device}")
+        return _model
 
 
 @app.route("/health", methods=["GET"])
@@ -69,9 +75,12 @@ def speak():
     if not text:
         return Response("No text provided", status=400)
 
+    if not voice_id or len(voice_id) > 64 or not _SAFE_VOICE_ID.match(voice_id):
+        return Response("Invalid voice_id", status=400)
+
     ref_path = VOICES_DIR / f"{voice_id}.wav"
     if not ref_path.exists():
-        return Response(f"Reference audio not found: {ref_path}", status=404)
+        return Response("Reference audio not found", status=404)
 
     model = get_model()
 
