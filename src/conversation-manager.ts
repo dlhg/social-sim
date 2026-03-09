@@ -16,11 +16,11 @@ import type { MemoryService } from "./memory-service";
 import type { WorldSimulation } from "./world-simulation";
 import type { DayCycle } from "./day-cycle";
 import type { TTSService } from "./tts-service";
-import { buildConversationMessages, buildBatchConversationMessages, buildReflectionMessages } from "./prompt-builder";
+import { buildConversationMessages, buildBatchConversationMessages, buildReflectionMessages, buildSceneDirectionMessages } from "./prompt-builder";
 import { accumulateChat, getGroqRateLimits } from "./ollama";
 import type { GroqRateLimits } from "./ollama";
 import { loadLlmConfig, GROQ_MODELS } from "./llm-config";
-import { parseLLMResponse, parseBatchLLMResponse, extractJson } from "./response-parser";
+import { parseLLMResponse, parseBatchLLMResponse, parseSceneDirection, extractJson } from "./response-parser";
 
 export interface ConversationManagerCallbacks {
   onStreamToken: (npcId: string, fullText: string) => void;
@@ -159,6 +159,9 @@ export class ConversationManager {
   // Cumulative relationship deltas for current conversation (for capping)
   private cumulativeRelDeltas: Map<string, number> = new Map();
   private activeConvType: ConversationType = "casual";
+
+  // Cumulative narrative arc summary (Phase 3C)
+  private narrativeSummary = "";
 
   private worldSim: WorldSimulation | null = null;
   private dayCycle: DayCycle | null = null;
@@ -568,34 +571,10 @@ export class ConversationManager {
 
     this.abortController = new AbortController();
     this.store.recordRelationshipSnapshot(npcAId, npcBId);
-    const convType = this.classifyConversationType(npcA, npcB);
-    this.activeConvType = convType;
 
     this.freezeRelationships(npcAId, npcBId);
 
-    const maxTurns = this.rollMaxTurns(convType);
-    const minTurns = Math.max(this.MIN_TURNS, Math.floor(maxTurns * 0.6));
-
-    const session: ConversationSession = {
-      id: `conv_${Date.now()}`,
-      participantIds: [npcAId, npcBId],
-      messages: [],
-      turnCount: 0,
-      maxTurns,
-      status: "active",
-      startedAt: Date.now(),
-    };
-
-    this.activeSession = session;
-    this.conversationEavesdroppers.clear();
-    // NOTE: We intentionally delay onConversationStart (camera zoom, UI)
-    // until after LLM + TTS are ready, so the user doesn't see a long wait.
-    // Freeze NPCs silently so they stay near each other during generation.
-    this.worldSim?.freezeNpc(npcAId);
-    this.worldSim?.freezeNpc(npcBId);
-    this.log(`[batch] Generating conversation for ${npcA.name} and ${npcB.name} [${convType}, ${minTurns}-${maxTurns} turns]`);
-
-    // ── 1. Build batch prompt ──
+    // ── 1. Build context ──
     const allNpcs = this.store.getAll().map(n => ({ id: n.id, name: n.name }));
     const velocity = this.store.getRelationshipVelocity(npcAId, npcBId);
     let trajectoryContext: string | undefined;
@@ -628,6 +607,49 @@ export class ConversationManager {
     const frozenAtoB = this.frozenRelationships.get(`${npcAId}->${npcBId}`);
     const frozenBtoA = this.frozenRelationships.get(`${npcBId}->${npcAId}`);
 
+    // ── Scene Direction pre-pass ──
+    let convType: ConversationType;
+    let sceneDirection: string | undefined;
+    try {
+      const sdMessages = buildSceneDirectionMessages(npcA, npcB, {
+        trajectoryContext, locationContext, timeOfDay,
+        memoriesA, memoriesB,
+        narrativeSummary: this.narrativeSummary || undefined,
+        language: this.language,
+      });
+      const sdRaw = await accumulateChat(sdMessages, {
+        signal: this.abortController!.signal,
+        numPredict: 512,
+      });
+      const sd = parseSceneDirection(sdRaw);
+      convType = sd.conversationType;
+      sceneDirection = sd.sceneDirection || undefined;
+      this.log(`[batch] Scene direction: ${convType} — "${sceneDirection?.slice(0, 80)}..."`);
+    } catch (e) {
+      convType = this.classifyConversationType(npcA, npcB);
+      this.log(`[batch] Scene direction failed, using heuristic: ${convType} (${e})`);
+    }
+
+    this.activeConvType = convType;
+    const maxTurns = this.rollMaxTurns(convType);
+    const minTurns = Math.max(this.MIN_TURNS, Math.floor(maxTurns * 0.6));
+
+    const session: ConversationSession = {
+      id: `conv_${Date.now()}`,
+      participantIds: [npcAId, npcBId],
+      messages: [],
+      turnCount: 0,
+      maxTurns,
+      status: "active",
+      startedAt: Date.now(),
+    };
+
+    this.activeSession = session;
+    this.conversationEavesdroppers.clear();
+    this.worldSim?.freezeNpc(npcAId);
+    this.worldSim?.freezeNpc(npcBId);
+    this.log(`[batch] Generating conversation for ${npcA.name} and ${npcB.name} [${convType}, ${minTurns}-${maxTurns} turns]`);
+
     const messages = buildBatchConversationMessages(
       npcA, npcB, npcAId, minTurns, maxTurns,
       {
@@ -640,6 +662,8 @@ export class ConversationManager {
         frozenAffectionAtoB: frozenAtoB?.affection,
         frozenRegardBtoA: frozenBtoA?.regard,
         frozenAffectionBtoA: frozenBtoA?.affection,
+        sceneDirection,
+        narrativeSummary: this.narrativeSummary || undefined,
       }
     );
 
@@ -881,6 +905,7 @@ export class ConversationManager {
 
     this.storeConversationSummaryMemory(npcAId, npcBId, session);
     this.logConversationSummary(npcAId, npcBId);
+    this.appendNarrativeArc(npcAId, npcBId, session);
     this.applyEmotionalContagion(npcAId, npcBId, session);
     this.triggerPostConversationBehavior(npcAId, npcBId, session);
     this.runPostConversationReflection(npcAId, npcBId, session).catch(() => {});
@@ -1006,11 +1031,8 @@ export class ConversationManager {
     }
 
     this.llmAbort = new AbortController();
-    const convType = this.classifyConversationType(npcA, npcB);
-    const maxTurns = this.rollMaxTurns(convType);
-    const minTurns = Math.max(this.MIN_TURNS, Math.floor(maxTurns * 0.6));
 
-    // Build context
+    // Build shared context
     const allNpcs = this.store.getAll().map(n => ({ id: n.id, name: n.name }));
     const velocity = this.store.getRelationshipVelocity(npcAId, npcBId);
     let trajectoryContext: string | undefined;
@@ -1047,6 +1069,36 @@ export class ConversationManager {
     const prevPKey = this.pairKey(npcAId, npcBId);
     const previousConversation = this.lastConversationDialogue.get(prevPKey);
 
+    // ── Scene Direction pre-pass (LLM-driven conversation type + creative direction) ──
+    let convType: ConversationType;
+    let sceneDirection: string | undefined;
+    const modelOverride = loadLlmConfig().provider === "groq" ? this.pickGroqModel() : undefined;
+
+    try {
+      const sdMessages = buildSceneDirectionMessages(npcA, npcB, {
+        trajectoryContext, locationContext, timeOfDay,
+        memoriesA, memoriesB,
+        narrativeSummary: this.narrativeSummary || undefined,
+        language: this.language,
+      });
+      const sdRaw = await accumulateChat(sdMessages, {
+        signal: this.llmAbort.signal,
+        numPredict: 512,
+        modelOverride,
+      });
+      const sd = parseSceneDirection(sdRaw);
+      convType = sd.conversationType;
+      sceneDirection = sd.sceneDirection || undefined;
+      this.log(`[director] Scene direction: ${convType} — "${sceneDirection?.slice(0, 80)}..."`);
+    } catch (e) {
+      // Fallback to hardcoded classification if scene direction fails
+      convType = this.classifyConversationType(npcA, npcB);
+      this.log(`[director] Scene direction failed, using heuristic: ${convType} (${e})`);
+    }
+
+    const maxTurns = this.rollMaxTurns(convType);
+    const minTurns = Math.max(this.MIN_TURNS, Math.floor(maxTurns * 0.6));
+
     const messages = buildBatchConversationMessages(
       npcA, npcB, npcAId, minTurns, maxTurns,
       {
@@ -1060,18 +1112,20 @@ export class ConversationManager {
         frozenRegardBtoA: relBtoA?.regard,
         frozenAffectionBtoA: relBtoA?.affection,
         previousConversation,
+        sceneDirection,
+        narrativeSummary: this.narrativeSummary || undefined,
       }
     );
 
     // ── Phase 1: LLM generation ──
     const llmStart = Date.now();
-    const modelOverride = loadLlmConfig().provider === "groq" ? this.pickGroqModel() : undefined;
+    const convModelOverride = loadLlmConfig().provider === "groq" ? this.pickGroqModel() : undefined;
     let turns: BatchTurnData[];
     try {
       const raw = await accumulateChat(messages, {
         signal: this.llmAbort.signal,
         numPredict: 4096,
-        modelOverride,
+        modelOverride: convModelOverride,
       });
       turns = parseBatchLLMResponse(raw, [npcAId, npcBId]);
     } catch (e) {
@@ -2555,6 +2609,87 @@ export class ConversationManager {
     const moodA = this.describeMood(a);
     const moodB = this.describeMood(b);
     this.log(`Mood: ${a.name} is ${moodA} | ${b.name} is ${moodB}`);
+  }
+
+  // ── Narrative Arc Tracking ──────────────────
+
+  private readonly NARRATIVE_MAX_ENTRIES = 20;
+
+  private appendNarrativeArc(
+    npcAId: string,
+    npcBId: string,
+    session: ConversationSession,
+  ): void {
+    const npcA = this.store.get(npcAId);
+    const npcB = this.store.get(npcBId);
+    if (!npcA || !npcB) return;
+
+    // Build a one-line summary of what happened
+    let totalRelDelta = 0;
+    let hadAction = false;
+    let secretRevealed = false;
+    let promiseMade = false;
+    for (const msg of session.messages) {
+      const r = msg.rawResponse;
+      if (!r) continue;
+      totalRelDelta += r.relationship_delta;
+      if (r.action) hadAction = true;
+      if (r.secret_revealed) secretRevealed = true;
+      if (r.promise) promiseMade = true;
+    }
+
+    const tone = totalRelDelta > 0.1 ? "warm" : totalRelDelta < -0.1 ? "tense" : "neutral";
+    const convType = this.activeConvType;
+    let entry = `${npcA.name} & ${npcB.name} had a ${tone} ${convType} (${session.turnCount} turns)`;
+    if (secretRevealed) entry += " — a secret was revealed";
+    if (promiseMade) entry += " — a promise was made";
+    if (hadAction) entry += " — a significant action occurred";
+    entry += ".";
+
+    // Append to running narrative
+    const lines = this.narrativeSummary ? this.narrativeSummary.split("\n") : [];
+    lines.push(entry);
+
+    // If we exceed the threshold, compress via LLM in the background
+    if (lines.length > this.NARRATIVE_MAX_ENTRIES) {
+      this.compressNarrativeArc(lines).catch(() => {});
+    } else {
+      this.narrativeSummary = lines.join("\n");
+    }
+  }
+
+  private async compressNarrativeArc(lines: string[]): Promise<void> {
+    const text = lines.join("\n");
+    const messages = [
+      {
+        role: "system" as const,
+        content: `You are a story summarizer for an NPC social simulation. Given a list of conversation events, compress them into a concise narrative summary (5-8 sentences) that captures:
+- Key relationship developments (who got closer, who had conflict)
+- Important events (secrets revealed, promises made, dramatic actions)
+- Emerging storylines and unresolved tensions
+- The overall emotional arc of the community
+
+Respond with ONLY the summary text, no JSON, no markdown.`,
+      },
+      {
+        role: "user" as const,
+        content: `Compress these ${lines.length} conversation events into a narrative summary:\n\n${text}`,
+      },
+    ];
+
+    try {
+      const modelOverride = loadLlmConfig().provider === "groq" ? this.pickGroqModel() : undefined;
+      const summary = await accumulateChat(messages, {
+        numPredict: 1024,
+        modelOverride,
+      });
+      this.narrativeSummary = summary.trim();
+      this.log(`[narrative] Compressed ${lines.length} entries into narrative summary`);
+    } catch (e) {
+      // On failure, just keep the most recent entries
+      this.narrativeSummary = lines.slice(-10).join("\n");
+      this.log(`[narrative] Compression failed, keeping last 10 entries: ${e}`);
+    }
   }
 
   // ── Helpers ──────────────────────────────────

@@ -1,4 +1,4 @@
-import type { LLMResponse, BatchTurnData, MentionedNpc, ActionData, ActionType } from "./types";
+import type { LLMResponse, BatchTurnData, MentionedNpc, ActionData, ActionType, ConversationType } from "./types";
 
 export function parseLLMResponse(raw: string): LLMResponse {
   const cleaned = extractJson(raw);
@@ -247,6 +247,44 @@ export function parseBatchLLMResponse(raw: string, validSpeakerIds: [string, str
       action: validated.action,
     };
   });
+}
+
+// ── Scene direction parser ───────────────────────
+
+const VALID_CONV_TYPES: ConversationType[] = [
+  "casual", "confrontation", "reconciliation", "confession", "alliance_forming", "gossip_session",
+];
+
+export interface SceneDirectionResult {
+  conversationType: ConversationType;
+  sceneDirection: string;
+}
+
+export function parseSceneDirection(raw: string): SceneDirectionResult {
+  const cleaned = extractJson(raw);
+  let obj: unknown;
+  try {
+    obj = JSON.parse(cleaned);
+  } catch {
+    obj = JSON.parse(repairJson(cleaned));
+  }
+
+  if (typeof obj !== "object" || obj === null) {
+    throw new Error("Scene direction response is not an object");
+  }
+
+  const o = obj as Record<string, unknown>;
+
+  let conversationType: ConversationType = "casual";
+  if (typeof o.conversation_type === "string" && VALID_CONV_TYPES.includes(o.conversation_type as ConversationType)) {
+    conversationType = o.conversation_type as ConversationType;
+  }
+
+  const sceneDirection = typeof o.scene_direction === "string" && o.scene_direction.length > 0
+    ? o.scene_direction
+    : "";
+
+  return { conversationType, sceneDirection };
 }
 
 function toNumber(val: unknown, fallback: number): number {

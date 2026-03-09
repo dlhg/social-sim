@@ -119,17 +119,6 @@ function formatOtherNpcsBlock(
   return others.map(n => `- ${n.name} (id: "${n.id}")`).join("\n");
 }
 
-function combinedGuidance(
-  emotions: EmotionalState,
-  regard: number,
-  listenerName: string,
-): string[] {
-  return [
-    ...emotionBehavioralGuidance(emotions),
-    ...relationshipBehavioralGuidance(regard, listenerName),
-  ];
-}
-
 // ── System prompt builder ───────────────────────
 
 export interface PromptContext {
@@ -158,14 +147,7 @@ export function buildSystemPrompt(
   const relLabel = relationshipLabel(relationship);
   const emotionSummary = describeEmotions(speaker.emotionalState);
 
-  const allGuidance = combinedGuidance(speaker.emotionalState, relationship, listener.name);
-
   const { direct: relevantMemories, gossip: gossipMemories, aboutPartner: aboutListenerMemories } = formatMemoryLines(ctx.retrievedMemories);
-
-  const behavioralBlock =
-    allGuidance.length > 0
-      ? `\nBEHAVIORAL GUIDANCE (follow these closely):\n${allGuidance.map((g) => `- ${g}`).join("\n")}`
-      : "";
 
   const otherNpcsList = formatOtherNpcsBlock(ctx.allNpcs, [speaker.id, listener.id]);
   const otherNpcsBlock = otherNpcsList ? `\nOTHER PEOPLE YOU KNOW:\n${otherNpcsList}` : "";
@@ -238,7 +220,8 @@ ${gossipBlock}
 ${otherNpcsBlock}
 
 ${PREAMBLES[ctx.conversationType ?? "casual"]}
-${behavioralBlock}
+
+Your emotional state and relationship context above tell you how you feel. Let those feelings naturally shape how you speak — your tone, your patience, your openness, your word choices.
 ${actionHints}
 
 CONVERSATION PROGRESS: Turn ${turnNumber + 1} of ${maxTurns}.
@@ -369,6 +352,10 @@ export interface BatchPromptContext {
   frozenAffectionBtoA?: number;
   /** Summary of the immediately preceding conversation between these two, for continuity */
   previousConversation?: string;
+  /** LLM-generated scene direction (replaces hardcoded preambles when present) */
+  sceneDirection?: string;
+  /** Cumulative narrative arc summary fed from conversation-manager */
+  narrativeSummary?: string;
 }
 
 export function buildBatchConversationMessages(
@@ -386,9 +373,6 @@ export function buildBatchConversationMessages(
 
   const emotionsA = describeEmotions(npcA.emotionalState);
   const emotionsB = describeEmotions(npcB.emotionalState);
-
-  const guidanceA = combinedGuidance(npcA.emotionalState, relAtoB, npcB.name);
-  const guidanceB = combinedGuidance(npcB.emotionalState, relBtoA, npcA.name);
 
   const memA = ctx.memoriesA;
   const memB = ctx.memoriesB;
@@ -451,8 +435,7 @@ Current goal: ${npcA.currentGoal ?? "none"}${secretsA}${inventoryA}${plansBlockA
 Relationship with ${npcB.name}: ${relationshipLabel(relAtoB)} (regard: ${relAtoB.toFixed(2)})${affAtoB > 0.15 ? ` | Romantic: ${describeAffection(affAtoB)}` : ""}
 ${describeRelationshipDimensions(npcA, npcB)}
 Memories of ${npcB.name}:
-${memDirectA || "(none)"}${memAboutA ? `\nThings heard about ${npcB.name}:\n${memAboutA}` : ""}${memGossipA ? `\nGossip heard:\n${memGossipA}` : ""}
-${guidanceA.length > 0 ? `Behavioral guidance for ${npcA.name}:\n${guidanceA.map(g => `- ${g}`).join("\n")}` : ""}${actionHintsA}
+${memDirectA || "(none)"}${memAboutA ? `\nThings heard about ${npcB.name}:\n${memAboutA}` : ""}${memGossipA ? `\nGossip heard:\n${memGossipA}` : ""}${actionHintsA}
 
 CHARACTER B: ${npcB.name} (id: "${npcB.id}")
 ${identityB}
@@ -461,11 +444,12 @@ Current goal: ${npcB.currentGoal ?? "none"}${secretsB}${inventoryB}${plansBlockB
 Relationship with ${npcA.name}: ${relationshipLabel(relBtoA)} (regard: ${relBtoA.toFixed(2)})${affBtoA > 0.15 ? ` | Romantic: ${describeAffection(affBtoA)}` : ""}
 ${describeRelationshipDimensions(npcB, npcA)}
 Memories of ${npcA.name}:
-${memDirectB || "(none)"}${memAboutB ? `\nThings heard about ${npcA.name}:\n${memAboutB}` : ""}${memGossipB ? `\nGossip heard:\n${memGossipB}` : ""}
-${guidanceB.length > 0 ? `Behavioral guidance for ${npcB.name}:\n${guidanceB.map(g => `- ${g}`).join("\n")}` : ""}${actionHintsB}
-${trajectoryBlock}${locationBlock}${timeBlock}${otherNpcsBlock}${prevConvBlock}
+${memDirectB || "(none)"}${memAboutB ? `\nThings heard about ${npcA.name}:\n${memAboutB}` : ""}${memGossipB ? `\nGossip heard:\n${memGossipB}` : ""}${actionHintsB}
+${trajectoryBlock}${locationBlock}${timeBlock}${otherNpcsBlock}${prevConvBlock}${ctx.narrativeSummary ? `\nSTORY SO FAR (cumulative narrative arc across all conversations):\n${ctx.narrativeSummary}` : ""}
 
-${PREAMBLES[ctx.conversationType ?? "casual"]}
+${ctx.sceneDirection ? `SCENE DIRECTION:\n${ctx.sceneDirection}` : PREAMBLES[ctx.conversationType ?? "casual"]}
+
+Each character's emotional state and relationship context tell them how they feel. Let those feelings naturally shape how they speak — tone, patience, openness, word choices. Characters should react authentically to their inner state without being told how.
 
 Generate a conversation of EXACTLY ${maxTurns} turns (minimum ${minTurns}, aim for ${maxTurns}). ${firstSpeaker.name} speaks first, then they alternate.
 
@@ -737,236 +721,7 @@ function describeEmotions(state: EmotionalState): string {
   return parts.length > 0 ? parts.join(", ") : "emotionally neutral";
 }
 
-// ── Emotion → behavioral guidance ───────────────
-
-const emotionGuidanceCache = new Map<string, string[]>();
-const relationshipGuidanceCache = new Map<string, string[]>();
-const GUIDANCE_CACHE_MAX = 500;
-
-function bucketEmotion(v: number): string {
-  if (v >= 0.8) return "8";
-  if (v >= 0.7) return "7";
-  if (v >= 0.4) return "4";
-  if (v >= 0.3) return "3";
-  if (v >= 0.25) return "25";
-  if (v >= 0.15) return "15";
-  return "0";
-}
-
-function emotionBehavioralGuidance(state: EmotionalState): string[] {
-  const key = `${bucketEmotion(state.anger)}_${bucketEmotion(state.trust)}_${bucketEmotion(state.fear)}_${bucketEmotion(state.joy)}_${bucketEmotion(state.sadness)}_${bucketEmotion(state.curiosity)}_${bucketEmotion(state.disgust)}_${bucketEmotion(state.guilt)}`;
-  const cached = emotionGuidanceCache.get(key);
-  if (cached) return cached;
-
-  const guidance: string[] = [];
-
-  // Anger
-  if (state.anger >= 0.7) {
-    guidance.push(
-      "You are seething. Be confrontational, cutting, and sharp. Do not hold back criticism. " +
-        "You may raise your voice, use biting sarcasm, or directly attack what the other person says."
-    );
-  } else if (state.anger >= 0.4) {
-    guidance.push(
-      "You are irritated. Be curt, impatient, and ready to push back. " +
-        "Challenge statements you disagree with. Don't smooth things over."
-    );
-  } else if (state.anger >= 0.25) {
-    guidance.push(
-      "You are mildly annoyed. Let it show through clipped responses or subtle barbs."
-    );
-  }
-
-  // Trust
-  if (state.trust <= 0.15) {
-    guidance.push(
-      "You deeply distrust this person. Be guarded, evasive, and suspicious. " +
-        "Read hidden motives into what they say. Don't share personal information. " +
-        "Question their intentions openly or through pointed remarks."
-    );
-  } else if (state.trust <= 0.3) {
-    guidance.push(
-      "You are wary of this person. Be cautious about what you reveal. " +
-        "You suspect they may not be genuine. Deflect personal questions."
-    );
-  } else if (state.trust >= 0.8) {
-    guidance.push(
-      "You trust this person deeply. Be open and vulnerable. Share things you wouldn't tell others."
-    );
-  }
-
-  // Fear
-  if (state.fear >= 0.7) {
-    guidance.push(
-      "You are very anxious. Second-guess yourself and others. Catastrophize. " +
-        "You may try to flee the conversation or become defensive and jumpy."
-    );
-  } else if (state.fear >= 0.4) {
-    guidance.push(
-      "You are on edge. Be nervous and vigilant. Interpret ambiguous statements negatively."
-    );
-  }
-
-  // Joy
-  if (state.joy <= 0.15) {
-    guidance.push(
-      "You are deeply unhappy. Be bleak, humorless, and pessimistic. " +
-        "Don't pretend to enjoy things. Let your misery color everything you say."
-    );
-  } else if (state.joy <= 0.3) {
-    guidance.push(
-      "You are not in a good mood. Be subdued and downbeat. Positivity feels forced to you."
-    );
-  } else if (state.joy >= 0.8) {
-    guidance.push(
-      "You are in an excellent mood. Be warm, enthusiastic, and generous. " +
-        "But if someone provokes you, the contrast with your good mood makes it hit harder."
-    );
-  }
-
-  // Sadness
-  if (state.sadness >= 0.7) {
-    guidance.push(
-      "You are deeply sad. You may withdraw, speak quietly, or struggle to engage. " +
-        "You might seek comfort or retreat into silence. Sadness colors everything."
-    );
-  } else if (state.sadness >= 0.4) {
-    guidance.push(
-      "You feel melancholy. Be reflective, wistful, perhaps a little distant. " +
-        "You might bring up losses or missed opportunities."
-    );
-  }
-
-  // Curiosity
-  if (state.curiosity >= 0.7) {
-    guidance.push(
-      "You are intensely curious. Ask probing questions, dig deeper into topics, " +
-        "and pursue threads others might drop. You want to understand."
-    );
-  } else if (state.curiosity <= 0.15) {
-    guidance.push(
-      "You are apathetic and disengaged. Nothing interests you right now. " +
-        "Give short, uninterested answers. Don't pursue topics."
-    );
-  }
-
-  // Disgust
-  if (state.disgust >= 0.6) {
-    guidance.push(
-      "You feel moral revulsion. Be judgmental, dismissive, or cutting. " +
-        "You may express contempt through cold rejection rather than heated anger."
-    );
-  } else if (state.disgust >= 0.4) {
-    guidance.push(
-      "You feel put off. Show subtle distaste — wrinkled nose, clipped words, avoidance of certain topics."
-    );
-  }
-
-  // Guilt
-  if (state.guilt >= 0.6) {
-    guidance.push(
-      "You feel deeply guilty. You may want to confess, apologize, or make amends. " +
-        "You might avoid eye contact, overexplain yourself, or be unusually agreeable to compensate."
-    );
-  } else if (state.guilt >= 0.4) {
-    guidance.push(
-      "Your conscience is bothering you. You might deflect, change the subject when certain topics come up, " +
-        "or be overly generous to cover your discomfort."
-    );
-  }
-
-  // Compound emotional states
-  if (state.anger >= 0.4 && state.fear >= 0.4) {
-    guidance.push(
-      "You are both angry and afraid — this makes you volatile. " +
-        "You might lash out defensively or make accusations born from insecurity."
-    );
-  }
-  if (state.anger >= 0.4 && state.trust <= 0.3) {
-    guidance.push(
-      "You are angry AND distrustful — a dangerous combination. " +
-        "You suspect this person is trying to manipulate or undermine you."
-    );
-  }
-  if (state.fear >= 0.4 && state.trust <= 0.3) {
-    guidance.push(
-      "You are anxious and distrustful. You see threats everywhere. " +
-        "Read between the lines of everything they say."
-    );
-  }
-  if (state.sadness >= 0.4 && state.guilt >= 0.4) {
-    guidance.push(
-      "You feel sad and guilty — a heavy combination. You may spiral into self-blame " +
-        "or seek reassurance that you haven't ruined things."
-    );
-  }
-  if (state.disgust >= 0.4 && state.anger >= 0.4) {
-    guidance.push(
-      "You feel both disgusted and angry — cold fury. You don't just dislike what's happening, " +
-        "you find it morally repugnant. Be scathing."
-    );
-  }
-  if (state.curiosity >= 0.5 && state.fear >= 0.4) {
-    guidance.push(
-      "You are curious despite being afraid. You want to investigate even though it scares you."
-    );
-  }
-
-  if (emotionGuidanceCache.size >= GUIDANCE_CACHE_MAX) emotionGuidanceCache.clear();
-  emotionGuidanceCache.set(key, guidance);
-  return guidance;
-}
-
-// ── Relationship → behavioral guidance ──────────
-
-function relationshipBehavioralGuidance(
-  relationship: number,
-  listenerName: string
-): string[] {
-  const relBucket =
-    relationship <= -0.6 ? "-6" :
-    relationship <= -0.3 ? "-3" :
-    relationship <= -0.1 ? "-1" :
-    relationship >= 0.6 ? "6" :
-    relationship >= 0.3 ? "3" : "0";
-  const cacheKey = `${relBucket}_${listenerName}`;
-  const cached = relationshipGuidanceCache.get(cacheKey);
-  if (cached) return cached;
-
-  const guidance: string[] = [];
-
-  if (relationship <= -0.6) {
-    guidance.push(
-      `You actively dislike ${listenerName}. Be cold, dismissive, or openly hostile. ` +
-        `Do not pretend to be friendly. You may bring up past grievances or refuse to engage warmly.`
-    );
-  } else if (relationship <= -0.3) {
-    guidance.push(
-      `You have a negative opinion of ${listenerName}. Be cool, skeptical, and quick to disagree. ` +
-        `Don't go out of your way to be pleasant.`
-    );
-  } else if (relationship <= -0.1) {
-    guidance.push(
-      `You are slightly wary of ${listenerName}. You haven't warmed to them. ` +
-        `Be polite but distant — no warmth.`
-    );
-  } else if (relationship >= 0.6) {
-    guidance.push(
-      `You consider ${listenerName} a close friend. Be genuine, affectionate, and willing to be vulnerable. ` +
-        `You can tease them in ways you wouldn't with others.`
-    );
-  } else if (relationship >= 0.3) {
-    guidance.push(
-      `You like ${listenerName}. Be friendly and engaged, but you're not deeply bonded yet.`
-    );
-  }
-
-  if (relationshipGuidanceCache.size >= GUIDANCE_CACHE_MAX) relationshipGuidanceCache.clear();
-  relationshipGuidanceCache.set(cacheKey, guidance);
-  return guidance;
-}
-
-// ── Relationship label ──────────────────────────
+// ── Relationship helpers ────────────────────────
 
 function describeRelationshipDimensions(speaker: NPC, listener: NPC): string {
   const rel = speaker.relationships[listener.id];
@@ -1001,4 +756,80 @@ function relationshipLabel(value: number): string {
   if (value > -0.3) return "slightly negative";
   if (value > -0.6) return "tense";
   return "hostile";
+}
+
+// ── Scene Direction (LLM pre-pass) ───────────────
+
+export interface SceneDirectionContext {
+  trajectoryContext?: string;
+  locationContext?: string;
+  timeOfDay?: string;
+  memoriesA?: RetrievedMemories;
+  memoriesB?: RetrievedMemories;
+  narrativeSummary?: string;
+  language?: string;
+}
+
+const VALID_CONVERSATION_TYPES: ConversationType[] = [
+  "casual", "confrontation", "reconciliation", "confession", "alliance_forming", "gossip_session",
+];
+
+export function buildSceneDirectionMessages(
+  npcA: NPC,
+  npcB: NPC,
+  ctx: SceneDirectionContext = {},
+): ChatMessage[] {
+  const relAtoB = npcA.relationships[npcB.id];
+  const relBtoA = npcB.relationships[npcA.id];
+  const regardAB = relAtoB?.regard ?? 0;
+  const regardBA = relBtoA?.regard ?? 0;
+
+  const identityA = npcA.backstory
+    ? npcA.backstory
+    : `${npcA.personalityTraits.join(", ")}; wants ${npcA.coreDesires.join(", ")}`;
+  const identityB = npcB.backstory
+    ? npcB.backstory
+    : `${npcB.personalityTraits.join(", ")}; wants ${npcB.coreDesires.join(", ")}`;
+
+  const emotionsA = describeEmotions(npcA.emotionalState);
+  const emotionsB = describeEmotions(npcB.emotionalState);
+
+  const memA = ctx.memoriesA;
+  const memB = ctx.memoriesB;
+  const memSummaryA = memA?.direct.slice(0, 3).map(m => m.text).join("; ") || "(none)";
+  const memSummaryB = memB?.direct.slice(0, 3).map(m => m.text).join("; ") || "(none)";
+
+  const narrativeBlock = ctx.narrativeSummary
+    ? `\nSTORY SO FAR:\n${ctx.narrativeSummary}`
+    : "";
+
+  const system = `You are a scene director for an NPC social simulation. Given two characters about to have a conversation, decide what kind of scene this should be and write a brief creative direction.
+
+${npcA.name}: ${identityA}
+Emotions: ${emotionsA}
+Regard for ${npcB.name}: ${regardAB.toFixed(2)} (${relationshipLabel(regardAB)})
+Recent memories of ${npcB.name}: ${memSummaryA}
+${npcA.secrets.length > 0 ? `Secrets: ${npcA.secrets.join("; ")}` : ""}
+
+${npcB.name}: ${identityB}
+Emotions: ${emotionsB}
+Regard for ${npcA.name}: ${regardBA.toFixed(2)} (${relationshipLabel(regardBA)})
+Recent memories of ${npcA.name}: ${memSummaryB}
+${npcB.secrets.length > 0 ? `Secrets: ${npcB.secrets.join("; ")}` : ""}
+${ctx.trajectoryContext ? `\nRelationship trajectory: ${ctx.trajectoryContext}` : ""}${ctx.locationContext ? `\nLocation: ${ctx.locationContext}` : ""}${ctx.timeOfDay ? `\nTime: ${ctx.timeOfDay}` : ""}${narrativeBlock}
+
+Based on their emotional states, relationship, memories, and secrets, decide:
+1. What TYPE of conversation this should be (from: ${VALID_CONVERSATION_TYPES.join(", ")})
+2. A brief SCENE DIRECTION — 2-3 sentences of creative guidance for how this conversation should unfold. What tensions should surface? What emotional beats should hit? What could make this interaction surprising or meaningful? Be specific to these characters.
+
+Respond with ONLY a JSON object:
+{
+  "conversation_type": "one of: ${VALID_CONVERSATION_TYPES.join(", ")}",
+  "scene_direction": "2-3 sentences of specific creative direction for this conversation"
+}
+
+Output ONLY the JSON object. No markdown, no code fences.
+${ctx.language ? `Write the scene_direction in ${ctx.language}.` : ""}`;
+
+  return [{ role: "system", content: system }];
 }
