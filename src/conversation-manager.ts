@@ -1038,10 +1038,13 @@ export class ConversationManager {
           this.log(`[director] Rate limited — backing off for ${Math.ceil(backoffSecs)}s`);
         }
       } else {
-        this.log(`[director] LLM/parse error: ${e}`);
+        // Any other error (400 bad model, 401 auth, parse error, etc.)
+        // Apply a short backoff to prevent runaway retry loops
+        this.llmBackoffUntil = Date.now() + 15_000;
+        this.log(`[director] LLM/parse error (pausing 15s): ${e}`);
       }
       this.clearLlmSlot();
-      this.kickNextLlm();
+      // Don't kick — let the backoff expire and directorTick will resume
       return;
     }
 

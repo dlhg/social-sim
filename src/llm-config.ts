@@ -19,8 +19,10 @@ const DEFAULTS: LlmConfig = {
 export const GROQ_MODELS = [
   { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
   { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B (fast)" },
-  { id: "mixtral-8x7b-32768", label: "Mixtral 8x7B" },
-  { id: "gemma2-9b-it", label: "Gemma 2 9B" },
+  { id: "openai/gpt-oss-120b", label: "GPT OSS 120B" },
+  { id: "openai/gpt-oss-20b", label: "GPT OSS 20B (fast)" },
+  { id: "meta-llama/llama-4-scout-17b-16e-instruct", label: "Llama 4 Scout 17B" },
+  { id: "qwen/qwen3-32b", label: "Qwen 3 32B" },
 ];
 
 export function loadLlmConfig(): LlmConfig {
