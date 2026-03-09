@@ -122,7 +122,20 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
 
         {/* Pipeline status */}
         <div className="dd-section">
-          <div className="dd-section-title">Pipeline</div>
+          <div className="dd-section-title">
+            Pipeline
+            <span className="dd-depth-badge">
+              {status.pipelineDepth}/{status.maxPipelineDepth}
+              {status.pipelineDepth >= status.maxPipelineDepth && (
+                <span className="dd-depth-full"> (LLM paused)</span>
+              )}
+            </span>
+          </div>
+          {status.backoffRemainingSecs > 0 && (
+            <div className="dd-backoff-banner">
+              Rate limited — retrying in {status.backoffRemainingSecs}s
+            </div>
+          )}
           <div className="dd-pipeline">
             <div className={`dd-pipeline-slot ${status.generatingPair ? "dd-slot-active" : ""}`}>
               <span className="dd-slot-label">LLM</span>
@@ -132,7 +145,13 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
                   <span className="dd-slot-time">{formatDuration(status.generatingPair.elapsedMs)}</span>
                 </span>
               ) : (
-                <span className="dd-slot-idle">idle</span>
+                <span className="dd-slot-idle">
+                  {status.backoffRemainingSecs > 0
+                    ? "backoff"
+                    : status.pipelineDepth >= status.maxPipelineDepth
+                      ? "full"
+                      : "idle"}
+                </span>
               )}
             </div>
             <div className="dd-pipeline-arrow">&rarr;</div>

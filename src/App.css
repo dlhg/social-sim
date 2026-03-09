@@ -2646,3 +2646,26 @@
   color: var(--text-secondary);
   font-size: 11px;
 }
+
+.dd-depth-badge {
+  margin-left: 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text-primary);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.dd-depth-full {
+  color: #e0a84c;
+}
+
+.dd-backoff-banner {
+  background: rgba(224, 80, 80, 0.15);
+  border: 1px solid rgba(224, 80, 80, 0.3);
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: #e05050;
+}

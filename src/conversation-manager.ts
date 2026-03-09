@@ -115,6 +115,12 @@ export interface DirectorStatus {
   avgLlmMs: number;
   /** Average TTS generation time in ms (0 if no data) */
   avgTtsMs: number;
+  /** Current pipeline depth (TTS-in-progress + ready) */
+  pipelineDepth: number;
+  /** Max pipeline depth before LLM pauses */
+  maxPipelineDepth: number;
+  /** Seconds remaining on rate-limit backoff (0 = no backoff) */
+  backoffRemainingSecs: number;
 }
 
 export class ConversationManager {
@@ -159,6 +165,9 @@ export class ConversationManager {
   // TTS prefetch slot (runs independently from LLM)
   private ttsPairIds: [string, string] | null = null;
   private ttsStartedAt: number | null = null;
+
+  // Rate limit backoff — don't retry LLM until this timestamp
+  private llmBackoffUntil = 0;
 
   // ── Director telemetry ──
   private lastScoredPairs: DirectorScoredPair[] = [];
@@ -271,6 +280,8 @@ export class ConversationManager {
 
     const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
+    const backoffRemaining = Math.max(0, this.llmBackoffUntil - now);
+
     return {
       generatingPair,
       preparedConversations,
@@ -280,6 +291,9 @@ export class ConversationManager {
       preparedExpired: this.preparedExpired,
       avgLlmMs: avg(this.llmDurations),
       avgTtsMs: avg(this.ttsDurations),
+      pipelineDepth: this.pipelineDepth(),
+      maxPipelineDepth: this.MAX_PIPELINE_DEPTH,
+      backoffRemainingSecs: Math.ceil(backoffRemaining / 1000),
     };
   }
 
@@ -881,6 +895,8 @@ export class ConversationManager {
     // Only start a new LLM generation if the LLM slot is free.
     // TTS runs independently and doesn't block this.
     if (this.llmPairKey) return;
+    if (Date.now() < this.llmBackoffUntil) return;
+    if (this.pipelineDepth() >= this.MAX_PIPELINE_DEPTH) return;
 
     // Pick the most interesting pair
     const pair = this.pickNextPair();
@@ -987,7 +1003,18 @@ export class ConversationManager {
         this.clearLlmSlot();
         return;
       }
-      this.log(`[director] LLM/parse error: ${e}`);
+      const errMsg = String(e);
+      // Detect rate limiting (HTTP 429) and back off instead of retrying immediately
+      const retryMatch = errMsg.match(/try again in (\d+)m([\d.]+)s/);
+      if (errMsg.includes("429") || errMsg.includes("rate_limit")) {
+        const backoffSecs = retryMatch
+          ? parseInt(retryMatch[1]) * 60 + parseFloat(retryMatch[2])
+          : 60;
+        this.llmBackoffUntil = Date.now() + backoffSecs * 1000;
+        this.log(`[director] Rate limited — backing off for ${Math.ceil(backoffSecs)}s`);
+      } else {
+        this.log(`[director] LLM/parse error: ${e}`);
+      }
       this.clearLlmSlot();
       this.kickNextLlm();
       return;
@@ -1052,10 +1079,19 @@ export class ConversationManager {
     this.llmStartedAt = null;
   }
 
+  /** Number of conversations ahead of playback (TTS-in-progress + ready queue). */
+  private pipelineDepth(): number {
+    return this.preparedConversations.length + (this.ttsPairIds ? 1 : 0);
+  }
+
+  private readonly MAX_PIPELINE_DEPTH = 3;
+
   /** Immediately start the next LLM generation without waiting for the director tick.
    *  Critical for fast providers (Groq ~2-3s) where the 5s tick interval would leave the pipeline idle. */
   private kickNextLlm(): void {
     if (!this.running || this.paused || this.llmPairKey) return;
+    if (Date.now() < this.llmBackoffUntil) return;
+    if (this.pipelineDepth() >= this.MAX_PIPELINE_DEPTH) return;
     const pair = this.pickNextPair();
     if (!pair) return;
     const [npcAId, npcBId] = pair;
