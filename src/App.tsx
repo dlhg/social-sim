@@ -629,9 +629,13 @@ function App() {
     manager.setTTSService(ttsRef.current);
     manager.batchMode = true;
 
-    // Pre-assign TTS voices to all NPCs
+    // Pre-assign TTS voices to all NPCs (custom voices take priority)
     for (const npc of allNpcs) {
-      ttsRef.current.assignVoice(npc.id);
+      if (npc.customVoiceId) {
+        ttsRef.current.setCustomVoice(npc.id, npc.customVoiceId);
+      } else {
+        ttsRef.current.assignVoice(npc.id);
+      }
     }
 
     setStatus("running");
@@ -683,6 +687,9 @@ function App() {
     storeRef.current.addNpc(npc);
     if (worldRef.current) {
       worldRef.current.addNpc(npc.id);
+    }
+    if (npc.customVoiceId) {
+      ttsRef.current.setCustomVoice(npc.id, npc.customVoiceId);
     }
   }, []);
 

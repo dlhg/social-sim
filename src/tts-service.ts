@@ -104,6 +104,11 @@ export class TTSService {
     return this.assignVoice(npcId);
   }
 
+  /** Set a custom voice for an NPC (bypasses the pool round-robin) */
+  setCustomVoice(npcId: string, voiceId: string): void {
+    this.voiceMap.set(npcId, voiceId);
+  }
+
   /** Update options at runtime */
   setOptions(opts: Partial<TTSOptions>) {
     Object.assign(this.options, opts);
@@ -272,5 +277,26 @@ export class TTSService {
       };
       source.start();
     });
+  }
+}
+
+/** Upload a voice reference clip to the TTS server for Chatterbox voice cloning. */
+export async function uploadVoiceClip(
+  audioBlob: Blob,
+  voiceId: string,
+): Promise<{ voice_id: string; duration_seconds: number } | null> {
+  const formData = new FormData();
+  formData.append("file", audioBlob, `${voiceId}.wav`);
+  formData.append("voice_id", voiceId);
+
+  try {
+    const res = await fetch(`${TTS_BASE}/upload-voice`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
   }
 }

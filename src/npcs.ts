@@ -208,6 +208,7 @@ export function createNpc(partial: {
   emotionalState?: Partial<EmotionalState>;
   secrets?: string[];
   inventory?: InventoryItem[];
+  customVoiceId?: string;
 }): NPC {
   return {
     ...partial,
@@ -223,6 +224,7 @@ export function createNpc(partial: {
     knownSecrets: {},
     behavioralOverride: null,
     inventory: partial.inventory ?? [],
+    customVoiceId: partial.customVoiceId,
   };
 }
 

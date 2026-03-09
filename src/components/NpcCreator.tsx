@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createNpc, randomizeFields, AVATAR_OPTIONS, COLOR_SWATCHES, RANDOM_ITEMS } from "../npcs";
 import type { NPC, InventoryItem, ItemCategory, EmotionalState } from "../types";
 import { ITEM_LIFETIME_BY_CATEGORY } from "../types";
+import { uploadVoiceClip } from "../tts-service";
 
 interface NpcCreatorProps {
   onClose: () => void;
@@ -47,11 +48,38 @@ export function NpcCreator({
     initialNpc?.inventory ?? []
   );
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Preserve emotional state from the initial NPC when editing
   const [emotionalStateOverride] = useState<Partial<EmotionalState> | undefined>(
     initialNpc?.emotionalState
   );
+
+  // ── Voice cloning state ──────────────────────────
+  const [customVoiceId, setCustomVoiceId] = useState<string | undefined>(
+    initialNpc?.customVoiceId
+  );
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [isTesting, setIsTesting] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<number | null>(null);
+  const testAudioCtxRef = useRef<AudioContext | null>(null);
+
+  // If editing an NPC with a custom voice, show its existing clip
+  const hasExistingVoice = !!customVoiceId && !audioBlob;
+
+  // Clean up object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (testAudioCtxRef.current) testAudioCtxRef.current.close();
+    };
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const derivedId = name.trim().toLowerCase().replace(/\s+/g, "-");
   const isDuplicate =
@@ -90,7 +118,186 @@ export function NpcCreator({
     setInventory((prev) => prev.filter((i) => i.id !== itemId));
   }
 
-  function handleSubmit() {
+  // ── Voice recording / upload helpers ───────────
+  async function convertToWav(blob: Blob): Promise<Blob> {
+    const audioCtx = new AudioContext({ sampleRate: 24000 });
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+    const length = Math.min(audioBuffer.length, 24000 * 30); // cap at 30s
+    const wavBuffer = new ArrayBuffer(44 + length * 2);
+    const view = new DataView(wavBuffer);
+
+    const writeStr = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++)
+        view.setUint8(offset + i, str.charCodeAt(i));
+    };
+    writeStr(0, "RIFF");
+    view.setUint32(4, 36 + length * 2, true);
+    writeStr(8, "WAVE");
+    writeStr(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);   // PCM
+    view.setUint16(22, 1, true);   // mono
+    view.setUint32(24, 24000, true);
+    view.setUint32(28, 48000, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeStr(36, "data");
+    view.setUint32(40, length * 2, true);
+
+    const channelData = audioBuffer.getChannelData(0);
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      const sample = Math.max(-1, Math.min(1, channelData[i]));
+      view.setInt16(offset, sample * 32767, true);
+      offset += 2;
+    }
+    audioCtx.close();
+    return new Blob([wavBuffer], { type: "audio/wav" });
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const rawBlob = new Blob(chunksRef.current, { type: recorder.mimeType });
+        stream.getTracks().forEach((t) => t.stop());
+        try {
+          const wavBlob = await convertToWav(rawBlob);
+          setAudioBlob(wavBlob);
+          if (audioUrl) URL.revokeObjectURL(audioUrl);
+          setAudioUrl(URL.createObjectURL(wavBlob));
+          setCustomVoiceId(undefined); // needs re-upload
+        } catch (err) {
+          setError("Failed to process recording");
+          console.warn("[voice] conversion error:", err);
+        }
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      timerRef.current = window.setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+
+      // Auto-stop after 30 seconds
+      setTimeout(() => stopRecording(), 30000);
+    } catch {
+      setError("Microphone access denied");
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("audio/") && !file.name.match(/\.(wav|mp3|m4a|ogg|webm)$/i)) {
+      setError("Please upload an audio file");
+      return;
+    }
+
+    try {
+      const wavBlob = await convertToWav(file);
+      setAudioBlob(wavBlob);
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      setAudioUrl(URL.createObjectURL(wavBlob));
+      setCustomVoiceId(undefined); // needs upload
+      setError("");
+    } catch (err) {
+      setError("Could not process audio file");
+      console.warn("[voice] upload conversion error:", err);
+    }
+  }
+
+  function clearVoice() {
+    setAudioBlob(null);
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl(null);
+    setCustomVoiceId(undefined);
+  }
+
+  async function handleTestVoice() {
+    setIsTesting(true);
+    const currentId = name.trim().toLowerCase().replace(/\s+/g, "-");
+
+    // Upload if not yet uploaded
+    let voiceId = customVoiceId;
+    if (!voiceId && audioBlob) {
+      const tempId = `custom_${currentId || "test_" + Date.now()}`;
+      const result = await uploadVoiceClip(audioBlob, tempId);
+      if (!result) {
+        setError("Could not upload voice for testing. Is the TTS server running?");
+        setIsTesting(false);
+        return;
+      }
+      voiceId = result.voice_id;
+      setCustomVoiceId(voiceId);
+    }
+
+    if (!voiceId) {
+      setIsTesting(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("http://localhost:8787/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Hello there! This is what I sound like. Nice to meet you.",
+          voice: voiceId,
+          speed: 1.0,
+          engine: "chatterbox",
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (res.ok) {
+        const wavBytes = await res.arrayBuffer();
+        const ctx = new AudioContext({ sampleRate: 24000 });
+        testAudioCtxRef.current = ctx;
+        const audioBuffer = await ctx.decodeAudioData(wavBytes);
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        source.onended = () => {
+          setIsTesting(false);
+          ctx.close();
+          testAudioCtxRef.current = null;
+        };
+        source.start();
+      } else {
+        setError("Voice test failed");
+        setIsTesting(false);
+      }
+    } catch {
+      setError("TTS server not available for testing");
+      setIsTesting(false);
+    }
+  }
+
+  async function handleSubmit() {
     const trimmed = name.trim();
     if (!trimmed) {
       setError("Name is required");
@@ -124,6 +331,20 @@ export function NpcCreator({
       .map((s) => s.trim())
       .filter(Boolean);
 
+    // Upload custom voice if we have a new recording/upload
+    let finalVoiceId = customVoiceId;
+    if (audioBlob && !customVoiceId) {
+      setIsSubmitting(true);
+      const voiceId = `custom_${derivedId || "npc_" + Date.now()}`;
+      const result = await uploadVoiceClip(audioBlob, voiceId);
+      setIsSubmitting(false);
+      if (!result) {
+        setError("Failed to upload voice clip. Is the TTS server running?");
+        return;
+      }
+      finalVoiceId = result.voice_id;
+    }
+
     const npc = createNpc({
       id: derivedId,
       name: trimmed,
@@ -134,6 +355,7 @@ export function NpcCreator({
       secrets: parsedSecrets,
       inventory,
       emotionalState: emotionalStateOverride,
+      customVoiceId: finalVoiceId,
     });
 
     onCreateNpc(npc);
@@ -229,6 +451,48 @@ export function NpcCreator({
           className="secrets-textarea"
         />
 
+        <label>Voice Reference <span style={{ opacity: 0.5, fontWeight: 400 }}>(optional, Chatterbox only)</span></label>
+        <div className="voice-section">
+          {audioUrl || hasExistingVoice ? (
+            <div className="voice-preview">
+              {audioUrl && (
+                <audio src={audioUrl} controls className="voice-audio" />
+              )}
+              {hasExistingVoice && !audioUrl && (
+                <span className="voice-existing-label">Custom voice set</span>
+              )}
+              <button
+                className="btn voice-test-btn"
+                disabled={isTesting}
+                onClick={handleTestVoice}
+              >
+                {isTesting ? "Testing..." : "Test"}
+              </button>
+              <button className="btn voice-clear-btn" onClick={clearVoice}>
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="voice-controls">
+              <button
+                className={`btn voice-record-btn ${isRecording ? "recording" : ""}`}
+                onClick={isRecording ? stopRecording : startRecording}
+              >
+                {isRecording ? `Stop (${recordingTime}s)` : "Record Voice"}
+              </button>
+              <label className="btn voice-upload-btn">
+                Upload Clip
+                <input
+                  type="file"
+                  accept="audio/wav,audio/mpeg,audio/mp3,audio/m4a,audio/webm,.wav,.mp3,.m4a"
+                  onChange={handleFileUpload}
+                  hidden
+                />
+              </label>
+            </div>
+          )}
+        </div>
+
         <label>
           Starting Inventory
           <span className="creator-inv-count">{inventory.length}/8</span>
@@ -279,8 +543,8 @@ export function NpcCreator({
 
         {error && <div className="form-error">{error}</div>}
 
-        <button className="btn-spawn" onClick={handleSubmit}>
-          {submitLabel ?? "Spawn"}
+        <button className="btn-spawn" onClick={handleSubmit} disabled={isSubmitting}>
+          {isSubmitting ? "Uploading voice..." : submitLabel ?? "Spawn"}
         </button>
       </div>
     </div>

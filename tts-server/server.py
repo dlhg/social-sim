@@ -20,9 +20,11 @@ Usage:
 
 import io
 import os
+import uuid
 from pathlib import Path
-from flask import Flask, request, Response, jsonify
+from flask import Flask, request, Response, jsonify, send_file
 from flask_cors import CORS
+import numpy as np
 import soundfile as sf
 import requests as http_requests
 
@@ -31,6 +33,7 @@ CORS(app)
 
 # Chatterbox Turbo server URL
 CHATTERBOX_URL = os.environ.get("CHATTERBOX_URL", "http://localhost:8788")
+VOICES_DIR = Path(__file__).parent / "voices"
 
 # ── Voice pool ────────────────────────────────────
 # Each ID maps to a reference audio clip used by Chatterbox
@@ -298,6 +301,66 @@ def speak_stream():
                 print(f"[tts] Kokoro stream error: {e}")
 
         return Response(generate(), mimetype="audio/wav")
+
+
+@app.route("/upload-voice", methods=["POST"])
+def upload_voice():
+    """
+    Upload a reference audio clip for voice cloning.
+
+    Accepts multipart/form-data with:
+      - file: audio file (WAV or MP3)
+      - voice_id (optional): custom ID, defaults to custom_<uuid>
+
+    Resamples to 24kHz mono WAV, trims to 10s max.
+    """
+    if "file" not in request.files:
+        return Response("No file provided", status=400)
+
+    file = request.files["file"]
+    voice_id = request.form.get("voice_id", f"custom_{uuid.uuid4().hex[:8]}")
+
+    try:
+        audio_data, sample_rate = sf.read(io.BytesIO(file.read()))
+    except Exception as e:
+        return Response(f"Could not read audio file: {e}", status=400)
+
+    # Convert to mono if stereo
+    if len(audio_data.shape) > 1:
+        audio_data = audio_data.mean(axis=1)
+
+    # Resample to 24kHz if needed
+    if sample_rate != 24000:
+        duration = len(audio_data) / sample_rate
+        new_length = int(duration * 24000)
+        audio_data = np.interp(
+            np.linspace(0, len(audio_data), new_length),
+            np.arange(len(audio_data)),
+            audio_data,
+        )
+        sample_rate = 24000
+
+    # Cap at 30 seconds to avoid huge files — longer clips are fine for quality
+    max_samples = 30 * sample_rate
+    audio_data = audio_data[:max_samples]
+
+    out_path = VOICES_DIR / f"{voice_id}.wav"
+    sf.write(str(out_path), audio_data, sample_rate, subtype="PCM_16")
+
+    print(f"[tts] Saved custom voice: {voice_id} ({len(audio_data)/sample_rate:.1f}s)")
+    return jsonify({
+        "voice_id": voice_id,
+        "duration_seconds": round(len(audio_data) / sample_rate, 2),
+    })
+
+
+@app.route("/voice-clip/<voice_id>", methods=["GET"])
+def voice_clip(voice_id: str):
+    """Serve a reference audio clip back to the client for preview."""
+    path = VOICES_DIR / f"{voice_id}.wav"
+    if not path.exists():
+        return Response("Voice not found", status=404)
+    return send_file(str(path), mimetype="audio/wav")
 
 
 if __name__ == "__main__":

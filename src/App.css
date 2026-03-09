@@ -1345,6 +1345,108 @@
   margin-top: 4px;
 }
 
+/* ── Voice Section (NPC Creator) ──────────── */
+
+.voice-section {
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+.voice-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.voice-record-btn,
+.voice-upload-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: all var(--duration-fast) var(--ease-in-out);
+}
+
+.voice-record-btn:hover,
+.voice-upload-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent-info);
+}
+
+.voice-record-btn.recording {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+  animation: pulse-recording 1s ease-in-out infinite;
+}
+
+@keyframes pulse-recording {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.voice-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.voice-audio {
+  flex: 1;
+  min-width: 160px;
+  height: 32px;
+  border-radius: 6px;
+}
+
+.voice-existing-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 6px 0;
+}
+
+.voice-test-btn,
+.voice-clear-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  border: 1px solid;
+  background: transparent;
+  transition: opacity var(--duration-fast);
+}
+
+.voice-test-btn {
+  border-color: var(--accent-info);
+  color: var(--accent-info);
+}
+
+.voice-clear-btn {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}
+
+.voice-test-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-test-btn:hover:not(:disabled),
+.voice-clear-btn:hover {
+  opacity: 0.8;
+}
+
+.roster-card-voice {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
 /* ── DM Tools ──────────────────────────────── */
 
 .btn-dm {

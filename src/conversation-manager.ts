@@ -727,20 +727,19 @@ export class ConversationManager {
 
     this.log(`[batch] Generated ${turns.length} turns, pre-fetching TTS...`);
 
-    // ── 3. Pre-fetch all TTS in parallel ──
+    // ── 3. Pre-fetch TTS sequentially (GPU is serial; parallel causes timeout cascades) ──
     const audioBuffers: (ArrayBuffer | null)[] = [];
     if (this.ttsService) {
-      const promises = turns.map(turn => {
+      for (const turn of turns) {
         const speaker = this.store.get(turn.speaker_id)!;
-        return this.ttsService!.prefetch(
+        const buf = await this.ttsService.prefetch(
           turn.speaker_id,
           turn.speech,
           speaker.emotionalState,
           this.language
         );
-      });
-      const results = await Promise.all(promises);
-      audioBuffers.push(...results);
+        audioBuffers.push(buf);
+      }
     }
 
     // ── 4. NOW show the conversation to the user ──
@@ -1144,18 +1143,20 @@ export class ConversationManager {
     };
     this.ttsInFlight.set(pKey, inFlightEntry);
 
-    let audioBuffers: (ArrayBuffer | null)[] = [];
+    const audioBuffers: (ArrayBuffer | null)[] = [];
     if (this.ttsService) {
-      const promises = turns.map(turn => {
+      for (const turn of turns) {
+        if (!this.running) break;
         const speaker = this.store.get(turn.speaker_id)!;
-        return this.ttsService!.prefetch(
+        const buf = await this.ttsService.prefetch(
           turn.speaker_id,
           turn.speech,
           speaker.emotionalState,
           this.language
-        ).then(buf => { inFlightEntry.completedTurns++; return buf; });
-      });
-      audioBuffers = await Promise.all(promises);
+        );
+        inFlightEntry.completedTurns++;
+        audioBuffers.push(buf);
+      }
     }
 
     const ttsDurationMs = Date.now() - ttsStart;

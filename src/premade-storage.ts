@@ -14,6 +14,7 @@ export interface PremadeTemplate {
   secrets: string[];
   inventory: InventoryItem[];
   emotionalState?: Partial<EmotionalState>;
+  customVoiceId?: string;
 }
 
 /** Seed built-in NPCs into localStorage on first ever load. */
@@ -68,6 +69,7 @@ export function premadeTemplateToNpc(template: PremadeTemplate): NPC {
       acquiredAt: Date.now(),
     })),
     emotionalState: template.emotionalState,
+    customVoiceId: template.customVoiceId,
   });
 }
 
@@ -84,5 +86,6 @@ export function npcToPremadeTemplate(npc: NPC): PremadeTemplate {
       ...item,
     })),
     emotionalState: { ...npc.emotionalState },
+    customVoiceId: npc.customVoiceId,
   };
 }

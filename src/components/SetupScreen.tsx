@@ -383,6 +383,11 @@ export function SetupScreen({
                   >
                     {isSaved ? "★" : "☆"}
                   </button>
+                  {npc.customVoiceId && (
+                    <span className="roster-card-voice" title="Custom voice">
+                      🎙
+                    </span>
+                  )}
                   <div className="roster-card-avatar">{npc.avatar}</div>
                   <div
                     className="roster-card-name"

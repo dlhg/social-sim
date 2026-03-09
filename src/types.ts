@@ -108,6 +108,7 @@ export interface NPC {
   knownSecrets: Record<string, string[]>; // npcId -> secrets learned about them
   behavioralOverride?: BehavioralOverride | null;
   inventory: InventoryItem[];
+  customVoiceId?: string;
 }
 
 // ── Promises / Plans ─────────────────────────
