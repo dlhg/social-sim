@@ -145,6 +145,17 @@ export class MemoryService {
     this._memoryVersion++;
   }
 
+  // ── Unresolved memories ──────────────────────
+
+  getUnresolved(npcId: string): MemoryEntry[] {
+    const npc = this.store.get(npcId);
+    if (!npc) return [];
+    return [
+      ...npc.shortTermMemory.filter((m) => m.unresolved),
+      ...npc.longTermMemory.filter((m) => m.unresolved),
+    ];
+  }
+
   // ── Queries ───────────────────────────────────
 
   hasGossip(npcId: string): boolean {

@@ -47,10 +47,12 @@ const PREAMBLES: Record<ConversationType, string> = {
 
 const RESPONSE_JSON_SCHEMA = `- Your response MUST be a single JSON object with exactly these fields:
 {
+  "inner_thought": "Before speaking, reason privately: what is the other person really thinking? What are their motives? What's your strategy here? 1-2 sentences of private inner monologue that is never spoken aloud.",
   "speech": "your actual spoken words ONLY — no narration, no action descriptions, no third-person text like 'she smiles' or 'he hands over'. Just the words that come out of your mouth.",
   "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0, "sadness": 0, "curiosity": 0, "disgust": 0, "guilt": 0 },
   "relationship_delta": 0,
   "affection_delta": 0,
+  "justification": null,
   "intent": "brief description of your goal in saying this",
   "conversation_end": false,
   "mentioned_npcs": [],
@@ -60,9 +62,10 @@ const RESPONSE_JSON_SCHEMA = `- Your response MUST be a single JSON object with 
 }
 
 RULES FOR DELTAS:
-- emotion_delta values range from -0.2 to +0.2 (small shifts per turn). Emotions: anger, trust, fear, joy, sadness, curiosity, disgust, guilt
-- relationship_delta ranges from -0.1 to +0.1 (general regard — how much you like/dislike them)
-- affection_delta ranges from -0.1 to +0.1 (romantic/deep attraction — set this if you feel a romantic pull, warmth, or infatuation toward this person. Leave at 0 if feelings are purely platonic)
+- emotion_delta values range from -0.4 to +0.4 (emotional shifts per turn). Emotions: anger, trust, fear, joy, sadness, curiosity, disgust, guilt. Most turns should have small shifts (-0.1 to +0.1). Reserve large deltas for genuinely significant moments.
+- relationship_delta ranges from -0.2 to +0.2 (general regard — how much you like/dislike them). Most turns should stay within -0.05 to +0.05.
+- affection_delta ranges from -0.2 to +0.2 (romantic/deep attraction — set this if you feel a romantic pull, warmth, or infatuation toward this person. Leave at 0 if feelings are purely platonic)
+- justification: if any single emotion_delta value exceeds 0.15 in magnitude or relationship_delta exceeds 0.1, you MUST include a justification explaining why. Example: "justification": "She just revealed she sabotaged my work"
 - Set conversation_end to true only if you want to end the conversation
 - mentioned_npcs is optional. Only include if you talk about someone not in this conversation. Format: [{"npc_id": "id", "sentiment": 0.3, "what_was_said": "brief summary"}]
 - secret_revealed: set to the exact text of a secret you're revealing, or null
@@ -78,10 +81,18 @@ ACTIONS (optional — set "action" to one of these, or null):
 - {"action": "spread_rumor", "target_npc_id": "id", "detail": "the rumor"} — Plant a false or exaggerated claim about a third person.
 - IMPORTANT: Most turns should have NO action (null). Actions are dramatic moments — use them sparingly, maybe once per conversation at most.
 
+- inner_thought is your private reasoning. It is NEVER spoken aloud. Use it to consider the other person's perspective, motives, hidden agendas, or your own strategy before speaking. This makes your speech more intentional and authentic.
 - CRITICAL: "speech" must contain ONLY your spoken dialog — the literal words you say. NEVER put narration, action descriptions, or third-person text in speech (wrong: "Ivy smiles and offers a cake" — right: "Here, I brought you some cake!"). Use the "action" field for physical actions.
 - Output ONLY the JSON object. No markdown, no code fences, no extra text.`;
 
 // ── Shared formatting helpers ────────────────────
+
+function formatMemoryLine(m: { text: string; interpretation?: string; unresolved?: boolean }): string {
+  let line = `- ${m.text}`;
+  if (m.interpretation) line += ` (I think: ${m.interpretation})`;
+  if (m.unresolved) line += " [unresolved]";
+  return line;
+}
 
 function formatMemoryLines(mem: RetrievedMemories | undefined): {
   direct: string;
@@ -89,9 +100,9 @@ function formatMemoryLines(mem: RetrievedMemories | undefined): {
   aboutPartner: string;
 } {
   return {
-    direct: mem?.direct.map(m => `- ${m.text}`).join("\n") ?? "",
-    gossip: mem?.gossip.map(m => `- ${m.text}`).join("\n") ?? "",
-    aboutPartner: mem?.aboutPartner.map(m => `- ${m.text}`).join("\n") ?? "",
+    direct: mem?.direct.map(formatMemoryLine).join("\n") ?? "",
+    gossip: mem?.gossip.map(formatMemoryLine).join("\n") ?? "",
+    aboutPartner: mem?.aboutPartner.map(formatMemoryLine).join("\n") ?? "",
   };
 }
 
@@ -454,10 +465,12 @@ RESPONSE FORMAT — respond with ONLY a JSON object:
   "turns": [
     {
       "speaker_id": "${firstSpeaker.id}",
+      "inner_thought": "private reasoning before speaking — what is the other person thinking? what's my strategy? 1-2 sentences, never spoken aloud",
       "speech": "spoken words only — no narration",
       "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0, "sadness": 0, "curiosity": 0, "disgust": 0, "guilt": 0 },
       "relationship_delta": 0,
       "affection_delta": 0,
+      "justification": null,
       "intent": "brief intent",
       "mentioned_npcs": [],
       "secret_revealed": null,
@@ -468,9 +481,11 @@ RESPONSE FORMAT — respond with ONLY a JSON object:
 }
 
 RULES FOR DELTAS:
-- emotion_delta values: -0.2 to +0.2 per turn
-- relationship_delta: -0.1 to +0.1 per turn
-- affection_delta: -0.1 to +0.1 (only if romantic feelings are relevant)
+- emotion_delta values: -0.4 to +0.4 per turn. Most turns should have small shifts (-0.1 to +0.1). Reserve large deltas for genuinely significant moments.
+- relationship_delta: -0.2 to +0.2 per turn. Most turns should stay within -0.05 to +0.05.
+- affection_delta: -0.2 to +0.2 (only if romantic feelings are relevant)
+- justification: if any single emotion_delta exceeds 0.15 in magnitude or relationship_delta exceeds 0.1, you MUST include a justification explaining why
+- inner_thought: private reasoning that is NEVER spoken. Use it to consider the other person's motives, hidden agendas, or your own strategy. This shapes more intentional speech.
 - mentioned_npcs: only if talking about someone not in this conversation. Format: [{"npc_id": "id", "sentiment": 0.3, "what_was_said": "summary"}]
 - secret_revealed: exact text of a secret being revealed, or null
 - promise: what is promised, or null. Promises are remembered and breaking them has consequences
@@ -515,7 +530,8 @@ Now reflect privately. What are you really thinking? What did you learn? How do 
 
 Respond with ONLY a single JSON object:
 {
-  "thought": "your private inner thought, 1-2 sentences"
+  "thought": "your private inner thought, 1-2 sentences",
+  "interpretation": "what this conversation meant to you — what was the other person really after? what shifted between you? 1 sentence"
 }
 
 Output ONLY the JSON object. No markdown, no code fences, no extra text.

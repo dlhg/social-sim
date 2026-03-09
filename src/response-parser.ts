@@ -151,11 +151,23 @@ function validate(obj: unknown): LLMResponse {
     }
   }
 
+  const innerThought =
+    typeof o.inner_thought === "string" && o.inner_thought.length > 0
+      ? o.inner_thought
+      : undefined;
+
+  const justification =
+    typeof o.justification === "string" && o.justification.length > 0
+      ? o.justification
+      : undefined;
+
   return {
+    inner_thought: innerThought,
     speech: o.speech as string,
     emotion_delta: emotionDelta,
     relationship_delta: rd,
     affection_delta: ad,
+    justification,
     intent,
     conversation_end: conversationEnd,
     mentioned_npcs: mentionedNpcs,
@@ -209,10 +221,12 @@ export function parseBatchLLMResponse(raw: string, validSpeakerIds: [string, str
 
     return {
       speaker_id: speakerId,
+      inner_thought: validated.inner_thought,
       speech: validated.speech,
       emotion_delta: validated.emotion_delta,
       relationship_delta: validated.relationship_delta,
       affection_delta: validated.affection_delta,
+      justification: validated.justification,
       intent: validated.intent,
       mentioned_npcs: validated.mentioned_npcs,
       secret_revealed: validated.secret_revealed,
@@ -232,9 +246,9 @@ function toNumber(val: unknown, fallback: number): number {
 }
 
 /** Max magnitude of per-turn emotion delta (matches prompt instructions) */
-const EMOTION_DELTA_MAX = 0.2;
+const EMOTION_DELTA_MAX = 0.4;
 /** Max magnitude of per-turn relationship/affection delta (matches prompt instructions) */
-const RELATIONSHIP_DELTA_MAX = 0.1;
+const RELATIONSHIP_DELTA_MAX = 0.2;
 
 function clampDelta(v: number): number {
   return Math.max(-EMOTION_DELTA_MAX, Math.min(EMOTION_DELTA_MAX, v));

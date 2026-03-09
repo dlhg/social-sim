@@ -79,6 +79,14 @@ export type MemoryType =
   | "rumor_planted"
   | "activity";
 
+export type MemoryCategory =
+  | "social"
+  | "conflict"
+  | "discovery"
+  | "emotional"
+  | "promise"
+  | "routine";
+
 export interface MemoryEntry {
   text: string;
   importance: number; // 0 to 1
@@ -89,6 +97,9 @@ export interface MemoryEntry {
   type?: MemoryType;
   aboutNpcIds?: string[]; // who this memory is ABOUT (vs who was present)
   sentiment?: number; // -1 to 1
+  category?: MemoryCategory;
+  unresolved?: boolean; // flags unfinished business (e.g. pending promises)
+  interpretation?: string; // NPC's subjective interpretation of this event
 }
 
 // ── NPC ────────────────────────────────────────
@@ -140,10 +151,12 @@ export interface MentionedNpc {
 }
 
 export interface LLMResponse {
+  inner_thought?: string; // private reasoning before speaking
   speech: string;
   emotion_delta: EmotionalState; // deltas, can be negative
   relationship_delta: number; // -1 to 1
   affection_delta: number; // -0.1 to 0.1
+  justification?: string; // required when deltas are large
   intent: string;
   conversation_end: boolean;
   mentioned_npcs?: MentionedNpc[];
@@ -156,10 +169,12 @@ export interface LLMResponse {
 
 export interface BatchTurnData {
   speaker_id: string;
+  inner_thought?: string; // private reasoning before speaking
   speech: string;
   emotion_delta: EmotionalState;
   relationship_delta: number;
   affection_delta: number;
+  justification?: string; // required when deltas are large
   intent: string;
   mentioned_npcs?: MentionedNpc[];
   secret_revealed?: string;

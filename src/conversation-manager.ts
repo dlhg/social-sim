@@ -37,12 +37,12 @@ export interface ConversationManagerCallbacks {
 
 // Per-conversation caps on cumulative relationship change
 const RELATIONSHIP_CAPS: Record<ConversationType, number> = {
-  casual: 0.15,
-  confrontation: 0.30,
-  reconciliation: 0.20,
-  confession: 0.25,
-  alliance_forming: 0.20,
-  gossip_session: 0.15,
+  casual: 0.30,
+  confrontation: 0.50,
+  reconciliation: 0.40,
+  confession: 0.45,
+  alliance_forming: 0.40,
+  gossip_session: 0.30,
 };
 
 // Turn limits by conversation type [min, max]
@@ -755,10 +755,12 @@ export class ConversationManager {
   /** Convert batch turn data to an LLMResponse */
   private batchTurnToResponse(turn: BatchTurnData): LLMResponse {
     return {
+      inner_thought: turn.inner_thought,
       speech: turn.speech,
       emotion_delta: turn.emotion_delta,
       relationship_delta: turn.relationship_delta,
       affection_delta: turn.affection_delta,
+      justification: turn.justification,
       intent: turn.intent,
       conversation_end: false,
       mentioned_npcs: turn.mentioned_npcs,
@@ -1631,6 +1633,33 @@ export class ConversationManager {
     listener: NPC,
     response: LLMResponse
   ): void {
+    // Store inner thought as a memory if present
+    if (response.inner_thought) {
+      this.memory.add(
+        speaker.id,
+        {
+          text: response.inner_thought,
+          importance: 0.5,
+          recency: 1,
+          emotionalWeight: 0.3,
+          involvedNpcIds: [listener.id],
+          aboutNpcIds: [listener.id],
+          type: "inner_thought",
+          category: "emotional",
+          sentiment: 0,
+          timestamp: Date.now(),
+        },
+        "shortTermMemory"
+      );
+
+      this.callbacks.onActivity({
+        timestamp: new Date(),
+        text: `${speaker.name} thinks: "${response.inner_thought}"`,
+        activityType: "thought",
+        npcId: speaker.id,
+      });
+    }
+
     this.store.applyEmotionDelta(speaker.id, response.emotion_delta);
 
     // Cap cumulative relationship change per conversation
@@ -1709,6 +1738,7 @@ export class ConversationManager {
             involvedNpcIds: [listener.id],
             aboutNpcIds: [speaker.id],
             type: "secret_learned",
+            category: "discovery",
             sentiment: 0,
             timestamp: Date.now(),
           },
@@ -1725,6 +1755,7 @@ export class ConversationManager {
             involvedNpcIds: [speaker.id],
             aboutNpcIds: [speaker.id],
             type: "secret_learned",
+            category: "discovery",
             sentiment: 0,
             timestamp: Date.now(),
           },
@@ -1757,6 +1788,8 @@ export class ConversationManager {
           emotionalWeight: 0.5,
           involvedNpcIds: [listener.id],
           type: "promise_made",
+          category: "promise",
+          unresolved: true,
           timestamp: Date.now(),
         },
         "shortTermMemory"
@@ -1771,6 +1804,8 @@ export class ConversationManager {
           emotionalWeight: 0.5,
           involvedNpcIds: [speaker.id],
           type: "promise_made",
+          category: "promise",
+          unresolved: true,
           timestamp: Date.now(),
         },
         "shortTermMemory"
@@ -1799,6 +1834,7 @@ export class ConversationManager {
             involvedNpcIds: [speaker.id],
             aboutNpcIds: [mention.npc_id],
             type: "gossip",
+            category: "social",
             sentiment: mention.sentiment,
             timestamp: Date.now(),
           },
@@ -2432,6 +2468,17 @@ export class ConversationManager {
 
     const importance = Math.min(1, Math.abs(totalRelDelta) * 3 + (hadAction ? 0.3 : 0) + 0.2);
 
+    // Map conversation type to memory category
+    const convCategoryMap: Record<string, "social" | "conflict" | "emotional" | "routine"> = {
+      casual: "routine",
+      confrontation: "conflict",
+      reconciliation: "social",
+      confession: "emotional",
+      alliance_forming: "social",
+      gossip_session: "social",
+    };
+    const memCategory = convCategoryMap[this.activeConvType] ?? "routine";
+
     // NPC A's memory
     this.memory.add(
       npcAId,
@@ -2443,6 +2490,7 @@ export class ConversationManager {
         involvedNpcIds: [npcBId],
         timestamp: Date.now(),
         type: "conversation",
+        category: memCategory,
         aboutNpcIds: [],
         sentiment: avgSentiment > 0 ? 0.3 : avgSentiment < 0 ? -0.3 : 0,
       },
@@ -2460,6 +2508,7 @@ export class ConversationManager {
         involvedNpcIds: [npcAId],
         timestamp: Date.now(),
         type: "conversation",
+        category: memCategory,
         aboutNpcIds: [],
         sentiment: avgSentiment > 0 ? 0.3 : avgSentiment < 0 ? -0.3 : 0,
       },
@@ -2734,6 +2783,9 @@ export class ConversationManager {
             typeof parsed.thought === "string" ? parsed.thought.trim() : null;
           if (!thought) return;
 
+          const interpretation =
+            typeof parsed.interpretation === "string" ? parsed.interpretation.trim() : undefined;
+
           this.memory.add(
             npc.id,
             {
@@ -2744,6 +2796,8 @@ export class ConversationManager {
               involvedNpcIds: [otherId],
               aboutNpcIds: [otherId],
               type: "inner_thought",
+              category: "emotional",
+              interpretation,
               sentiment: 0,
               timestamp: Date.now(),
             },
