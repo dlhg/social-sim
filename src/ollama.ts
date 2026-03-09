@@ -13,10 +13,28 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface GroqRateLimits {
+  limitRequests: number;
+  remainingRequests: number;
+  limitTokens: number;
+  remainingTokens: number;
+  resetRequests: string;
+  resetTokens: string;
+  model: string;
+}
+
+let latestGroqRateLimits: GroqRateLimits | null = null;
+
+export function getGroqRateLimits(): GroqRateLimits | null {
+  return latestGroqRateLimits;
+}
+
 export interface AccumulateChatOptions {
   onProgress?: (accumulated: string) => void;
   signal?: AbortSignal;
   numPredict?: number;
+  /** Override the configured model for this single call (used for auto-downgrade) */
+  modelOverride?: string;
 }
 
 export async function accumulateChat(
@@ -28,6 +46,7 @@ export async function accumulateChat(
   let onProgress: ((accumulated: string) => void) | undefined;
   let abortSignal = signal;
   let numPredict: number | undefined;
+  let modelOverride: string | undefined;
 
   if (typeof onProgressOrOpts === "function") {
     onProgress = onProgressOrOpts;
@@ -35,12 +54,14 @@ export async function accumulateChat(
     onProgress = onProgressOrOpts.onProgress;
     abortSignal = onProgressOrOpts.signal ?? signal;
     numPredict = onProgressOrOpts.numPredict;
+    modelOverride = onProgressOrOpts.modelOverride;
   }
 
   const config = loadLlmConfig();
 
   if (config.provider === "groq") {
-    return accumulateGroq(messages, config.groqApiKey, config.groqModel, numPredict, onProgress, abortSignal);
+    const model = modelOverride ?? config.groqModel;
+    return accumulateGroq(messages, config.groqApiKey, model, numPredict, onProgress, abortSignal);
   }
   return accumulateOllama(messages, config.ollamaModel, numPredict, onProgress, abortSignal);
 }
@@ -140,6 +161,17 @@ async function accumulateGroq(
     const text = await res.text().catch(() => "");
     throw new Error(`Groq error: ${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`);
   }
+
+  // Capture rate limit headers
+  latestGroqRateLimits = {
+    limitRequests: parseInt(res.headers.get("x-ratelimit-limit-requests") ?? "0"),
+    remainingRequests: parseInt(res.headers.get("x-ratelimit-remaining-requests") ?? "0"),
+    limitTokens: parseInt(res.headers.get("x-ratelimit-limit-tokens") ?? "0"),
+    remainingTokens: parseInt(res.headers.get("x-ratelimit-remaining-tokens") ?? "0"),
+    resetRequests: res.headers.get("x-ratelimit-reset-requests") ?? "",
+    resetTokens: res.headers.get("x-ratelimit-reset-tokens") ?? "",
+    model,
+  };
 
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();

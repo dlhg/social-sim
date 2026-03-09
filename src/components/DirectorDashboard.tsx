@@ -176,6 +176,60 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
           </div>
         </div>
 
+        {/* Groq rate limits */}
+        {status.groqRateLimits && (() => {
+          const rl = status.groqRateLimits;
+          const tokenRatio = rl.limitTokens > 0 ? rl.remainingTokens / rl.limitTokens : 1;
+          const reqRatio = rl.limitRequests > 0 ? rl.remainingRequests / rl.limitRequests : 1;
+          const tokenPct = Math.round(tokenRatio * 100);
+          const reqPct = Math.round(reqRatio * 100);
+          const barColor = (ratio: number) =>
+            ratio > 0.5 ? "#7ec87e" : ratio > 0.2 ? "#e0a84c" : "#e05050";
+          return (
+            <div className="dd-section">
+              <div className="dd-section-title">
+                Groq Quota
+                <span className="dd-depth-badge">
+                  {rl.model}
+                  {status.modelDowngraded && (
+                    <span className="dd-depth-full"> (auto-downgraded)</span>
+                  )}
+                </span>
+              </div>
+              <div className="dd-quota-row">
+                <div className="dd-quota-item">
+                  <div className="dd-quota-header">
+                    <span>Tokens</span>
+                    <span className="dd-quota-numbers">
+                      {rl.remainingTokens.toLocaleString()} / {rl.limitTokens.toLocaleString()} ({tokenPct}%)
+                    </span>
+                  </div>
+                  <div className="dd-quota-bar">
+                    <div
+                      className="dd-quota-fill"
+                      style={{ width: `${tokenPct}%`, background: barColor(tokenRatio) }}
+                    />
+                  </div>
+                </div>
+                <div className="dd-quota-item">
+                  <div className="dd-quota-header">
+                    <span>Requests</span>
+                    <span className="dd-quota-numbers">
+                      {rl.remainingRequests} / {rl.limitRequests} ({reqPct}%)
+                    </span>
+                  </div>
+                  <div className="dd-quota-bar">
+                    <div
+                      className="dd-quota-fill"
+                      style={{ width: `${reqPct}%`, background: barColor(reqRatio) }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Stats row */}
         <div className="dd-stats-row">
           <div className="dd-stat">

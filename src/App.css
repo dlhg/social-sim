@@ -2669,3 +2669,39 @@
   font-size: 11px;
   color: #e05050;
 }
+
+.dd-quota-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dd-quota-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dd-quota-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.dd-quota-numbers {
+  font-family: var(--font-mono, monospace);
+}
+
+.dd-quota-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.dd-quota-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}

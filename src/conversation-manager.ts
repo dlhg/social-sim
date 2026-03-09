@@ -17,7 +17,9 @@ import type { WorldSimulation } from "./world-simulation";
 import type { DayCycle } from "./day-cycle";
 import type { TTSService } from "./tts-service";
 import { buildConversationMessages, buildBatchConversationMessages, buildReflectionMessages } from "./prompt-builder";
-import { accumulateChat } from "./ollama";
+import { accumulateChat, getGroqRateLimits } from "./ollama";
+import type { GroqRateLimits } from "./ollama";
+import { loadLlmConfig, GROQ_MODELS } from "./llm-config";
 import { parseLLMResponse, parseBatchLLMResponse, extractJson } from "./response-parser";
 
 export interface ConversationManagerCallbacks {
@@ -121,6 +123,12 @@ export interface DirectorStatus {
   maxPipelineDepth: number;
   /** Seconds remaining on rate-limit backoff (0 = no backoff) */
   backoffRemainingSecs: number;
+  /** Latest Groq rate limit info (null if using Ollama or no data yet) */
+  groqRateLimits: GroqRateLimits | null;
+  /** The model actually used for the last/current LLM generation (may differ from config if auto-downgraded) */
+  activeModel: string;
+  /** Whether the model was auto-downgraded from the user's preferred model */
+  modelDowngraded: boolean;
 }
 
 export class ConversationManager {
@@ -168,6 +176,10 @@ export class ConversationManager {
 
   // Rate limit backoff — don't retry LLM until this timestamp
   private llmBackoffUntil = 0;
+
+  // Model auto-downgrade tracking
+  private activeGroqModel: string | null = null;
+  private modelDowngraded = false;
 
   // ── Director telemetry ──
   private lastScoredPairs: DirectorScoredPair[] = [];
@@ -294,6 +306,9 @@ export class ConversationManager {
       pipelineDepth: this.pipelineDepth(),
       maxPipelineDepth: this.MAX_PIPELINE_DEPTH,
       backoffRemainingSecs: Math.ceil(backoffRemaining / 1000),
+      groqRateLimits: getGroqRateLimits(),
+      activeModel: this.activeGroqModel ?? loadLlmConfig().groqModel,
+      modelDowngraded: this.modelDowngraded,
     };
   }
 
@@ -991,11 +1006,13 @@ export class ConversationManager {
 
     // ── Phase 1: LLM generation ──
     const llmStart = Date.now();
+    const modelOverride = loadLlmConfig().provider === "groq" ? this.pickGroqModel() : undefined;
     let turns: BatchTurnData[];
     try {
       const raw = await accumulateChat(messages, {
         signal: this.llmAbort.signal,
         numPredict: 4096,
+        modelOverride,
       });
       turns = parseBatchLLMResponse(raw, [npcAId, npcBId]);
     } catch (e) {
@@ -1085,6 +1102,33 @@ export class ConversationManager {
   }
 
   private readonly MAX_PIPELINE_DEPTH = 3;
+
+  /** Pick the best Groq model based on remaining rate limit quota.
+   *  Falls back to the fast 8B model when tokens are running low. */
+  private readonly GROQ_FALLBACK_MODEL = "llama-3.1-8b-instant";
+  private readonly GROQ_DOWNGRADE_THRESHOLD = 0.2; // downgrade when <20% tokens remain
+
+  private pickGroqModel(): string {
+    const config = loadLlmConfig();
+    if (config.provider !== "groq") return config.ollamaModel;
+
+    const preferred = config.groqModel;
+    const limits = getGroqRateLimits();
+
+    if (limits && limits.limitTokens > 0) {
+      const ratio = limits.remainingTokens / limits.limitTokens;
+      if (ratio < this.GROQ_DOWNGRADE_THRESHOLD && preferred !== this.GROQ_FALLBACK_MODEL) {
+        this.modelDowngraded = true;
+        this.activeGroqModel = this.GROQ_FALLBACK_MODEL;
+        this.log(`[director] Auto-downgrading to ${this.GROQ_FALLBACK_MODEL} (${Math.round(ratio * 100)}% tokens remaining)`);
+        return this.GROQ_FALLBACK_MODEL;
+      }
+    }
+
+    this.modelDowngraded = false;
+    this.activeGroqModel = preferred;
+    return preferred;
+  }
 
   /** Immediately start the next LLM generation without waiting for the director tick.
    *  Critical for fast providers (Groq ~2-3s) where the 5s tick interval would leave the pipeline idle. */
