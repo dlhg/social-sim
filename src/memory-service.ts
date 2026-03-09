@@ -52,7 +52,7 @@ export class MemoryService {
       }
       const [evicted] = npc.shortTermMemory.splice(minIdx, 1);
       // Promote important memories to long-term instead of discarding
-      if (evicted.importance >= 7) {
+      if (evicted.importance >= 0.7) {
         npc.longTermMemory.push(evicted);
       }
     }
