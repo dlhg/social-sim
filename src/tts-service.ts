@@ -10,6 +10,20 @@ import type { EmotionalState } from "./types";
 
 const TTS_BASE = "http://localhost:8787";
 
+// ── Paralinguistic tag sanitization ─────────
+// Only these tags are supported by Chatterbox TTS
+const SUPPORTED_TAGS = new Set([
+  "clear throat", "sigh", "shush", "cough", "groan",
+  "sniff", "gasp", "chuckle", "laugh",
+]);
+
+/** Strip unsupported paralinguistic tags (e.g. [smiles], [nods]) from speech text */
+function sanitizeTags(text: string): string {
+  return text.replace(/\[([^\]]+)\]/g, (match, tag) => {
+    return SUPPORTED_TAGS.has(tag.trim().toLowerCase()) ? match : "";
+  });
+}
+
 // ── Voice pool (must match server's VOICE_POOL) ─────────
 const VOICE_POOL = [
   "voice_01",
@@ -212,12 +226,13 @@ export class TTSService {
     emotions?: EmotionalState,
     language?: string,
   ): Promise<ArrayBuffer | null> {
+    const cleanText = sanitizeTags(text);
     try {
       const res = await fetch(`${TTS_BASE}/speak`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text,
+          text: cleanText,
           voice,
           speed: this.options.speed,
           emotions: emotions ?? undefined,

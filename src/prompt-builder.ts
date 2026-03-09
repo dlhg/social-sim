@@ -213,8 +213,8 @@ ${buildEscalationDirective(turnNumber, maxTurns, ctx.conversationType ?? "casual
 
 RESPONSE FORMAT:
 - Stay in character. Vary your message length naturally — sometimes just a word or two ("Yeah." / "No way."), sometimes a full paragraph. Match the energy: quick banter should be short, emotional or story-heavy moments can be longer. Don't always write the same amount.
-- Use punctuation expressively to convey emotion: ellipses for hesitation or trailing off ("I don't know..."), exclamation marks for strong feeling, em-dashes for interrupting yourself or changing tack mid-sentence ("I was going to — actually, never mind"), commas and periods for natural breathing rhythm. Your speech will be read aloud, so punctuation shapes how it sounds.
-- You can embed vocal sounds inline in your speech using these tags: [laugh], [chuckle], [sigh], [gasp], [cough], [groan], [sniff], [clear throat], [sush], [pause]. These are vocalized by the TTS engine, so use them where they'd occur naturally. Examples: "I can't believe you said that [laugh] that's incredible", "Oh [sigh] I really don't know what to do", "[gasp] You're kidding me!". Don't overuse them — one or two per response at most, and only when they genuinely fit the emotion.
+- Use punctuation expressively to convey emotion: ellipses (...) for hesitation, trailing off, or creating a natural pause ("I don't know..." / "Well... I guess so"), exclamation marks for strong feeling, em-dashes for interrupting yourself or changing tack mid-sentence ("I was going to — actually, never mind"), commas and periods for natural breathing rhythm. Your speech will be read aloud, so punctuation shapes how it sounds. Ellipses are especially effective for pacing — the TTS engine renders them as real pauses.
+- You can embed vocal sounds inline in your speech using ONLY these tags: [laugh], [chuckle], [sigh], [gasp], [cough], [groan], [sniff], [clear throat], [shush]. These are the ONLY paralinguistic tags supported by the TTS engine — do NOT invent others (no [smiles], [nods], [pause], [whispers], etc.). You can also prefix a tag with a short descriptive cue to get more expressive results from the TTS engine — the cue sets up the vocal quality. Examples: "I can't believe you said that [laugh] that's incredible", "Oh [sigh] I really don't know what to do", "[gasp] You're kidding me!", "Not this again... [groan] Fine, I'll deal with it." Don't overuse them — one or two per response at most, and only when they genuinely fit the emotion.
 - CRITICAL: NEVER repeat, rephrase, or circle back to something already discussed. If a topic has been covered, it is DONE. Move to something completely different.
 - Each response must introduce NEW information, a new question, a new emotion, or a new topic. Restating your position on the same subject is not allowed.
 - React to what ${listener.name} actually said. Ask follow-up questions, share new thoughts, change the subject, disagree, joke — anything but echo.
@@ -466,8 +466,8 @@ RULES FOR DELTAS:
 SPEECH RULES:
 - "speech" must contain ONLY spoken dialog — no narration, no "she laughs", no third-person text
 - Vary message length naturally — sometimes just a few words, sometimes a paragraph
-- Use punctuation expressively: ellipses for hesitation, em-dashes for mid-thought changes, exclamation marks for emphasis
-- Embed vocal sounds naturally: [laugh], [chuckle], [sigh], [gasp], [cough], [groan], [sniff], [clear throat], [pause]. Don't overuse — 1-2 per turn at most.
+- Use punctuation expressively: ellipses (...) for hesitation or natural pauses (the TTS engine renders these as real pauses), em-dashes for mid-thought changes, exclamation marks for emphasis
+- Embed vocal sounds naturally using ONLY these tags: [laugh], [chuckle], [sigh], [gasp], [cough], [groan], [sniff], [clear throat], [shush]. Do NOT invent other tags (no [smiles], [nods], [pause], [whispers], etc.). You can prefix a tag with a short descriptive cue for more expressive results (e.g. "Not this again... [groan] Fine."). Don't overuse — 1-2 per turn at most.
 - Characters must strictly alternate. speaker_id alternates between "${firstSpeaker.id}" and "${secondSpeaker.id}".
 - NEVER repeat topics. Each turn must introduce something new.
 - Each character stays in character — their personality, emotions, and relationship color everything they say.
