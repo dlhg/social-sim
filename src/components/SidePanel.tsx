@@ -18,6 +18,7 @@ const FILTER_LABELS: Record<FilterKey, string> = {
   thought: "Thoughts",
   eavesdrop: "Eavesdrop",
   action: "Actions",
+  plan: "Plans",
   system: "System",
   prompt: "Prompts",
 };
@@ -27,11 +28,12 @@ const FILTER_COLORS: Record<FilterKey, string> = {
   thought: "#b0a0cc",
   eavesdrop: "#a876c4",
   action: "#e0a84c",
+  plan: "#5cb87a",
   system: "#9896a8",
   prompt: "#6ca6d9",
 };
 
-const ALL_FILTERS: FilterKey[] = ["chat", "thought", "eavesdrop", "action", "system", "prompt"];
+const ALL_FILTERS: FilterKey[] = ["chat", "thought", "eavesdrop", "action", "plan", "system", "prompt"];
 
 function getFilterKey(item: FeedItem): FilterKey {
   if (item.type === "chat") return "chat";

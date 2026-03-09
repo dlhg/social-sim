@@ -617,7 +617,8 @@ function App() {
           type: "activity",
           event: {
             timestamp: new Date(),
-            text: `${kept ? "[Plan resolved]" : "[Plan fell through]"} ${promiserName} & ${promiseeName}: ${outcome}`,
+            text: `${kept ? "Plan fulfilled" : "Plan fell through"} — ${promiserName} & ${promiseeName}: ${outcome}`,
+            activityType: "plan",
           },
         }]);
       },

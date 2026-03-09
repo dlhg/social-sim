@@ -226,7 +226,7 @@ export interface ConversationSession {
 }
 
 // ── Activity ──────────────────────────────────
-export type ActivityType = "thought" | "eavesdrop" | "action";
+export type ActivityType = "thought" | "eavesdrop" | "action" | "plan";
 
 export interface ActivityEvent {
   timestamp: Date;
