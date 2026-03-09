@@ -1028,7 +1028,15 @@ export class ConversationManager {
           ? parseInt(retryMatch[1]) * 60 + parseFloat(retryMatch[2])
           : 60;
         this.llmBackoffUntil = Date.now() + backoffSecs * 1000;
-        this.log(`[director] Rate limited — backing off for ${Math.ceil(backoffSecs)}s`);
+        // Force-downgrade model so we don't retry with the same rate-limited model
+        const config = loadLlmConfig();
+        if (config.provider === "groq" && config.groqModel !== this.GROQ_FALLBACK_MODEL) {
+          this.modelDowngraded = true;
+          this.activeGroqModel = this.GROQ_FALLBACK_MODEL;
+          this.log(`[director] Rate limited on ${config.groqModel} — switching to ${this.GROQ_FALLBACK_MODEL}, backing off ${Math.ceil(backoffSecs)}s`);
+        } else {
+          this.log(`[director] Rate limited — backing off for ${Math.ceil(backoffSecs)}s`);
+        }
       } else {
         this.log(`[director] LLM/parse error: ${e}`);
       }
@@ -1117,15 +1125,33 @@ export class ConversationManager {
 
     if (limits && limits.limitTokens > 0) {
       const ratio = limits.remainingTokens / limits.limitTokens;
+      // Downgrade when tokens are low
       if (ratio < this.GROQ_DOWNGRADE_THRESHOLD && preferred !== this.GROQ_FALLBACK_MODEL) {
+        if (!this.modelDowngraded) {
+          this.log(`[director] Auto-downgrading to ${this.GROQ_FALLBACK_MODEL} (${Math.round(ratio * 100)}% tokens remaining)`);
+        }
         this.modelDowngraded = true;
         this.activeGroqModel = this.GROQ_FALLBACK_MODEL;
-        this.log(`[director] Auto-downgrading to ${this.GROQ_FALLBACK_MODEL} (${Math.round(ratio * 100)}% tokens remaining)`);
+        return this.GROQ_FALLBACK_MODEL;
+      }
+      // Only un-downgrade when quota has clearly recovered (>50%)
+      if (this.modelDowngraded && ratio > 0.5) {
+        this.log(`[director] Quota recovered (${Math.round(ratio * 100)}%) — upgrading back to ${preferred}`);
+        this.modelDowngraded = false;
+      }
+    }
+
+    // If force-downgraded by 429 handler, keep using fallback even if headers are stale
+    // But if the user manually switched to the fallback model, clear the flag
+    if (this.modelDowngraded) {
+      if (preferred === this.GROQ_FALLBACK_MODEL) {
+        this.modelDowngraded = false;
+      } else {
+        this.activeGroqModel = this.GROQ_FALLBACK_MODEL;
         return this.GROQ_FALLBACK_MODEL;
       }
     }
 
-    this.modelDowngraded = false;
     this.activeGroqModel = preferred;
     return preferred;
   }

@@ -2705,3 +2705,32 @@
   border-radius: 3px;
   transition: width 0.3s ease;
 }
+
+.dd-model-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dd-model-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.dd-model-select {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 3px 6px;
+}
+
+.dd-model-override {
+  font-size: 10px;
+  color: #e0a84c;
+  white-space: nowrap;
+}

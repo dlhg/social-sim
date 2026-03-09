@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { DirectorStatus, PreparedConversationInfo } from "../conversation-manager";
+import { GROQ_MODELS, loadLlmConfig, saveLlmConfig } from "../llm-config";
 
 interface DirectorDashboardProps {
   getStatus: () => DirectorStatus;
@@ -176,11 +177,13 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
           </div>
         </div>
 
-        {/* Groq rate limits */}
-        {status.groqRateLimits && (() => {
+        {/* Groq model & rate limits */}
+        {(() => {
+          const config = loadLlmConfig();
+          if (config.provider !== "groq") return null;
           const rl = status.groqRateLimits;
-          const tokenRatio = rl.limitTokens > 0 ? rl.remainingTokens / rl.limitTokens : 1;
-          const reqRatio = rl.limitRequests > 0 ? rl.remainingRequests / rl.limitRequests : 1;
+          const tokenRatio = rl && rl.limitTokens > 0 ? rl.remainingTokens / rl.limitTokens : 1;
+          const reqRatio = rl && rl.limitRequests > 0 ? rl.remainingRequests / rl.limitRequests : 1;
           const tokenPct = Math.round(tokenRatio * 100);
           const reqPct = Math.round(reqRatio * 100);
           const barColor = (ratio: number) =>
@@ -188,44 +191,64 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
           return (
             <div className="dd-section">
               <div className="dd-section-title">
-                Groq Quota
-                <span className="dd-depth-badge">
-                  {rl.model}
-                  {status.modelDowngraded && (
-                    <span className="dd-depth-full"> (auto-downgraded)</span>
-                  )}
-                </span>
+                Groq
+                {status.modelDowngraded && (
+                  <span className="dd-depth-badge">
+                    <span className="dd-depth-full">(auto-downgraded)</span>
+                  </span>
+                )}
               </div>
-              <div className="dd-quota-row">
-                <div className="dd-quota-item">
-                  <div className="dd-quota-header">
-                    <span>Tokens</span>
-                    <span className="dd-quota-numbers">
-                      {rl.remainingTokens.toLocaleString()} / {rl.limitTokens.toLocaleString()} ({tokenPct}%)
-                    </span>
+              <div className="dd-model-selector">
+                <label className="dd-model-label">Model</label>
+                <select
+                  className="dd-model-select"
+                  value={config.groqModel}
+                  onChange={(e) => {
+                    saveLlmConfig({ ...config, groqModel: e.target.value });
+                  }}
+                >
+                  {GROQ_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+                {status.activeModel !== config.groqModel && (
+                  <span className="dd-model-override">
+                    using {GROQ_MODELS.find(m => m.id === status.activeModel)?.label ?? status.activeModel}
+                  </span>
+                )}
+              </div>
+              {rl && (
+                <div className="dd-quota-row">
+                  <div className="dd-quota-item">
+                    <div className="dd-quota-header">
+                      <span>Tokens</span>
+                      <span className="dd-quota-numbers">
+                        {rl.remainingTokens.toLocaleString()} / {rl.limitTokens.toLocaleString()} ({tokenPct}%)
+                      </span>
+                    </div>
+                    <div className="dd-quota-bar">
+                      <div
+                        className="dd-quota-fill"
+                        style={{ width: `${tokenPct}%`, background: barColor(tokenRatio) }}
+                      />
+                    </div>
                   </div>
-                  <div className="dd-quota-bar">
-                    <div
-                      className="dd-quota-fill"
-                      style={{ width: `${tokenPct}%`, background: barColor(tokenRatio) }}
-                    />
+                  <div className="dd-quota-item">
+                    <div className="dd-quota-header">
+                      <span>Requests</span>
+                      <span className="dd-quota-numbers">
+                        {rl.remainingRequests} / {rl.limitRequests} ({reqPct}%)
+                      </span>
+                    </div>
+                    <div className="dd-quota-bar">
+                      <div
+                        className="dd-quota-fill"
+                        style={{ width: `${reqPct}%`, background: barColor(reqRatio) }}
+                      />
+                    </div>
                   </div>
                 </div>
-                <div className="dd-quota-item">
-                  <div className="dd-quota-header">
-                    <span>Requests</span>
-                    <span className="dd-quota-numbers">
-                      {rl.remainingRequests} / {rl.limitRequests} ({reqPct}%)
-                    </span>
-                  </div>
-                  <div className="dd-quota-bar">
-                    <div
-                      className="dd-quota-fill"
-                      style={{ width: `${reqPct}%`, background: barColor(reqRatio) }}
-                    />
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           );
         })()}

@@ -157,21 +157,24 @@ async function accumulateGroq(
     signal,
   });
 
+  // Capture rate limit headers before checking status (429s still send these)
+  const rlLimitReq = res.headers.get("x-ratelimit-limit-requests");
+  if (rlLimitReq) {
+    latestGroqRateLimits = {
+      limitRequests: parseInt(rlLimitReq),
+      remainingRequests: parseInt(res.headers.get("x-ratelimit-remaining-requests") ?? "0"),
+      limitTokens: parseInt(res.headers.get("x-ratelimit-limit-tokens") ?? "0"),
+      remainingTokens: parseInt(res.headers.get("x-ratelimit-remaining-tokens") ?? "0"),
+      resetRequests: res.headers.get("x-ratelimit-reset-requests") ?? "",
+      resetTokens: res.headers.get("x-ratelimit-reset-tokens") ?? "",
+      model,
+    };
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`Groq error: ${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`);
   }
-
-  // Capture rate limit headers
-  latestGroqRateLimits = {
-    limitRequests: parseInt(res.headers.get("x-ratelimit-limit-requests") ?? "0"),
-    remainingRequests: parseInt(res.headers.get("x-ratelimit-remaining-requests") ?? "0"),
-    limitTokens: parseInt(res.headers.get("x-ratelimit-limit-tokens") ?? "0"),
-    remainingTokens: parseInt(res.headers.get("x-ratelimit-remaining-tokens") ?? "0"),
-    resetRequests: res.headers.get("x-ratelimit-reset-requests") ?? "",
-    resetTokens: res.headers.get("x-ratelimit-reset-tokens") ?? "",
-    model,
-  };
 
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
