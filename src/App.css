@@ -1617,7 +1617,7 @@
 
 .bubble-fading {
   animation: bubble-fade 0.8s var(--ease-in-out) forwards;
-  animation-delay: 2.2s;
+  animation-delay: 0.5s;
 }
 
 .bubble-thought.bubble-fading {

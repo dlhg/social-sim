@@ -25,6 +25,8 @@ import { parseLLMResponse, parseBatchLLMResponse, extractJson } from "./response
 export interface ConversationManagerCallbacks {
   onStreamToken: (npcId: string, fullText: string) => void;
   onTurnComplete: (msg: ConversationMessage) => void;
+  /** Fires after audio playback for a turn finishes (bubble should start fading now) */
+  onTurnAudioEnd?: (npcId: string) => void;
   onConversationStart: (session: ConversationSession) => void;
   onConversationEnd: (session: ConversationSession) => void;
   onActivity: (event: ActivityEvent) => void;
@@ -788,6 +790,7 @@ export class ConversationManager {
         // No audio: wait based on text length so user can read
         await this.sleep(Math.max(1500, turn.speech.length * 40));
       }
+      this.callbacks.onTurnAudioEnd?.(speakerId);
 
       // storm_off ends the conversation
       if (response.conversation_end) {
@@ -1389,6 +1392,7 @@ export class ConversationManager {
       } else {
         await this.sleep(Math.max(1500, turn.speech.length * 40));
       }
+      this.callbacks.onTurnAudioEnd?.(speakerId);
 
       if (response.conversation_end) {
         this.log(`${speaker.name} ended the conversation`);

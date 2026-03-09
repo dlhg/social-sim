@@ -464,19 +464,13 @@ function App() {
         }
         ttsSentIndexRef.current.delete(msg.npcId);
 
-        // Mark speech bubble as completed, schedule removal
+        // Update bubble with full text but don't start fade yet —
+        // onTurnAudioEnd will trigger the fade after audio finishes
         setBubbles(prev => prev.map(b =>
           b.npcId === msg.npcId && b.type === "speech"
-            ? { ...b, text: msg.text, completedAt: Date.now() }
+            ? { ...b, text: msg.text }
             : b
         ));
-        const timerKey = msg.npcId + ":speech";
-        const prev = bubbleTimersRef.current.get(timerKey);
-        if (prev) clearTimeout(prev);
-        bubbleTimersRef.current.set(timerKey, window.setTimeout(() => {
-          setBubbles(p => p.filter(b => !(b.npcId === msg.npcId && b.type === "speech")));
-          bubbleTimersRef.current.delete(timerKey);
-        }, 3000));
 
         // Show action bubble if this turn had an action
         if (msg.rawResponse?.action) {
@@ -508,6 +502,21 @@ function App() {
             [msg.npcId]: [...(prev[msg.npcId] ?? []), snapshot],
           }));
         }
+      },
+      onTurnAudioEnd: (npcId) => {
+        // Audio playback finished — now start the bubble fade
+        setBubbles(prev => prev.map(b =>
+          b.npcId === npcId && b.type === "speech" && !b.completedAt
+            ? { ...b, completedAt: Date.now() }
+            : b
+        ));
+        const timerKey = npcId + ":speech";
+        const prev = bubbleTimersRef.current.get(timerKey);
+        if (prev) clearTimeout(prev);
+        bubbleTimersRef.current.set(timerKey, window.setTimeout(() => {
+          setBubbles(p => p.filter(b => !(b.npcId === npcId && b.type === "speech")));
+          bubbleTimersRef.current.delete(timerKey);
+        }, 3000));
       },
       onConversationStart: (session) => {
         const [a, b] = session.participantIds;
