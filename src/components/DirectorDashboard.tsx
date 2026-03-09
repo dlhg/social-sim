@@ -338,7 +338,7 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
             </div>
             {status.preparedConversations.map((info, i) => (
               <PreparedCard
-                key={`${info.npcAName}-${info.npcBName}-${info.phase}`}
+                key={`${info.npcAName}-${info.npcBName}-${info.phase}-${i}`}
                 info={info}
                 convIndex={info.phase === "ready" ? i - status.preparedConversations.filter((c, j) => j < i && c.phase !== "ready").length : -1}
                 onPlayTurn={onPlayTurnAudio}
