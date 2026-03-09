@@ -2,6 +2,7 @@ import type { Position, Waypoint, NpcSpatialState, WorldSnapshot, EmotionalState
 import type { NpcStore } from "./npc-store";
 import type { MemoryService } from "./memory-service";
 import { ACTIVITIES, shouldDoActivity, pickActivity, activityDurationTicks, buildActivityMemory, rollItemYield } from "./activities";
+import { weightedPick } from "./random";
 
 /** Fallback waypoints — used only if no tilemap waypoints are provided. */
 const FALLBACK_WAYPOINTS: Waypoint[] = [
@@ -442,16 +443,7 @@ export class WorldSimulation {
       return { wp, score };
     });
 
-    // Softmax-weighted random selection
-    const maxScore = Math.max(...scores.map((s) => s.score));
-    const weights = scores.map((s) => Math.exp(s.score - maxScore));
-    const totalWeight = weights.reduce((a, b) => a + b, 0);
-    let r = Math.random() * totalWeight;
-    for (let i = 0; i < weights.length; i++) {
-      r -= weights[i];
-      if (r <= 0) return scores[i].wp;
-    }
-    return scores[scores.length - 1].wp;
+    return weightedPick(scores, s => s.score).wp;
   }
 
   private pickOverrideDestination(npc: NpcSpatialState, npcData: import("./types").NPC): Waypoint | null {

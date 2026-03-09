@@ -213,7 +213,8 @@ You MUST write ALL text in ${this.language}. Never use any other language.`,
     const allNpcs = this.store.getAll();
     const mentioned: string[] = [];
     for (const npc of allNpcs) {
-      if (planText.toLowerCase().includes(npc.name.toLowerCase())) {
+      const pattern = new RegExp(`\\b${npc.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+      if (pattern.test(planText)) {
         mentioned.push(npc.id);
       }
     }

@@ -1,5 +1,6 @@
 import type { NPC, WaypointActivity, WaypointActivityId, InventoryItem } from "./types";
 import { ITEM_LIFETIME_BY_CATEGORY } from "./types";
+import { weightedPick } from "./random";
 
 // ── Activity Registry ───────────────────────────
 
@@ -324,16 +325,7 @@ export function pickActivity(
     return { actId, score };
   });
 
-  // Softmax-weighted random selection
-  const maxScore = Math.max(...scored.map(s => s.score));
-  const weights = scored.map(s => Math.exp(s.score - maxScore));
-  const totalWeight = weights.reduce((a, b) => a + b, 0);
-  let r = Math.random() * totalWeight;
-  for (let i = 0; i < weights.length; i++) {
-    r -= weights[i];
-    if (r <= 0) return scored[i].actId;
-  }
-  return scored[scored.length - 1].actId;
+  return weightedPick(scored, s => s.score).actId;
 }
 
 export function activityDurationTicks(actId: WaypointActivityId): number {

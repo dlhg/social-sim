@@ -1,6 +1,7 @@
 import type { NPC, EmotionalState, MemoryEntry, ItemCategory } from "./types";
 import type { NpcStore } from "./npc-store";
 import type { MemoryService } from "./memory-service";
+import { weightedPick } from "./random";
 
 // ── Interaction Types ─────────────────────────────
 
@@ -611,19 +612,7 @@ export function pickInteraction(
 
   if (eligible.length === 0) return null;
 
-  // Softmax selection
-  const maxScore = Math.max(...eligible.map(e => e.score));
-  const weights = eligible.map(e => Math.exp(e.score - maxScore));
-  const total = weights.reduce((a, b) => a + b, 0);
-  let r = Math.random() * total;
-  let chosen = eligible[eligible.length - 1].def;
-  for (let i = 0; i < weights.length; i++) {
-    r -= weights[i];
-    if (r <= 0) {
-      chosen = eligible[i].def;
-      break;
-    }
-  }
+  const chosen = weightedPick(eligible, e => e.score).def;
 
   const feedText = chosen.feedText
     .replace("{actor}", actorNpc.name)

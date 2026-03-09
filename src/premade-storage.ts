@@ -64,10 +64,7 @@ export function premadeTemplateToNpc(template: PremadeTemplate): NPC {
     personalityTraits: [...template.personalityTraits],
     coreDesires: [...template.coreDesires],
     secrets: [...template.secrets],
-    inventory: template.inventory.map((item) => ({
-      ...item,
-      acquiredAt: Date.now(),
-    })),
+    inventory: template.inventory.map((item) => ({ ...item })),
     emotionalState: template.emotionalState,
     customVoiceId: template.customVoiceId,
   });

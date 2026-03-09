@@ -49,7 +49,7 @@ function TurnList({ speeches, speakerNames, convIndex, onPlayTurn, currentTurn, 
         const generating = ttsCompletedTurns !== undefined && i === ttsCompletedTurns;
         return (
           <div
-            key={i}
+            key={`${speakerNames[i]}-${i}`}
             className={[
               "dd-turn-line",
               currentTurn !== undefined && i === currentTurn ? "dd-turn-current" : "",
@@ -353,7 +353,7 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
             <div className="dd-section-title">Top Ranked Pairs</div>
             <div className="dd-pairs-table">
               {status.topPairs.map((pair, i) => (
-                <div key={i} className="dd-pair-row">
+                <div key={`${pair.npcAId}-${pair.npcBId}`} className="dd-pair-row">
                   <span className="dd-pair-rank">#{i + 1}</span>
                   <span className="dd-pair-names-small">
                     {pair.npcAName} + {pair.npcBName}

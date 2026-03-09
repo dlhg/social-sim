@@ -331,7 +331,7 @@ export function NpcInspector({
                         n.knownSecrets[selected.id]?.includes(secret)
                     );
                     return (
-                      <div key={i} className="secret-entry">
+                      <div key={secret} className="secret-entry">
                         <span className="secret-text">{secret}</span>
                         {knownBy.length > 0 && (
                           <span className="secret-known-by">
@@ -390,8 +390,8 @@ export function NpcInspector({
                 {selected.shortTermMemory
                   .slice(-5)
                   .reverse()
-                  .map((mem, i) => (
-                    <div key={i} className="memory-entry">
+                  .map((mem) => (
+                    <div key={`${mem.timestamp}-${mem.text.slice(0, 20)}`} className="memory-entry">
                       <div className="memory-row-meta">
                         {mem.type && (
                           <span className={`memory-type-badge memory-type-${mem.type}`}>

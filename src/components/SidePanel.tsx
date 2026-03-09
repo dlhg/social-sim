@@ -65,8 +65,8 @@ export function FeedPanel({
   );
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [openPrompts, setOpenPrompts] = useState<Set<number>>(() => new Set());
-  const [copiedPrompt, setCopiedPrompt] = useState<number | null>(null);
+  const [openPrompts, setOpenPrompts] = useState<Set<string>>(() => new Set());
+  const [copiedPrompt, setCopiedPrompt] = useState<string | null>(null);
 
   useEffect(() => {
     if (autoScroll) {
@@ -160,9 +160,10 @@ export function FeedPanel({
           if (item.type === "chat") {
             const npc = npcMap[item.msg.npcId];
             const showPrompt = activeFilters.has("prompt") && item.msg.systemPrompt;
-            const promptOpen = openPrompts.has(i);
+            const itemKey = `chat-${item.timestamp}-${item.msg.npcId}`;
+            const promptOpen = openPrompts.has(itemKey);
             return (
-              <div key={i} className={`chat-entry feed-item ${visible ? "feed-item-visible" : "feed-item-hidden"}${promptOpen ? " feed-item-prompt-open" : ""}`}>
+              <div key={itemKey} className={`chat-entry feed-item ${visible ? "feed-item-visible" : "feed-item-hidden"}${promptOpen ? " feed-item-prompt-open" : ""}`}>
                 <span className="chat-name" style={{ color: npc?.color }}>
                   {item.msg.npcName}:
                 </span>{" "}
@@ -174,8 +175,8 @@ export function FeedPanel({
                       const open = (e.target as HTMLDetailsElement).open;
                       setOpenPrompts((prev) => {
                         const next = new Set(prev);
-                        if (open) next.add(i);
-                        else next.delete(i);
+                        if (open) next.add(itemKey);
+                        else next.delete(itemKey);
                         return next;
                       });
                     }}
@@ -188,13 +189,13 @@ export function FeedPanel({
                           e.preventDefault();
                           e.stopPropagation();
                           navigator.clipboard.writeText(item.msg.systemPrompt!).then(() => {
-                            setCopiedPrompt(i);
+                            setCopiedPrompt(itemKey);
                             setTimeout(() => setCopiedPrompt(null), 1500);
                           });
                         }}
                         title="Copy prompt"
                       >
-                        {copiedPrompt === i ? "copied!" : "copy"}
+                        {copiedPrompt === itemKey ? "copied!" : "copy"}
                       </button>
                     </summary>
                     <pre className="feed-prompt-content">{item.msg.systemPrompt}</pre>
@@ -207,7 +208,7 @@ export function FeedPanel({
             ? `activity-entry activity-${item.event.activityType}`
             : "activity-entry";
           return (
-            <div key={i} className={`${activityClass} feed-item ${visible ? "feed-item-visible" : "feed-item-hidden"}`}>
+            <div key={`act-${+item.event.timestamp}-${item.event.npcId ?? i}`} className={`${activityClass} feed-item ${visible ? "feed-item-visible" : "feed-item-hidden"}`}>
               <span className="activity-time">
                 {formatTime(item.event.timestamp)}
               </span>{" "}

@@ -81,6 +81,40 @@ ACTIONS (optional — set "action" to one of these, or null):
 - CRITICAL: "speech" must contain ONLY your spoken dialog — the literal words you say. NEVER put narration, action descriptions, or third-person text in speech (wrong: "Ivy smiles and offers a cake" — right: "Here, I brought you some cake!"). Use the "action" field for physical actions.
 - Output ONLY the JSON object. No markdown, no code fences, no extra text.`;
 
+// ── Shared formatting helpers ────────────────────
+
+function formatMemoryLines(mem: RetrievedMemories | undefined): {
+  direct: string;
+  gossip: string;
+  aboutPartner: string;
+} {
+  return {
+    direct: mem?.direct.map(m => `- ${m.text}`).join("\n") ?? "",
+    gossip: mem?.gossip.map(m => `- ${m.text}`).join("\n") ?? "",
+    aboutPartner: mem?.aboutPartner.map(m => `- ${m.text}`).join("\n") ?? "",
+  };
+}
+
+function formatOtherNpcsBlock(
+  allNpcs: Array<{ id: string; name: string }> | undefined,
+  excludeIds: string[],
+): string {
+  const others = (allNpcs ?? []).filter(n => !excludeIds.includes(n.id));
+  if (others.length === 0) return "";
+  return others.map(n => `- ${n.name} (id: "${n.id}")`).join("\n");
+}
+
+function combinedGuidance(
+  emotions: EmotionalState,
+  regard: number,
+  listenerName: string,
+): string[] {
+  return [
+    ...emotionBehavioralGuidance(emotions),
+    ...relationshipBehavioralGuidance(regard, listenerName),
+  ];
+}
+
 // ── System prompt builder ───────────────────────
 
 export interface PromptContext {
@@ -109,37 +143,17 @@ export function buildSystemPrompt(
   const relLabel = relationshipLabel(relationship);
   const emotionSummary = describeEmotions(speaker.emotionalState);
 
-  const emotionGuidance = emotionBehavioralGuidance(speaker.emotionalState);
-  const relGuidance = relationshipBehavioralGuidance(
-    relationship,
-    listener.name
-  );
-  const allGuidance = [...emotionGuidance, ...relGuidance];
+  const allGuidance = combinedGuidance(speaker.emotionalState, relationship, listener.name);
 
-  const mem = ctx.retrievedMemories;
-  const relevantMemories = mem
-    ? mem.direct.map((m) => `- ${m.text}`).join("\n")
-    : "";
-  const gossipMemories = mem
-    ? mem.gossip.map((m) => `- ${m.text}`).join("\n")
-    : "";
-  const aboutListenerMemories = mem
-    ? mem.aboutPartner.map((m) => `- ${m.text}`).join("\n")
-    : "";
+  const { direct: relevantMemories, gossip: gossipMemories, aboutPartner: aboutListenerMemories } = formatMemoryLines(ctx.retrievedMemories);
 
   const behavioralBlock =
     allGuidance.length > 0
       ? `\nBEHAVIORAL GUIDANCE (follow these closely):\n${allGuidance.map((g) => `- ${g}`).join("\n")}`
       : "";
 
-  // Other NPCs the speaker knows about
-  const otherNpcs = (ctx.allNpcs ?? []).filter(
-    (n) => n.id !== speaker.id && n.id !== listener.id
-  );
-  const otherNpcsBlock =
-    otherNpcs.length > 0
-      ? `\nOTHER PEOPLE YOU KNOW:\n${otherNpcs.map((n) => `- ${n.name} (id: "${n.id}")`).join("\n")}`
-      : "";
+  const otherNpcsList = formatOtherNpcsBlock(ctx.allNpcs, [speaker.id, listener.id]);
+  const otherNpcsBlock = otherNpcsList ? `\nOTHER PEOPLE YOU KNOW:\n${otherNpcsList}` : "";
 
   const gossipBlock =
     gossipMemories
@@ -354,16 +368,14 @@ export function buildBatchConversationMessages(
   const emotionsA = describeEmotions(npcA.emotionalState);
   const emotionsB = describeEmotions(npcB.emotionalState);
 
-  const guidanceA = [...emotionBehavioralGuidance(npcA.emotionalState), ...relationshipBehavioralGuidance(relAtoB, npcB.name)];
-  const guidanceB = [...emotionBehavioralGuidance(npcB.emotionalState), ...relationshipBehavioralGuidance(relBtoA, npcA.name)];
+  const guidanceA = combinedGuidance(npcA.emotionalState, relAtoB, npcB.name);
+  const guidanceB = combinedGuidance(npcB.emotionalState, relBtoA, npcA.name);
 
   const memA = ctx.memoriesA;
   const memB = ctx.memoriesB;
 
-  const otherNpcs = (ctx.allNpcs ?? []).filter(n => n.id !== npcA.id && n.id !== npcB.id);
-  const otherNpcsBlock = otherNpcs.length > 0
-    ? `\nOTHER PEOPLE THEY KNOW:\n${otherNpcs.map(n => `- ${n.name} (id: "${n.id}")`).join("\n")}`
-    : "";
+  const otherNpcsList = formatOtherNpcsBlock(ctx.allNpcs, [npcA.id, npcB.id]);
+  const otherNpcsBlock = otherNpcsList ? `\nOTHER PEOPLE THEY KNOW:\n${otherNpcsList}` : "";
 
   const actionHintsA = buildActionGuidance(npcA, npcB);
   const actionHintsB = buildActionGuidance(npcB, npcA);
@@ -401,12 +413,8 @@ export function buildBatchConversationMessages(
     ? `\nINVENTORY: ${npcB.inventory.map(i => `${i.emoji} ${i.label}`).join(", ")}`
     : "";
 
-  const memDirectA = memA?.direct.map(m => `- ${m.text}`).join("\n") ?? "(none)";
-  const memGossipA = memA?.gossip.map(m => `- ${m.text}`).join("\n") ?? "";
-  const memAboutA = memA?.aboutPartner.map(m => `- ${m.text}`).join("\n") ?? "";
-  const memDirectB = memB?.direct.map(m => `- ${m.text}`).join("\n") ?? "(none)";
-  const memGossipB = memB?.gossip.map(m => `- ${m.text}`).join("\n") ?? "";
-  const memAboutB = memB?.aboutPartner.map(m => `- ${m.text}`).join("\n") ?? "";
+  const { direct: memDirectA, gossip: memGossipA, aboutPartner: memAboutA } = formatMemoryLines(memA);
+  const { direct: memDirectB, gossip: memGossipB, aboutPartner: memAboutB } = formatMemoryLines(memB);
 
   const system = `You are a dialogue writer. Generate a complete conversation between two characters.
 
@@ -417,7 +425,7 @@ Emotional state: ${emotionsA}
 Current goal: ${npcA.currentGoal ?? "none"}${secretsA}${inventoryA}${plansBlockA}
 Relationship with ${npcB.name}: ${relationshipLabel(relAtoB)} (regard: ${relAtoB.toFixed(2)})${affAtoB > 0.15 ? ` | Romantic: ${describeAffection(affAtoB)}` : ""}
 Memories of ${npcB.name}:
-${memDirectA}${memAboutA ? `\nThings heard about ${npcB.name}:\n${memAboutA}` : ""}${memGossipA ? `\nGossip heard:\n${memGossipA}` : ""}
+${memDirectA || "(none)"}${memAboutA ? `\nThings heard about ${npcB.name}:\n${memAboutA}` : ""}${memGossipA ? `\nGossip heard:\n${memGossipA}` : ""}
 ${guidanceA.length > 0 ? `Behavioral guidance for ${npcA.name}:\n${guidanceA.map(g => `- ${g}`).join("\n")}` : ""}${actionHintsA}
 
 CHARACTER B: ${npcB.name} (id: "${npcB.id}")
@@ -427,7 +435,7 @@ Emotional state: ${emotionsB}
 Current goal: ${npcB.currentGoal ?? "none"}${secretsB}${inventoryB}${plansBlockB}
 Relationship with ${npcA.name}: ${relationshipLabel(relBtoA)} (regard: ${relBtoA.toFixed(2)})${affBtoA > 0.15 ? ` | Romantic: ${describeAffection(affBtoA)}` : ""}
 Memories of ${npcA.name}:
-${memDirectB}${memAboutB ? `\nThings heard about ${npcA.name}:\n${memAboutB}` : ""}${memGossipB ? `\nGossip heard:\n${memGossipB}` : ""}
+${memDirectB || "(none)"}${memAboutB ? `\nThings heard about ${npcA.name}:\n${memAboutB}` : ""}${memGossipB ? `\nGossip heard:\n${memGossipB}` : ""}
 ${guidanceB.length > 0 ? `Behavioral guidance for ${npcB.name}:\n${guidanceB.map(g => `- ${g}`).join("\n")}` : ""}${actionHintsB}
 ${trajectoryBlock}${locationBlock}${timeBlock}${otherNpcsBlock}${prevConvBlock}
 
@@ -695,6 +703,7 @@ function describeEmotions(state: EmotionalState): string {
 
 const emotionGuidanceCache = new Map<string, string[]>();
 const relationshipGuidanceCache = new Map<string, string[]>();
+const GUIDANCE_CACHE_MAX = 500;
 
 function bucketEmotion(v: number): string {
   if (v >= 0.8) return "8";
@@ -865,6 +874,7 @@ function emotionBehavioralGuidance(state: EmotionalState): string[] {
     );
   }
 
+  if (emotionGuidanceCache.size >= GUIDANCE_CACHE_MAX) emotionGuidanceCache.clear();
   emotionGuidanceCache.set(key, guidance);
   return guidance;
 }
@@ -913,6 +923,7 @@ function relationshipBehavioralGuidance(
     );
   }
 
+  if (relationshipGuidanceCache.size >= GUIDANCE_CACHE_MAX) relationshipGuidanceCache.clear();
   relationshipGuidanceCache.set(cacheKey, guidance);
   return guidance;
 }
