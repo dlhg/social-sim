@@ -70,8 +70,10 @@ function PreparedCard({ info, convIndex, onPlayTurn }: {
   onPlayTurn?: (convIndex: number, turnIndex: number) => void;
 }) {
   const isTts = info.phase === "generating_tts";
+  const isQueued = info.phase === "queued_for_tts";
+  const isPending = isTts || isQueued;
   return (
-    <div className={`dd-card ${isTts ? "dd-card-preparing" : "dd-card-ready"}`}>
+    <div className={`dd-card ${isPending ? "dd-card-preparing" : "dd-card-ready"}`}>
       <div className="dd-card-header">
         <div className="dd-pair-names">
           {info.npcAName} + {info.npcBName}
@@ -81,18 +83,23 @@ function PreparedCard({ info, convIndex, onPlayTurn }: {
             TTS {formatDuration(info.ttsElapsedMs ?? 0)}
           </span>
         )}
+        {isQueued && (
+          <span className="dd-phase-badge dd-phase-tts">
+            queued
+          </span>
+        )}
       </div>
       <div className="dd-card-meta">
         {info.convType} &middot; {info.turnCount} turns
         &middot; LLM {formatDuration(info.llmDurationMs)}
-        {!isTts && <> + TTS {formatDuration(info.ttsDurationMs)}</>}
+        {!isPending && <> + TTS {formatDuration(info.ttsDurationMs)}</>}
       </div>
-      {!isTts && <StalenessBar ageMs={info.ageMs} maxAgeMs={info.maxAgeMs} />}
+      {!isPending && <StalenessBar ageMs={info.ageMs} maxAgeMs={info.maxAgeMs} />}
       <TurnList
         speeches={info.speeches}
         speakerNames={info.speakerNames}
-        convIndex={isTts ? undefined : convIndex}
-        onPlayTurn={isTts ? undefined : onPlayTurn}
+        convIndex={isPending ? undefined : convIndex}
+        onPlayTurn={isPending ? undefined : onPlayTurn}
       />
     </div>
   );
@@ -310,7 +317,7 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
               <PreparedCard
                 key={`${info.npcAName}-${info.npcBName}-${info.phase}`}
                 info={info}
-                convIndex={info.phase === "generating_tts" ? -1 : i - (ttsConv ? 1 : 0)}
+                convIndex={info.phase === "ready" ? i - status.preparedConversations.filter((c, j) => j < i && c.phase !== "ready").length : -1}
                 onPlayTurn={onPlayTurnAudio}
               />
             ))}

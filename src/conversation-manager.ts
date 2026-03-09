@@ -89,9 +89,12 @@ export interface PreparedConversationInfo {
   maxAgeMs: number;
   llmDurationMs: number;
   ttsDurationMs: number;
-  /** "ready" = fully prepared, "generating_tts" = LLM done, TTS in progress */
-  phase: "ready" | "generating_tts";
+  /** "ready" = fully prepared, "generating_tts" = actively synthesizing, "queued_for_tts" = waiting for TTS slot */
+  phase: "ready" | "generating_tts" | "queued_for_tts";
   ttsElapsedMs?: number;
+  /** TTS progress: how many turns have finished generating audio */
+  ttsCompletedTurns?: number;
+  ttsTotalTurns?: number;
 }
 
 export interface DirectorStatus {
@@ -172,13 +175,24 @@ export class ConversationManager {
   private llmAbort: AbortController | null = null;
   private llmStartedAt: number | null = null;
 
-  // TTS prefetch tracking (multiple can run concurrently)
+  // TTS queue — conversations waiting for the TTS slot (serialized to avoid GPU contention)
+  private ttsQueue: {
+    pKey: string;
+    npcAId: string;
+    npcBId: string;
+    turns: BatchTurnData[];
+    convType: ConversationType;
+    llmDurationMs: number;
+  }[] = [];
+
+  // TTS prefetch tracking — only one active at a time (GPU is serial)
   private ttsInFlight = new Map<string, {
     pairIds: [string, string];
     turns: BatchTurnData[];
     convType: ConversationType;
     llmMs: number;
     startedAt: number;
+    completedTurns: number;
   }>();
 
   // Rate limit backoff — don't retry LLM until this timestamp
@@ -241,10 +255,10 @@ export class ConversationManager {
       };
     }
 
-    // Build pipeline list: TTS-in-progress conversations + fully ready conversations
+    // Build pipeline list: TTS-queued + TTS-in-progress + fully ready conversations
     const preparedConversations: PreparedConversationInfo[] = [];
 
-    // Show all TTS-in-progress conversations (LLM done, audio generating)
+    // Actively synthesizing TTS (at most one)
     for (const [, info] of this.ttsInFlight) {
       preparedConversations.push({
         npcAName: this.npcName(info.pairIds[0]),
@@ -260,6 +274,26 @@ export class ConversationManager {
         ttsDurationMs: 0,
         phase: "generating_tts",
         ttsElapsedMs: now - info.startedAt,
+        ttsCompletedTurns: info.completedTurns,
+        ttsTotalTurns: info.turns.length,
+      });
+    }
+
+    // Conversations queued waiting for TTS slot
+    for (const q of this.ttsQueue) {
+      preparedConversations.push({
+        npcAName: this.npcName(q.npcAId),
+        npcBName: this.npcName(q.npcBId),
+        convType: q.convType,
+        turnCount: q.turns.length,
+        speeches: q.turns.map(t => t.speech),
+        speakerNames: q.turns.map(t => this.npcName(t.speaker_id)),
+        preparedAt: 0,
+        ageMs: 0,
+        maxAgeMs: this.PREPARED_MAX_AGE_MS,
+        llmDurationMs: q.llmDurationMs,
+        ttsDurationMs: 0,
+        phase: "queued_for_tts",
       });
     }
 
@@ -875,8 +909,8 @@ export class ConversationManager {
     this.llmPairKey = null;
     this.llmPairIds = null;
     this.llmStartedAt = null;
-    this.ttsPairIds = null;
-    this.ttsStartedAt = null;
+    this.ttsQueue = [];
+    this.ttsInFlight.clear();
   }
 
   private directorTick(): void {
@@ -1079,16 +1113,36 @@ export class ConversationManager {
     this.clearLlmSlot();
     this.kickNextLlm();
 
-    // ── Phase 2: TTS prefetch (runs independently, doesn't block next LLM) ──
+    // ── Phase 2: Queue for TTS (serialized — GPU processes one at a time) ──
     const pKey = this.pairKey(npcAId, npcBId);
+    this.ttsQueue.push({ pKey, npcAId, npcBId, turns, convType, llmDurationMs });
+    this.processNextTts();
+  }
+
+  private clearLlmSlot(): void {
+    this.llmPairKey = null;
+    this.llmPairIds = null;
+    this.llmStartedAt = null;
+  }
+
+  /** Process the next conversation in the TTS queue (one at a time). */
+  private async processNextTts(): Promise<void> {
+    // Only one TTS job active at a time
+    if (this.ttsInFlight.size > 0 || this.ttsQueue.length === 0) return;
+
+    const item = this.ttsQueue.shift()!;
+    const { pKey, npcAId, npcBId, turns, convType, llmDurationMs } = item;
+
     const ttsStart = Date.now();
-    this.ttsInFlight.set(pKey, {
-      pairIds: [npcAId, npcBId],
+    const inFlightEntry = {
+      pairIds: [npcAId, npcBId] as [string, string],
       turns,
       convType,
       llmMs: llmDurationMs,
       startedAt: ttsStart,
-    });
+      completedTurns: 0,
+    };
+    this.ttsInFlight.set(pKey, inFlightEntry);
 
     let audioBuffers: (ArrayBuffer | null)[] = [];
     if (this.ttsService) {
@@ -1099,7 +1153,7 @@ export class ConversationManager {
           turn.speech,
           speaker.emotionalState,
           this.language
-        );
+        ).then(buf => { inFlightEntry.completedTurns++; return buf; });
       });
       audioBuffers = await Promise.all(promises);
     }
@@ -1110,24 +1164,21 @@ export class ConversationManager {
 
     if (!this.running) return;
 
-    // ── Store as ready ──
+    // Store as ready
     this.preparedConversations.push({
       npcAId, npcBId, turns, audioBuffers,
       convType, preparedAt: Date.now(),
       llmDurationMs, ttsDurationMs,
     });
     this.log(`[director] Conversation ready for ${this.npcName(npcAId)} + ${this.npcName(npcBId)} (${turns.length} turns)`);
+
+    // Process next queued conversation
+    this.processNextTts();
   }
 
-  private clearLlmSlot(): void {
-    this.llmPairKey = null;
-    this.llmPairIds = null;
-    this.llmStartedAt = null;
-  }
-
-  /** Number of conversations ahead of playback (TTS-in-progress + ready queue). */
+  /** Number of conversations ahead of playback (TTS queue + TTS-in-progress + ready). */
   private pipelineDepth(): number {
-    return this.preparedConversations.length + this.ttsInFlight.size;
+    return this.preparedConversations.length + this.ttsInFlight.size + this.ttsQueue.length;
   }
 
   private readonly MAX_PIPELINE_DEPTH = 3;
@@ -1200,10 +1251,11 @@ export class ConversationManager {
 
     // Skip NPCs currently in a conversation
     const busyIds = new Set(this.activeSession?.participantIds ?? []);
-    // Skip pairs that already have a prepared conversation or are being TTS'd
+    // Skip pairs that already have a prepared conversation, are being TTS'd, or are queued for TTS
     const preparedPairKeys = new Set([
       ...this.preparedConversations.map(p => this.pairKey(p.npcAId, p.npcBId)),
       ...this.ttsInFlight.keys(),
+      ...this.ttsQueue.map(q => q.pKey),
     ]);
 
     const now = Date.now();
