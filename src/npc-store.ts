@@ -39,7 +39,7 @@ export class NpcStore {
 
   applyEmotionDelta(npcId: string, delta: EmotionalState): void {
     const npc = this.npcs.get(npcId);
-    if (!npc) return;
+    if (!npc) { console.warn(`[npc-store] applyEmotionDelta: NPC "${npcId}" not found`); return; }
     for (const key of NpcStore.EMOTION_KEYS) {
       npc.emotionalState[key] = clamp(
         npc.emotionalState[key] + delta[key],
@@ -57,7 +57,7 @@ export class NpcStore {
     affectionDelta = 0
   ): void {
     const npc = this.npcs.get(npcId);
-    if (!npc) return;
+    if (!npc) { console.warn(`[npc-store] applyRelationshipDelta: NPC "${npcId}" not found`); return; }
     if (!npc.relationships[targetId]) {
       npc.relationships[targetId] = { regard: 0, affection: 0 };
     }
@@ -81,7 +81,7 @@ export class NpcStore {
 
   setGoal(npcId: string, goal: string | null): void {
     const npc = this.npcs.get(npcId);
-    if (!npc) return;
+    if (!npc) { console.warn(`[npc-store] setGoal: NPC "${npcId}" not found`); return; }
     npc.currentGoal = goal;
     this.notify();
   }
@@ -96,7 +96,7 @@ export class NpcStore {
 
   setBehavioralOverride(npcId: string, override: BehavioralOverride | null): void {
     const npc = this.npcs.get(npcId);
-    if (!npc) return;
+    if (!npc) { console.warn(`[npc-store] setBehavioralOverride: NPC "${npcId}" not found`); return; }
     npc.behavioralOverride = override;
     this.notify();
   }
@@ -118,7 +118,7 @@ export class NpcStore {
     secret: string
   ): void {
     const npc = this.npcs.get(knowerNpcId);
-    if (!npc) return;
+    if (!npc) { console.warn(`[npc-store] addKnownSecret: NPC "${knowerNpcId}" not found`); return; }
     if (!npc.knownSecrets[aboutNpcId]) {
       npc.knownSecrets[aboutNpcId] = [];
     }
@@ -149,7 +149,7 @@ export class NpcStore {
 
   addItem(npcId: string, item: InventoryItem): void {
     const npc = this.npcs.get(npcId);
-    if (!npc) return;
+    if (!npc) { console.warn(`[npc-store] addItem: NPC "${npcId}" not found`); return; }
     npc.inventory.push(item);
     if (npc.inventory.length > 8) {
       // Drop oldest item to keep inventory small
@@ -188,7 +188,7 @@ export class NpcStore {
   /** Pull all emotions toward their baselines by the given rate. Call after each conversation. */
   decayEmotions(npcId: string, rate = 0.15): void {
     const npc = this.npcs.get(npcId);
-    if (!npc) return;
+    if (!npc) { console.warn(`[npc-store] decayEmotions: NPC "${npcId}" not found`); return; }
     for (const key of NpcStore.EMOTION_KEYS) {
       const baseline = NpcStore.EMOTION_BASELINES[key] ?? 0.3;
       npc.emotionalState[key] += (baseline - npc.emotionalState[key]) * rate;

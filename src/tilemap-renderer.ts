@@ -62,7 +62,23 @@ export class TilemapRenderer {
   /** Waypoints parsed from object layers. */
   waypoints: Waypoint[] = [];
 
+  /** Release pre-rendered canvases and reset state. */
+  destroy(): void {
+    this.groundCanvas = null;
+    this.objectCanvas = null;
+    this.tilesetImage = null;
+    this.map = null;
+    this.tileset = null;
+    this.collisionGrid = [];
+    this.waypoints = [];
+    this.ready = false;
+  }
+
   async load(mapUrl: string) {
+    // Free previous canvases if re-loading
+    this.groundCanvas = null;
+    this.objectCanvas = null;
+
     const resp = await fetch(mapUrl);
     this.map = await resp.json();
 

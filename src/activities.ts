@@ -309,7 +309,8 @@ export function pickActivity(
       if (traits.includes(trait)) score += 2;
     }
 
-    // Emotional state influence
+    // Emotional state influence (thresholds vary per emotion — joy/curiosity have higher
+    // baselines so use 0.6; disgust baseline is low so triggers at 0.4)
     if (emo.anger > 0.5 && (actId === "training" || actId === "gardening")) score += 2;
     if (emo.fear > 0.5 && (actId === "meditating" || actId === "napping" || actId === "reading")) score += 2;
     if (emo.joy > 0.6 && (actId === "sketching" || actId === "cooking" || actId === "people_watching")) score += 1.5;

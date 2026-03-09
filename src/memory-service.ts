@@ -19,6 +19,10 @@ export interface RetrievedMemories {
 
 // ── Memory Service ──────────────────────────────
 
+const SHORT_TERM_CAPACITY = 40;
+const LONG_TERM_CAPACITY = 100;
+const PROMOTION_THRESHOLD = 0.7;
+
 export class MemoryService {
   private store: NpcStore;
   private _memoryVersion = 0;
@@ -36,9 +40,9 @@ export class MemoryService {
     slot: "shortTermMemory" | "longTermMemory" = "shortTermMemory"
   ): void {
     const npc = this.store.get(npcId);
-    if (!npc) return;
+    if (!npc) { console.warn(`[memory] add: NPC "${npcId}" not found`); return; }
     npc[slot].push(entry);
-    if (slot === "shortTermMemory" && npc.shortTermMemory.length > 40) {
+    if (slot === "shortTermMemory" && npc.shortTermMemory.length > SHORT_TERM_CAPACITY) {
       // Evict the least valuable memory (lowest recency * importance)
       let minIdx = 0;
       let minScore = Infinity;
@@ -52,10 +56,10 @@ export class MemoryService {
       }
       const [evicted] = npc.shortTermMemory.splice(minIdx, 1);
       // Promote important memories to long-term instead of discarding
-      if (evicted.importance >= 0.7) {
+      if (evicted.importance >= PROMOTION_THRESHOLD) {
         npc.longTermMemory.push(evicted);
         // Cap long-term memory too — evict lowest scoring when over limit
-        if (npc.longTermMemory.length > 100) {
+        if (npc.longTermMemory.length > LONG_TERM_CAPACITY) {
           let ltMinIdx = 0;
           let ltMinScore = Infinity;
           for (let i = 0; i < npc.longTermMemory.length; i++) {

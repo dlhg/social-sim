@@ -2756,8 +2756,8 @@ export class ConversationManager {
             activityType: "thought",
             npcId: npc.id,
           });
-        } catch {
-          // Reflection is best-effort, skip on failure
+        } catch (err) {
+          console.warn(`[reflection] ${npc.name} reflection failed:`, err);
         }
       })
     );

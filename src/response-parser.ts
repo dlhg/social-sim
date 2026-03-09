@@ -231,10 +231,15 @@ function toNumber(val: unknown, fallback: number): number {
   return fallback;
 }
 
+/** Max magnitude of per-turn emotion delta (matches prompt instructions) */
+const EMOTION_DELTA_MAX = 0.2;
+/** Max magnitude of per-turn relationship/affection delta (matches prompt instructions) */
+const RELATIONSHIP_DELTA_MAX = 0.1;
+
 function clampDelta(v: number): number {
-  return Math.max(-0.2, Math.min(0.2, v));
+  return Math.max(-EMOTION_DELTA_MAX, Math.min(EMOTION_DELTA_MAX, v));
 }
 
 function clampRelDelta(v: number): number {
-  return Math.max(-0.1, Math.min(0.1, v));
+  return Math.max(-RELATIONSHIP_DELTA_MAX, Math.min(RELATIONSHIP_DELTA_MAX, v));
 }

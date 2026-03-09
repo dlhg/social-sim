@@ -97,7 +97,10 @@ async function accumulateOllama(
     throw new Error(`Ollama error: ${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`);
   }
 
-  const reader = res.body!.getReader();
+  if (!res.body) {
+    throw new Error("Ollama response body is null");
+  }
+  const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let full = "";
 
@@ -176,7 +179,10 @@ async function accumulateGroq(
     throw new Error(`Groq error: ${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`);
   }
 
-  const reader = res.body!.getReader();
+  if (!res.body) {
+    throw new Error("Groq response body is null");
+  }
+  const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let full = "";
   let buffer = "";

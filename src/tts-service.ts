@@ -204,25 +204,23 @@ export class TTSService {
     if (this.playing || this.queue.length === 0) return;
     this.playing = true;
 
-    const item = this.queue.shift()!;
-    const voice = this.assignVoice(item.npcId);
+    while (this.queue.length > 0) {
+      const item = this.queue.shift()!;
+      const voice = this.assignVoice(item.npcId);
 
-    try {
-      const wavBytes = await this.fetchSpeech(item.text, voice, item.emotions, item.language);
-      if (wavBytes) {
-        await this.playAudio(wavBytes);
+      try {
+        const wavBytes = await this.fetchSpeech(item.text, voice, item.emotions, item.language);
+        if (wavBytes) {
+          await this.playAudio(wavBytes);
+        }
+      } catch (err) {
+        console.warn("[tts] playback error:", err);
       }
-    } catch (err) {
-      console.warn("[tts] playback error:", err);
+
+      item.resolve();
     }
 
-    item.resolve();
     this.playing = false;
-
-    // Process next in queue
-    if (this.queue.length > 0) {
-      this.processQueue();
-    }
   }
 
   private async fetchSpeech(
