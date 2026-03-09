@@ -320,8 +320,42 @@ export function createNpc(partial: {
   };
 }
 
-export const initialNpcs: NPC[] = [
-  createNpc({
+// ── Relationship constructor helper ──
+function rel(
+  regard: number, affection = 0, respect = 0.3, trust = 0.3,
+  fear = 0, debt = 0, familiarity = 0.1,
+): import("./types").RelationshipState {
+  return { regard, affection, respect, trust, fear, debt, familiarity };
+}
+
+// ── Seed memory helper ──
+function seedMemory(
+  text: string,
+  involvedNpcIds: string[],
+  opts: {
+    importance?: number; sentiment?: number; type?: import("./types").MemoryType;
+    category?: import("./types").MemoryCategory; interpretation?: string;
+    aboutNpcIds?: string[]; unresolved?: boolean;
+  } = {},
+): import("./types").MemoryEntry {
+  return {
+    text,
+    importance: opts.importance ?? 0.5,
+    recency: 0.7,
+    emotionalWeight: Math.abs(opts.sentiment ?? 0) * 0.5 + 0.2,
+    involvedNpcIds,
+    aboutNpcIds: opts.aboutNpcIds,
+    timestamp: Date.now() - 60_000 * (10 + Math.random() * 50), // stagger into the past
+    type: opts.type ?? "observation",
+    category: opts.category ?? "social",
+    sentiment: opts.sentiment ?? 0,
+    interpretation: opts.interpretation,
+    unresolved: opts.unresolved,
+  };
+}
+
+export const initialNpcs: NPC[] = (() => {
+  const alice = createNpc({
     id: "alice",
     name: "Alice",
     avatar: "🧑‍🔬",
@@ -330,12 +364,17 @@ export const initialNpcs: NPC[] = [
     coreDesires: [
       "discover unexpected connections",
       "share knowledge",
-      "build friendships",
+      "understand why Victor is so hostile toward me",
     ],
     backstory: "Alice is a self-taught naturalist with an infectious sense of wonder. She sees connections everywhere — between the pattern of moss on a stone and the spiral of a snail shell, between a stranger's offhand comment and a half-remembered theorem. This relentless curiosity makes her a delightful conversationalist but an exhausting one; she'll derail any topic that catches her imagination. Beneath the enthusiasm, she carries guilt from sabotaging a colleague whose work threatened to overshadow hers — a betrayal that contradicts her self-image as someone who celebrates others' discoveries. She compensates by being aggressively generous with her own knowledge, as if sharing enough could erase what she took.",
     secrets: ["I once sabotaged a colleague's experiment because I was jealous of their results"],
-  }),
-  createNpc({
+    inventory: [
+      { id: "item_alice_1", label: "pressed flower specimen", category: "herb", emoji: "🌸", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.herb },
+      { id: "item_alice_2", label: "magnifying lens", category: "trinket", emoji: "🔍", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+    ],
+  });
+
+  const bob = createNpc({
     id: "bob",
     name: "Bob",
     avatar: "📚",
@@ -344,12 +383,16 @@ export const initialNpcs: NPC[] = [
     coreDesires: [
       "find meaning in absurdity",
       "quiet companionship",
-      "intellectual stimulation",
+      "figure out what Mara is really after",
     ],
     backstory: "Bob is the kind of person who reads Camus at breakfast and then makes a pun about it. He hides genuine warmth behind a wall of sardonic observations, not because he's afraid of connection but because he finds earnestness embarrassing — mostly his own. He wrote a novel once, under a fake name, and it became a bestseller. The success terrified him more than failure would have, so he told no one and went back to his quiet life. He craves intellectual companionship but sets the bar impossibly high, then feels lonely when people can't clear it. His kindness emerges in small, almost invisible gestures — he'll remember exactly how you take your tea but pretend he guessed.",
     secrets: ["I wrote a bestselling novel under a pseudonym and never told anyone"],
-  }),
-  createNpc({
+    inventory: [
+      { id: "item_bob_1", label: "worn notebook", category: "book", emoji: "📓", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.book },
+    ],
+  });
+
+  const victor = createNpc({
     id: "victor",
     name: "Victor",
     avatar: "🎭",
@@ -363,8 +406,8 @@ export const initialNpcs: NPC[] = [
     ],
     coreDesires: [
       "prove intellectual superiority",
-      "expose what he sees as others' naivety",
-      "win every argument",
+      "earn Alice's respect without admitting I want it",
+      "find a worthy intellectual rival",
     ],
     backstory: "Victor treats every conversation like a debate he intends to win. He was rejected from the university he'd built his entire identity around, and the wound never healed — it just calcified into a need to prove, constantly, that the rejection was their mistake. He's genuinely brilliant, but his brilliance is weaponized: he finds the weak point in any argument and drives into it without mercy. What makes Victor complicated is that he secretly admires people who don't play his game. Alice's unselfconscious curiosity fascinates him precisely because he can't replicate it. He'd never admit this. Admitting it would mean admitting that intelligence isn't the only thing that matters, and that's the one argument he can't afford to lose.",
     emotionalState: { anger: 0.6, trust: 0.2, joy: 0.3, curiosity: 0.5, disgust: 0.2 },
@@ -372,8 +415,9 @@ export const initialNpcs: NPC[] = [
       "I secretly admire Alice's intellect but would never admit it",
       "I was rejected from my dream university",
     ],
-  }),
-  createNpc({
+  });
+
+  const mara = createNpc({
     id: "mara",
     name: "Mara",
     avatar: "🪞",
@@ -387,7 +431,7 @@ export const initialNpcs: NPC[] = [
     ],
     coreDesires: [
       "gain social leverage over others",
-      "be seen as everyone's closest confidante",
+      "learn what Ellis is hiding — they're clearly afraid of something",
       "subtly turn people against each other",
     ],
     backstory: "Mara learned early that the right words in the right ear could reshape any social landscape. She collects people's vulnerabilities the way others collect stamps — catalogued, organized, and ready to deploy. Everyone thinks they're her closest friend; no one is. She flatters with surgical precision, always calibrating exactly how much warmth will lower someone's guard. The persona is so polished that even Mara sometimes forgets where the performance ends and she begins. In rare, unguarded moments she feels a hollow ache — the suspicion that she's constructed herself so thoroughly that there's nothing real underneath. She keeps a journal of everyone's weaknesses, and the most devastating entry is her own.",
@@ -396,8 +440,12 @@ export const initialNpcs: NPC[] = [
       "I keep a journal of everyone's weaknesses",
       "My charming personality is entirely constructed — I feel empty inside",
     ],
-  }),
-  createNpc({
+    inventory: [
+      { id: "item_mara_1", label: "colorful ribbon", category: "trinket", emoji: "🎀", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+    ],
+  });
+
+  const ellis = createNpc({
     id: "ellis",
     name: "Ellis",
     avatar: "🌀",
@@ -411,11 +459,134 @@ export const initialNpcs: NPC[] = [
     ],
     coreDesires: [
       "uncover hidden motives",
-      "prepare for the worst",
-      "find someone trustworthy (but doubt everyone)",
+      "find out if Bob can actually be trusted",
+      "figure out whether Mara knows my secret",
     ],
     backstory: "Ellis sees threats that others miss — or imagines them so vividly that the distinction stops mattering. They witnessed something once, something they weren't supposed to see, and the fear of being found out rewired their entire personality. Now every friendly gesture carries a possible ulterior motive, every silence hides a judgment. The tragedy is that Ellis's suspicion is often perceptive: they really do notice the micro-expression that betrays a lie, the slight hesitation before a deflection. But they can't distinguish genuine danger signals from the noise of their own anxiety. They desperately want to trust someone — anyone — but every time they get close, their mind manufactures a reason to pull back. The loneliest kind of intelligence is the kind that sees too much.",
     emotionalState: { anger: 0.2, trust: 0.15, fear: 0.7, joy: 0.1, sadness: 0.4, guilt: 0.3 },
     secrets: ["I once saw something I wasn't supposed to and I'm terrified someone will find out"],
-  }),
-];
+    inventory: [
+      { id: "item_ellis_1", label: "lucky coin", category: "trinket", emoji: "🪙", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+    ],
+  });
+
+  // ── Seed relationships ──
+  // Alice: likes Bob (intellectual kinship), finds Victor abrasive, trusts Mara (hasn't seen through her), worried about Ellis
+  alice.relationships = {
+    bob:    rel(0.35, 0, 0.4, 0.45, 0, 0, 0.4),
+    victor: rel(-0.15, 0, 0.25, 0.15, 0.15, 0, 0.35),
+    mara:   rel(0.2, 0, 0.3, 0.35, 0, 0, 0.25),
+    ellis:  rel(0.1, 0, 0.3, 0.3, 0, 0, 0.15),
+  };
+
+  // Bob: enjoys Alice's energy, suspicious of Mara, gentle with Ellis, respects Victor's mind grudgingly
+  bob.relationships = {
+    alice:  rel(0.3, 0, 0.45, 0.4, 0, 0, 0.4),
+    victor: rel(-0.1, 0, 0.4, 0.2, 0, 0, 0.3),
+    mara:   rel(-0.1, 0, 0.25, 0.15, 0, 0, 0.3),
+    ellis:  rel(0.15, 0, 0.3, 0.35, 0, 0, 0.2),
+  };
+
+  // Victor: secretly admires Alice (high respect, hidden affection), sees Bob as sparring partner, distrusts Mara, impatient with Ellis
+  victor.relationships = {
+    alice:  rel(0.25, 0.15, 0.6, 0.2, 0, 0, 0.45),
+    bob:    rel(0.05, 0, 0.4, 0.25, 0, 0, 0.3),
+    mara:   rel(-0.15, 0, 0.2, 0.1, 0, 0, 0.25),
+    ellis:  rel(-0.2, 0, 0.1, 0.15, 0, 0, 0.15),
+  };
+
+  // Mara: has studied everyone (high familiarity), targets Ellis (vulnerability), intrigued by Bob (can't read him), views Alice as easy
+  mara.relationships = {
+    alice:  rel(0.2, 0, 0.3, 0.3, 0, 0, 0.5),
+    bob:    rel(0.1, 0, 0.35, 0.2, 0, 0, 0.45),
+    victor: rel(-0.1, 0, 0.3, 0.1, 0.2, 0, 0.5),
+    ellis:  rel(0.2, 0, 0.2, 0.25, 0, 0, 0.55),
+  };
+
+  // Ellis: Bob feels safest, Mara feels wrong, Alice is overwhelming, Victor is terrifying
+  ellis.relationships = {
+    alice:  rel(0.05, 0, 0.3, 0.25, 0, 0, 0.2),
+    bob:    rel(0.15, 0, 0.35, 0.4, 0, 0, 0.25),
+    victor: rel(-0.25, 0, 0.2, 0.1, 0.4, 0, 0.2),
+    mara:   rel(-0.2, 0, 0.25, 0.1, 0.3, 0, 0.3),
+  };
+
+  // ── Seed memories ──
+  alice.shortTermMemory = [
+    seedMemory("Bob and I spent an hour comparing theories about migratory patterns. He made a joke about existential dread in butterflies that I'm still thinking about.", ["bob"], {
+      sentiment: 0.4, category: "social", interpretation: "He's one of the few people who can keep up with me and make me laugh at the same time.",
+    }),
+    seedMemory("Victor dismissed my theory about fungal networks in front of everyone. Called it 'charmingly naive.'", ["victor"], {
+      sentiment: -0.3, category: "conflict", interpretation: "He's brilliant but cruel. I don't understand why he has to tear things down instead of building on them.",
+    }),
+    seedMemory("Mara complimented my pressed flower collection so specifically — she noticed the labeling system I use. Most people don't look that closely.", ["mara"], {
+      sentiment: 0.2, category: "social", interpretation: "She pays attention. It felt nice to be seen, though I wonder if she's like that with everyone.",
+    }),
+  ];
+
+  bob.shortTermMemory = [
+    seedMemory("Alice got so excited about a rock she found that she nearly knocked over my tea. The rock did turn out to be interesting.", ["alice"], {
+      sentiment: 0.3, category: "routine", interpretation: "She's exhausting in the best possible way. I envy that kind of unguarded enthusiasm.",
+    }),
+    seedMemory("Mara asked me three times what I've been writing lately. Each time it felt less like curiosity and more like reconnaissance.", ["mara"], {
+      sentiment: -0.2, category: "social", interpretation: "She's fishing for something. I don't know what she'd do with personal information, but I don't want to find out.",
+    }),
+    seedMemory("Ellis sat near me in silence for twenty minutes and then apologized for 'being weird.' I told them silence is underrated.", ["ellis"], {
+      sentiment: 0.2, category: "social", interpretation: "They're wound so tight. But there's something honest about someone who doesn't pretend to be fine.",
+    }),
+  ];
+
+  victor.shortTermMemory = [
+    seedMemory("Alice made a point about symbiotic relationships in ecosystems that I couldn't counter. I changed the subject.", ["alice"], {
+      sentiment: -0.1, category: "conflict", interpretation: "She stumbles onto insights that I have to work for. It's infuriating. It's also fascinating.",
+    }),
+    seedMemory("Bob and I argued about whether free will is an illusion. He conceded nothing but bought me a drink afterward. Grudging respect.", ["bob"], {
+      sentiment: 0.1, category: "social", interpretation: "He won't fight dirty, which limits him. But he's sharper than he lets on.",
+    }),
+    seedMemory("Mara told me I was 'the most honest person she knows.' That's either a compliment or a trap.", ["mara"], {
+      sentiment: -0.15, category: "social", interpretation: "No one is that flattering without an agenda. I need to watch what I say around her.",
+    }),
+  ];
+
+  mara.shortTermMemory = [
+    seedMemory("Ellis flinched when I mentioned the old mill. They tried to cover it but I saw it. Something happened there.", ["ellis"], {
+      sentiment: 0.1, category: "discovery", interpretation: "Whatever Ellis is hiding, it's connected to the old mill. If I can find out what it is, they'll need me to keep it quiet.",
+    }),
+    seedMemory("Bob deflected every personal question I asked — smoothly, almost elegantly. He's hiding something but I can't tell what.", ["bob"], {
+      sentiment: -0.1, category: "social", interpretation: "He's the hardest one to read. That makes him either the least useful or the most dangerous.",
+      unresolved: true,
+    }),
+    seedMemory("Alice told me about her old colleague without any prompting. She carries guilt she doesn't even realize she's showing.", ["alice"], {
+      sentiment: 0.15, category: "social", interpretation: "Her guilt is a lever. She overcompensates with generosity — if I ever need a favor, she won't be able to say no.",
+    }),
+  ];
+
+  ellis.shortTermMemory = [
+    seedMemory("Mara was so nice to me yesterday it made my skin crawl. Nobody is that warm without wanting something.", ["mara"], {
+      sentiment: -0.25, category: "social", interpretation: "She knows something. Or she suspects something. Either way, every conversation with her feels like a trap.",
+    }),
+    seedMemory("I overheard Victor and Alice arguing near the square. Victor was louder but Alice held her ground. For a moment I envied her nerve.", ["victor", "alice"], {
+      sentiment: 0, type: "eavesdrop", category: "social", interpretation: "I wish I could stand up to people like that instead of just... watching from the edges.",
+    }),
+    seedMemory("Bob brought me tea without asking. Didn't make a big deal of it. Didn't ask anything in return.", ["bob"], {
+      sentiment: 0.3, category: "social", interpretation: "Maybe he's just kind. Maybe. I want to believe that but I've been wrong before.",
+      unresolved: true,
+    }),
+  ];
+
+  // ── Seed goals ──
+  alice.currentGoal = "investigate the unusual moss patterns near the eastern woods";
+  bob.currentGoal = "find a quiet spot to think about a new writing project";
+  victor.currentGoal = "prove that Alice's fungal network theory has a fatal flaw";
+  mara.currentGoal = "find out what happened at the old mill that Ellis is so afraid of";
+  ellis.currentGoal = "figure out whether Mara knows what I saw";
+
+  // ── Seed known secrets (cross-references) ──
+  // Mara has picked up hints about Alice's guilt (not the exact secret, but she senses it)
+  // Ellis overheard Victor's university rejection mentioned in passing
+  ellis.knownSecrets = {
+    victor: ["He was rejected from his dream university"],
+  };
+
+  return [alice, bob, victor, mara, ellis];
+})();
