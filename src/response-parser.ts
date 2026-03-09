@@ -161,12 +161,21 @@ function validate(obj: unknown): LLMResponse {
       ? o.justification
       : undefined;
 
+  const respectDelta = o.respect_delta != null ? clampRelDelta(toNumber(o.respect_delta, 0)) : undefined;
+  const trustDelta = o.trust_delta != null ? clampRelDelta(toNumber(o.trust_delta, 0)) : undefined;
+  const fearDelta = o.fear_delta != null ? clampRelDelta(toNumber(o.fear_delta, 0)) : undefined;
+  const debtDelta = o.debt_delta != null ? clampRelDelta(toNumber(o.debt_delta, 0)) : undefined;
+
   return {
     inner_thought: innerThought,
     speech: o.speech as string,
     emotion_delta: emotionDelta,
     relationship_delta: rd,
     affection_delta: ad,
+    respect_delta: respectDelta,
+    trust_delta: trustDelta,
+    fear_delta: fearDelta,
+    debt_delta: debtDelta,
     justification,
     intent,
     conversation_end: conversationEnd,
@@ -226,6 +235,10 @@ export function parseBatchLLMResponse(raw: string, validSpeakerIds: [string, str
       emotion_delta: validated.emotion_delta,
       relationship_delta: validated.relationship_delta,
       affection_delta: validated.affection_delta,
+      respect_delta: validated.respect_delta,
+      trust_delta: validated.trust_delta,
+      fear_delta: validated.fear_delta,
+      debt_delta: validated.debt_delta,
       justification: validated.justification,
       intent: validated.intent,
       mentioned_npcs: validated.mentioned_npcs,

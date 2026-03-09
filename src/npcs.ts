@@ -145,7 +145,87 @@ export interface RandomNpcFields {
   traits: string[];
   desires: string[];
   secrets: string[];
+  backstory: string;
   inventory: InventoryItem[];
+}
+
+// ── Backstory generation from random components ──
+
+const BACKSTORY_OPENERS = [
+  (name: string) => `${name} has always been the kind of person who`,
+  (name: string) => `People tend to underestimate ${name}, which is exactly how`,
+  (name: string) => `There's a restlessness in ${name} that`,
+  (name: string) => `${name} learned early on that`,
+  (name: string) => `If you asked ${name} what they want, they'd tell you one thing — but the truth is`,
+  (name: string) => `${name} carries themselves with`,
+  (name: string) => `Most people see only one side of ${name} —`,
+];
+
+const TRAIT_CONNECTORS: Record<string, string[]> = {
+  brooding: ["dwells on old wounds and unresolved questions", "finds it hard to let things go, turning memories over and over"],
+  playful: ["deflects anything serious with humor, though the jokes sometimes land too close to the truth", "uses lightness as armor, rarely letting anyone see what's underneath"],
+  stubborn: ["digs in harder the more they're pushed, treating compromise as a kind of defeat", "would rather be wrong and resolute than right and uncertain"],
+  gentle: ["moves through the world carefully, as if afraid of leaving marks", "treats even difficult people with a patience that sometimes looks like weakness"],
+  reckless: ["acts first and reckons with consequences only when they catch up", "chases intensity the way others chase safety"],
+  meticulous: ["notices what others overlook, which is both a gift and a burden", "organizes the world into systems because the alternative feels like chaos"],
+  dramatic: ["lives at full volume, turning minor events into grand narratives", "needs to be felt, not just heard"],
+  stoic: ["keeps everything locked behind a calm surface, making it impossible to tell when they're breaking", "has learned to endure by simply refusing to react"],
+  cynical: ["expects the worst from people and is rarely disappointed", "once believed in something earnestly, and the loss of that faith left a permanent edge"],
+  dreamy: ["lives half in a world of their own invention, drifting between what is and what could be", "sees possibility everywhere, which makes the real world feel insufficient"],
+  loyal: ["would walk through fire for the people they've chosen, which makes betrayal unforgivable", "attaches deeply and permanently, for better or worse"],
+  perceptive: ["reads people like weather patterns, sensing shifts others miss entirely", "sees too much, and what they see isn't always comfortable"],
+  calculating: ["weighs every interaction on a private ledger of advantage and cost", "never does anything without a reason, even when the reason is hidden"],
+  compassionate: ["feels others' pain as if it were their own, which is both beautiful and unsustainable", "can't walk past suffering without trying to fix it, even when fixing it isn't their job"],
+  anxious: ["lives in a state of anticipation, always bracing for the disaster that hasn't happened yet", "sees threats in shadows that others don't even notice"],
+  competitive: ["measures themselves against everyone around them, turning even casual interactions into contests", "needs to win not because the prize matters but because losing is intolerable"],
+  manipulative: ["learned that the easiest way to get what they want is to make others think it was their idea", "shapes situations with invisible hands, always three moves ahead"],
+};
+
+const DESIRE_BRIDGES: Record<string, string> = {
+  "find belonging": "What drives them most is a hunger to belong somewhere — really belong, not just be tolerated",
+  "prove themselves": "Underneath everything is a need to prove that they matter, that they're not the failure someone once told them they were",
+  "protect someone dear": "They carry a fierce protectiveness for someone they love, and that loyalty shapes every decision they make",
+  "uncover a hidden truth": "They're haunted by the feeling that something important is being hidden, and they won't rest until they find it",
+  "escape the past": "They're running from something — a place, a person, a version of themselves — and the running has become its own kind of prison",
+  "earn respect": "Respect is the currency they value above all others, and the lack of it cuts deeper than any insult",
+  "find inner peace": "They're searching for a quiet they've never actually known, a silence inside that would let them finally stop fighting",
+  "be feared by everyone": "They've decided that if they can't be loved, they'll settle for being feared — and fear, at least, is reliable",
+  "find true love": "Somewhere beneath the armor is a desperate, almost embarrassing hope that someone will see them — really see them — and stay",
+  "amass power quietly": "They gather influence the way a spider builds a web: patiently, invisibly, and with purpose",
+  "control the narrative": "They need to control how others see them, because the truth — whatever it is — feels too dangerous to leave unmanaged",
+};
+
+const SECRET_SHADOWS = [
+  "This secret sits at the center of their personality like a stone in a river — everything flows around it but nothing dislodges it.",
+  "They've built walls around this part of themselves, and the effort of maintaining those walls has become exhausting.",
+  "If anyone found out, everything would change. So they watch, and they guard, and they perform normalcy.",
+  "The guilt doesn't fade. It just becomes familiar, like background noise they've learned to live with.",
+  "They sometimes wonder if keeping this secret has cost them more than revealing it ever would have.",
+];
+
+export function generateBackstory(name: string, traits: string[], desires: string[], secrets: string[]): string {
+  const opener = pick(BACKSTORY_OPENERS)(name);
+
+  // Find a trait connector for the first trait that has one, or use a generic one
+  const traitDesc = traits
+    .map(t => TRAIT_CONNECTORS[t.toLowerCase()])
+    .filter(Boolean)
+    .map(options => pick(options!))
+    .slice(0, 2);
+
+  const traitPart = traitDesc.length > 0
+    ? traitDesc.join(". They ")
+    : `is ${traits.slice(0, 2).join(" and ")}, though these qualities pull in different directions`;
+
+  // Find a desire bridge for the first matching desire
+  const desireKey = desires.find(d => DESIRE_BRIDGES[d.toLowerCase()]);
+  const desirePart = desireKey
+    ? DESIRE_BRIDGES[desireKey.toLowerCase()]
+    : `What they want most is to ${desires[0]?.toLowerCase() ?? "find their place"}, though they might not admit it`;
+
+  const secretPart = secrets.length > 0 ? pick(SECRET_SHADOWS) : "";
+
+  return `${opener} ${traitPart}. ${desirePart}. ${secretPart}`.trim();
 }
 
 export function randomizeFields(existingIds: string[]): RandomNpcFields {
@@ -162,13 +242,18 @@ export function randomizeFields(existingIds: string[]): RandomNpcFields {
     }
   }
 
+  const traits = pickN(RANDOM_TRAITS, 2, 4);
+  const desires = pickN(RANDOM_DESIRES, 1, 3);
+  const secrets = pickN(RANDOM_SECRETS, 1, 2);
+
   return {
     name,
     avatar: pick(AVATAR_OPTIONS),
     color: pick(COLOR_SWATCHES),
-    traits: pickN(RANDOM_TRAITS, 2, 4),
-    desires: pickN(RANDOM_DESIRES, 1, 3),
-    secrets: pickN(RANDOM_SECRETS, 1, 2),
+    traits,
+    desires,
+    secrets,
+    backstory: generateBackstory(name, traits, desires, secrets),
     inventory: randomizeInventory(),
   };
 }
@@ -193,9 +278,10 @@ export function randomizeNpc(existingIds: string[]): NPC {
   const personalityTraits = pickN(RANDOM_TRAITS, 2, 4);
   const coreDesires = pickN(RANDOM_DESIRES, 1, 3);
   const secrets = pickN(RANDOM_SECRETS, 1, 2);
+  const backstory = generateBackstory(name, personalityTraits, coreDesires, secrets);
 
   const inventory = randomizeInventory();
-  return createNpc({ id, name, avatar, color, personalityTraits, coreDesires, secrets, inventory });
+  return createNpc({ id, name, avatar, color, personalityTraits, coreDesires, backstory, secrets, inventory });
 }
 
 function defaultEmotionalState(): EmotionalState {
@@ -209,6 +295,7 @@ export function createNpc(partial: {
   color: string;
   personalityTraits: string[];
   coreDesires: string[];
+  backstory?: string;
   emotionalState?: Partial<EmotionalState>;
   secrets?: string[];
   inventory?: InventoryItem[];
@@ -216,6 +303,7 @@ export function createNpc(partial: {
 }): NPC {
   return {
     ...partial,
+    backstory: partial.backstory,
     emotionalState: {
       ...defaultEmotionalState(),
       ...(partial.emotionalState ?? {}),
@@ -244,6 +332,7 @@ export const initialNpcs: NPC[] = [
       "share knowledge",
       "build friendships",
     ],
+    backstory: "Alice is a self-taught naturalist with an infectious sense of wonder. She sees connections everywhere — between the pattern of moss on a stone and the spiral of a snail shell, between a stranger's offhand comment and a half-remembered theorem. This relentless curiosity makes her a delightful conversationalist but an exhausting one; she'll derail any topic that catches her imagination. Beneath the enthusiasm, she carries guilt from sabotaging a colleague whose work threatened to overshadow hers — a betrayal that contradicts her self-image as someone who celebrates others' discoveries. She compensates by being aggressively generous with her own knowledge, as if sharing enough could erase what she took.",
     secrets: ["I once sabotaged a colleague's experiment because I was jealous of their results"],
   }),
   createNpc({
@@ -257,6 +346,7 @@ export const initialNpcs: NPC[] = [
       "quiet companionship",
       "intellectual stimulation",
     ],
+    backstory: "Bob is the kind of person who reads Camus at breakfast and then makes a pun about it. He hides genuine warmth behind a wall of sardonic observations, not because he's afraid of connection but because he finds earnestness embarrassing — mostly his own. He wrote a novel once, under a fake name, and it became a bestseller. The success terrified him more than failure would have, so he told no one and went back to his quiet life. He craves intellectual companionship but sets the bar impossibly high, then feels lonely when people can't clear it. His kindness emerges in small, almost invisible gestures — he'll remember exactly how you take your tea but pretend he guessed.",
     secrets: ["I wrote a bestselling novel under a pseudonym and never told anyone"],
   }),
   createNpc({
@@ -276,6 +366,7 @@ export const initialNpcs: NPC[] = [
       "expose what he sees as others' naivety",
       "win every argument",
     ],
+    backstory: "Victor treats every conversation like a debate he intends to win. He was rejected from the university he'd built his entire identity around, and the wound never healed — it just calcified into a need to prove, constantly, that the rejection was their mistake. He's genuinely brilliant, but his brilliance is weaponized: he finds the weak point in any argument and drives into it without mercy. What makes Victor complicated is that he secretly admires people who don't play his game. Alice's unselfconscious curiosity fascinates him precisely because he can't replicate it. He'd never admit this. Admitting it would mean admitting that intelligence isn't the only thing that matters, and that's the one argument he can't afford to lose.",
     emotionalState: { anger: 0.6, trust: 0.2, joy: 0.3, curiosity: 0.5, disgust: 0.2 },
     secrets: [
       "I secretly admire Alice's intellect but would never admit it",
@@ -299,6 +390,7 @@ export const initialNpcs: NPC[] = [
       "be seen as everyone's closest confidante",
       "subtly turn people against each other",
     ],
+    backstory: "Mara learned early that the right words in the right ear could reshape any social landscape. She collects people's vulnerabilities the way others collect stamps — catalogued, organized, and ready to deploy. Everyone thinks they're her closest friend; no one is. She flatters with surgical precision, always calibrating exactly how much warmth will lower someone's guard. The persona is so polished that even Mara sometimes forgets where the performance ends and she begins. In rare, unguarded moments she feels a hollow ache — the suspicion that she's constructed herself so thoroughly that there's nothing real underneath. She keeps a journal of everyone's weaknesses, and the most devastating entry is her own.",
     emotionalState: { anger: 0.1, trust: 0.3, fear: 0.2, joy: 0.6, curiosity: 0.6 },
     secrets: [
       "I keep a journal of everyone's weaknesses",
@@ -322,6 +414,7 @@ export const initialNpcs: NPC[] = [
       "prepare for the worst",
       "find someone trustworthy (but doubt everyone)",
     ],
+    backstory: "Ellis sees threats that others miss — or imagines them so vividly that the distinction stops mattering. They witnessed something once, something they weren't supposed to see, and the fear of being found out rewired their entire personality. Now every friendly gesture carries a possible ulterior motive, every silence hides a judgment. The tragedy is that Ellis's suspicion is often perceptive: they really do notice the micro-expression that betrays a lie, the slight hesitation before a deflection. But they can't distinguish genuine danger signals from the noise of their own anxiety. They desperately want to trust someone — anyone — but every time they get close, their mind manufactures a reason to pull back. The loneliest kind of intelligence is the kind that sees too much.",
     emotionalState: { anger: 0.2, trust: 0.15, fear: 0.7, joy: 0.1, sadness: 0.4, guilt: 0.3 },
     secrets: ["I once saw something I wasn't supposed to and I'm terrified someone will find out"],
   }),

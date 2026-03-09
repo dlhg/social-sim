@@ -760,6 +760,10 @@ export class ConversationManager {
       emotion_delta: turn.emotion_delta,
       relationship_delta: turn.relationship_delta,
       affection_delta: turn.affection_delta,
+      respect_delta: turn.respect_delta,
+      trust_delta: turn.trust_delta,
+      fear_delta: turn.fear_delta,
+      debt_delta: turn.debt_delta,
       justification: turn.justification,
       intent: turn.intent,
       conversation_end: false,
@@ -870,6 +874,8 @@ export class ConversationManager {
     this.store.batch(() => {
       this.store.decayEmotions(npcAId);
       this.store.decayEmotions(npcBId);
+      this.store.incrementFamiliarity(npcAId, npcBId);
+      this.store.incrementFamiliarity(npcBId, npcAId);
       this.memory.decayAllRecency();
     });
 
@@ -1698,11 +1704,26 @@ export class ConversationManager {
     }
     this.cumulativeRelDeltas.set(listenerKey, listenerCumulative + listenerDelta);
 
+    // Build extras from new relationship dimensions
+    const speakerExtras = {
+      respect: response.respect_delta ?? 0,
+      trust: response.trust_delta ?? 0,
+      fear: response.fear_delta ?? 0,
+      debt: response.debt_delta ?? 0,
+    };
+    const listenerExtras = {
+      respect: (response.respect_delta ?? 0) * 0.5,
+      trust: (response.trust_delta ?? 0) * 0.5,
+      fear: (response.fear_delta ?? 0) * 0.3,
+      debt: -(response.debt_delta ?? 0) * 0.5, // debt is inverse for listener
+    };
+
     this.store.applyRelationshipDelta(
       speaker.id,
       listener.id,
       speakerDelta,
-      speakerAffDelta
+      speakerAffDelta,
+      speakerExtras
     );
 
     // Listener gets dampened mirror of relationship delta
@@ -1710,7 +1731,8 @@ export class ConversationManager {
       listener.id,
       speaker.id,
       listenerDelta,
-      listenerAffDelta
+      listenerAffDelta,
+      listenerExtras
     );
 
     // Per-turn memories are only stored for significant events (secrets, promises,

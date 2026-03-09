@@ -65,6 +65,10 @@ RULES FOR DELTAS:
 - emotion_delta values range from -0.4 to +0.4 (emotional shifts per turn). Emotions: anger, trust, fear, joy, sadness, curiosity, disgust, guilt. Most turns should have small shifts (-0.1 to +0.1). Reserve large deltas for genuinely significant moments.
 - relationship_delta ranges from -0.2 to +0.2 (general regard — how much you like/dislike them). Most turns should stay within -0.05 to +0.05.
 - affection_delta ranges from -0.2 to +0.2 (romantic/deep attraction — set this if you feel a romantic pull, warmth, or infatuation toward this person. Leave at 0 if feelings are purely platonic)
+- respect_delta (optional): -0.2 to +0.2 — how much your admiration for their competence or character shifts
+- trust_delta (optional): -0.2 to +0.2 — how much you trust THIS SPECIFIC PERSON (separate from your general trust disposition). Shifts based on their words and actions.
+- fear_delta (optional): -0.2 to +0.2 — how intimidated you feel by them
+- debt_delta (optional): -0.2 to +0.2 — social obligation shifts. Positive means you now owe them more (they did you a favor). Negative means they owe you.
 - justification: if any single emotion_delta value exceeds 0.15 in magnitude or relationship_delta exceeds 0.1, you MUST include a justification explaining why. Example: "justification": "She just revealed she sabotaged my work"
 - Set conversation_end to true only if you want to end the conversation
 - mentioned_npcs is optional. Only include if you talk about someone not in this conversation. Format: [{"npc_id": "id", "sentiment": 0.3, "what_was_said": "brief summary"}]
@@ -208,16 +212,20 @@ export function buildSystemPrompt(
     ? `\nINVENTORY (items you're carrying):\n${speaker.inventory.map(i => `- ${i.emoji} ${i.label}`).join("\n")}\nYou can reference these items in conversation — offer them, talk about how you got them, etc.`
     : "";
 
+  const identityBlock = speaker.backstory
+    ? `WHO YOU ARE:\n${speaker.backstory}`
+    : `PERSONALITY: ${speaker.personalityTraits.join(", ")}\nCORE DESIRES: ${speaker.coreDesires.join(", ")}`;
+
   return `You are ${speaker.name}.
 
-PERSONALITY: ${speaker.personalityTraits.join(", ")}
-CORE DESIRES: ${speaker.coreDesires.join(", ")}
+${identityBlock}
 CURRENT EMOTIONAL STATE: ${emotionSummary}
 CURRENT GOAL: ${speaker.currentGoal ?? "none"}
 ${secretsBlock}${inventoryBlock}
 
 You are talking to ${listener.name}.
 YOUR RELATIONSHIP WITH ${listener.name}: ${relLabel} (regard: ${relationship.toFixed(2)})${affection > 0.15 ? `\nROMANTIC FEELINGS: ${describeAffection(affection)}` : ""}
+${describeRelationshipDimensions(speaker, listener)}
 ${trajectoryBlock}
 ${locationBlock}
 ${timeBlock}
@@ -427,24 +435,31 @@ export function buildBatchConversationMessages(
   const { direct: memDirectA, gossip: memGossipA, aboutPartner: memAboutA } = formatMemoryLines(memA);
   const { direct: memDirectB, gossip: memGossipB, aboutPartner: memAboutB } = formatMemoryLines(memB);
 
+  const identityA = npcA.backstory
+    ? `Who they are: ${npcA.backstory}`
+    : `Personality: ${npcA.personalityTraits.join(", ")}\nCore desires: ${npcA.coreDesires.join(", ")}`;
+  const identityB = npcB.backstory
+    ? `Who they are: ${npcB.backstory}`
+    : `Personality: ${npcB.personalityTraits.join(", ")}\nCore desires: ${npcB.coreDesires.join(", ")}`;
+
   const system = `You are a dialogue writer. Generate a complete conversation between two characters.
 
 CHARACTER A: ${npcA.name} (id: "${npcA.id}")
-Personality: ${npcA.personalityTraits.join(", ")}
-Core desires: ${npcA.coreDesires.join(", ")}
+${identityA}
 Emotional state: ${emotionsA}
 Current goal: ${npcA.currentGoal ?? "none"}${secretsA}${inventoryA}${plansBlockA}
 Relationship with ${npcB.name}: ${relationshipLabel(relAtoB)} (regard: ${relAtoB.toFixed(2)})${affAtoB > 0.15 ? ` | Romantic: ${describeAffection(affAtoB)}` : ""}
+${describeRelationshipDimensions(npcA, npcB)}
 Memories of ${npcB.name}:
 ${memDirectA || "(none)"}${memAboutA ? `\nThings heard about ${npcB.name}:\n${memAboutA}` : ""}${memGossipA ? `\nGossip heard:\n${memGossipA}` : ""}
 ${guidanceA.length > 0 ? `Behavioral guidance for ${npcA.name}:\n${guidanceA.map(g => `- ${g}`).join("\n")}` : ""}${actionHintsA}
 
 CHARACTER B: ${npcB.name} (id: "${npcB.id}")
-Personality: ${npcB.personalityTraits.join(", ")}
-Core desires: ${npcB.coreDesires.join(", ")}
+${identityB}
 Emotional state: ${emotionsB}
 Current goal: ${npcB.currentGoal ?? "none"}${secretsB}${inventoryB}${plansBlockB}
 Relationship with ${npcA.name}: ${relationshipLabel(relBtoA)} (regard: ${relBtoA.toFixed(2)})${affBtoA > 0.15 ? ` | Romantic: ${describeAffection(affBtoA)}` : ""}
+${describeRelationshipDimensions(npcB, npcA)}
 Memories of ${npcA.name}:
 ${memDirectB || "(none)"}${memAboutB ? `\nThings heard about ${npcA.name}:\n${memAboutB}` : ""}${memGossipB ? `\nGossip heard:\n${memGossipB}` : ""}
 ${guidanceB.length > 0 ? `Behavioral guidance for ${npcB.name}:\n${guidanceB.map(g => `- ${g}`).join("\n")}` : ""}${actionHintsB}
@@ -484,6 +499,10 @@ RULES FOR DELTAS:
 - emotion_delta values: -0.4 to +0.4 per turn. Most turns should have small shifts (-0.1 to +0.1). Reserve large deltas for genuinely significant moments.
 - relationship_delta: -0.2 to +0.2 per turn. Most turns should stay within -0.05 to +0.05.
 - affection_delta: -0.2 to +0.2 (only if romantic feelings are relevant)
+- respect_delta (optional): -0.2 to +0.2 — admiration for competence/character
+- trust_delta (optional): -0.2 to +0.2 — trust of this specific person
+- fear_delta (optional): -0.2 to +0.2 — intimidation level
+- debt_delta (optional): -0.2 to +0.2 — social obligation (positive = I owe them more)
 - justification: if any single emotion_delta exceeds 0.15 in magnitude or relationship_delta exceeds 0.1, you MUST include a justification explaining why
 - inner_thought: private reasoning that is NEVER spoken. Use it to consider the other person's motives, hidden agendas, or your own strategy. This shapes more intentional speech.
 - mentioned_npcs: only if talking about someone not in this conversation. Format: [{"npc_id": "id", "sentiment": 0.3, "what_was_said": "summary"}]
@@ -514,13 +533,16 @@ export function buildReflectionMessages(
   language = "English",
 ): ChatMessage[] {
   const emotionSummary = describeEmotions(npc.emotionalState);
+  const reflectionIdentity = npc.backstory
+    ? `WHO YOU ARE:\n${npc.backstory}`
+    : `PERSONALITY: ${npc.personalityTraits.join(", ")}\nCORE DESIRES: ${npc.coreDesires.join(", ")}`;
+
   return [
     {
       role: "system",
       content: `You are ${npc.name}. You just finished a conversation with ${otherNpcName}.
 
-PERSONALITY: ${npc.personalityTraits.join(", ")}
-CORE DESIRES: ${npc.coreDesires.join(", ")}
+${reflectionIdentity}
 CURRENT EMOTIONAL STATE: ${emotionSummary}
 
 Here's what happened in the conversation:
@@ -945,6 +967,31 @@ function relationshipBehavioralGuidance(
 }
 
 // ── Relationship label ──────────────────────────
+
+function describeRelationshipDimensions(speaker: NPC, listener: NPC): string {
+  const rel = speaker.relationships[listener.id];
+  if (!rel) return "";
+  const parts: string[] = [];
+  if (rel.respect !== undefined) {
+    if (rel.respect >= 0.7) parts.push(`You deeply respect ${listener.name}.`);
+    else if (rel.respect <= 0.15) parts.push(`You have little respect for ${listener.name}.`);
+  }
+  if (rel.trust !== undefined) {
+    if (rel.trust >= 0.7) parts.push(`You trust ${listener.name} with sensitive matters.`);
+    else if (rel.trust <= 0.15) parts.push(`You do not trust ${listener.name} at all.`);
+  }
+  if (rel.fear !== undefined && rel.fear >= 0.3) {
+    parts.push(`${listener.name} intimidates you.`);
+  }
+  if (rel.debt !== undefined && Math.abs(rel.debt) >= 0.3) {
+    parts.push(rel.debt > 0 ? `You feel you owe ${listener.name}.` : `${listener.name} owes you.`);
+  }
+  if (rel.familiarity !== undefined) {
+    if (rel.familiarity >= 0.7) parts.push(`You know each other very well.`);
+    else if (rel.familiarity <= 0.15) parts.push(`You barely know each other.`);
+  }
+  return parts.join(" ");
+}
 
 function relationshipLabel(value: number): string {
   if (value > 0.6) return "close friend";

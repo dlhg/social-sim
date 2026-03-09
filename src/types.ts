@@ -14,6 +14,11 @@ export interface EmotionalState {
 export interface RelationshipState {
   regard: number; // -1 to 1 (general like/dislike)
   affection: number; // 0 to 1 (romantic attraction)
+  respect: number; // 0 to 1 (admiration for competence/character)
+  trust: number; // 0 to 1 (per-relationship trust, separate from emotional trust axis)
+  fear: number; // 0 to 1 (intimidation, power imbalance)
+  debt: number; // -1 to 1 (social obligation; positive = I owe them)
+  familiarity: number; // 0 to 1 (how well they know each other)
 }
 
 // ── Actions ───────────────────────────────────
@@ -110,6 +115,7 @@ export interface NPC {
   color: string;
   personalityTraits: string[];
   coreDesires: string[];
+  backstory?: string; // narrative paragraph — preferred over traits/desires for prompts
   emotionalState: EmotionalState;
   relationships: Record<string, RelationshipState>; // NPC id -> relationship state
   shortTermMemory: MemoryEntry[];
@@ -156,6 +162,10 @@ export interface LLMResponse {
   emotion_delta: EmotionalState; // deltas, can be negative
   relationship_delta: number; // -1 to 1
   affection_delta: number; // -0.1 to 0.1
+  respect_delta?: number; // -0.2 to 0.2
+  trust_delta?: number; // -0.2 to 0.2 (per-relationship trust)
+  fear_delta?: number; // -0.2 to 0.2
+  debt_delta?: number; // -0.2 to 0.2
   justification?: string; // required when deltas are large
   intent: string;
   conversation_end: boolean;
@@ -174,6 +184,10 @@ export interface BatchTurnData {
   emotion_delta: EmotionalState;
   relationship_delta: number;
   affection_delta: number;
+  respect_delta?: number;
+  trust_delta?: number;
+  fear_delta?: number;
+  debt_delta?: number;
   justification?: string; // required when deltas are large
   intent: string;
   mentioned_npcs?: MentionedNpc[];

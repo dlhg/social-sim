@@ -50,20 +50,49 @@ export class NpcStore {
     this.notify();
   }
 
+  private ensureRelationship(npc: NPC, targetId: string): RelationshipState {
+    if (!npc.relationships[targetId]) {
+      npc.relationships[targetId] = {
+        regard: 0, affection: 0, respect: 0.3, trust: 0.3,
+        fear: 0, debt: 0, familiarity: 0,
+      };
+    }
+    // Backfill new fields for existing relationships created before the upgrade
+    const rel = npc.relationships[targetId];
+    if (rel.respect === undefined) rel.respect = 0.3;
+    if (rel.trust === undefined) rel.trust = 0.3;
+    if (rel.fear === undefined) rel.fear = 0;
+    if (rel.debt === undefined) rel.debt = 0;
+    if (rel.familiarity === undefined) rel.familiarity = 0;
+    return rel;
+  }
+
   applyRelationshipDelta(
     npcId: string,
     targetId: string,
     delta: number,
-    affectionDelta = 0
+    affectionDelta = 0,
+    extras?: { respect?: number; trust?: number; fear?: number; debt?: number }
   ): void {
     const npc = this.npcs.get(npcId);
     if (!npc) { console.warn(`[npc-store] applyRelationshipDelta: NPC "${npcId}" not found`); return; }
-    if (!npc.relationships[targetId]) {
-      npc.relationships[targetId] = { regard: 0, affection: 0 };
-    }
-    const rel = npc.relationships[targetId];
+    const rel = this.ensureRelationship(npc, targetId);
     rel.regard = clamp(rel.regard + delta, -1, 1);
     rel.affection = clamp(rel.affection + affectionDelta, 0, 1);
+    if (extras) {
+      if (extras.respect) rel.respect = clamp(rel.respect + extras.respect, 0, 1);
+      if (extras.trust) rel.trust = clamp(rel.trust + extras.trust, 0, 1);
+      if (extras.fear) rel.fear = clamp(rel.fear + extras.fear, 0, 1);
+      if (extras.debt) rel.debt = clamp(rel.debt + extras.debt, -1, 1);
+    }
+    this.notify();
+  }
+
+  incrementFamiliarity(npcId: string, targetId: string, amount = 0.05): void {
+    const npc = this.npcs.get(npcId);
+    if (!npc) return;
+    const rel = this.ensureRelationship(npc, targetId);
+    rel.familiarity = clamp(rel.familiarity + amount, 0, 1);
     this.notify();
   }
 

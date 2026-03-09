@@ -11,6 +11,7 @@ export interface PremadeTemplate {
   color: string;
   personalityTraits: string[];
   coreDesires: string[];
+  backstory?: string;
   secrets: string[];
   inventory: InventoryItem[];
   emotionalState?: Partial<EmotionalState>;
@@ -63,6 +64,7 @@ export function premadeTemplateToNpc(template: PremadeTemplate): NPC {
     color: template.color,
     personalityTraits: [...template.personalityTraits],
     coreDesires: [...template.coreDesires],
+    backstory: template.backstory,
     secrets: [...template.secrets],
     inventory: template.inventory.map((item) => ({ ...item })),
     emotionalState: template.emotionalState,
@@ -78,6 +80,7 @@ export function npcToPremadeTemplate(npc: NPC): PremadeTemplate {
     color: npc.color,
     personalityTraits: [...npc.personalityTraits],
     coreDesires: [...npc.coreDesires],
+    backstory: npc.backstory,
     secrets: [...npc.secrets],
     inventory: npc.inventory.map((item) => ({
       ...item,

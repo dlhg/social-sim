@@ -250,6 +250,15 @@ export function NpcInspector({
               </ul>
             </div>
 
+            {selected.backstory && (
+              <div className="npc-section">
+                <div className="section-label">Backstory</div>
+                <p style={{ margin: 0, fontSize: "0.85em", lineHeight: 1.5, opacity: 0.85 }}>
+                  {selected.backstory}
+                </p>
+              </div>
+            )}
+
             <div className="npc-section">
               <div className="section-label">Emotional State</div>
               <div className="emotion-bars">
@@ -314,6 +323,13 @@ export function NpcInspector({
                           {"♥".repeat(Math.min(3, Math.ceil(affection * 3)))}
                         </span>
                       )}
+                      <span className="rel-badges" style={{ display: "flex", gap: "3px", flexWrap: "wrap", marginTop: "2px" }}>
+                        {(relState?.respect ?? 0) >= 0.6 && <span title={`Respect: ${(relState?.respect ?? 0).toFixed(2)}`} style={{ fontSize: "0.7em", opacity: 0.7 }}>⭐</span>}
+                        {(relState?.trust ?? 0) >= 0.6 && <span title={`Trust: ${(relState?.trust ?? 0).toFixed(2)}`} style={{ fontSize: "0.7em", opacity: 0.7 }}>🤝</span>}
+                        {(relState?.fear ?? 0) >= 0.3 && <span title={`Fear: ${(relState?.fear ?? 0).toFixed(2)}`} style={{ fontSize: "0.7em", opacity: 0.7 }}>😨</span>}
+                        {Math.abs(relState?.debt ?? 0) >= 0.3 && <span title={`Debt: ${(relState?.debt ?? 0).toFixed(2)}`} style={{ fontSize: "0.7em", opacity: 0.7 }}>{(relState?.debt ?? 0) > 0 ? "📋" : "📌"}</span>}
+                        {(relState?.familiarity ?? 0) >= 0.5 && <span title={`Familiarity: ${(relState?.familiarity ?? 0).toFixed(2)}`} style={{ fontSize: "0.7em", opacity: 0.7 }}>👁️</span>}
+                      </span>
                     </div>
                   );
                 })}

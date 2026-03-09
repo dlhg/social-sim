@@ -42,6 +42,9 @@ export function NpcCreator({
   const [desires, setDesires] = useState(
     initialNpc?.coreDesires.join(", ") ?? ""
   );
+  const [backstory, setBackstory] = useState(
+    initialNpc?.backstory ?? ""
+  );
   const [secrets, setSecrets] = useState(
     initialNpc?.secrets.join("\n") ?? ""
   );
@@ -125,6 +128,7 @@ export function NpcCreator({
     setColor(r.color);
     setTraits(r.traits.join(", "));
     setDesires(r.desires.join(", "));
+    setBackstory(r.backstory);
     setSecrets(r.secrets.join("\n"));
     setInventory(r.inventory);
     setError("");
@@ -469,6 +473,7 @@ export function NpcCreator({
       color,
       personalityTraits: parsedTraits,
       coreDesires: parsedDesires,
+      backstory: backstory.trim() || undefined,
       secrets: parsedSecrets,
       inventory,
       emotionalState: emotionalStateOverride,
@@ -557,6 +562,15 @@ export function NpcCreator({
             setError("");
           }}
           placeholder="e.g. uncover the truth, be left alone"
+        />
+
+        <label>Backstory (narrative paragraph — shapes how the character speaks and thinks)</label>
+        <textarea
+          value={backstory}
+          onChange={(e) => setBackstory(e.target.value)}
+          placeholder="A narrative paragraph describing who this character is, what drives them, and their contradictions..."
+          rows={4}
+          className="secrets-textarea"
         />
 
         <label>Secrets (one per line, optional)</label>
