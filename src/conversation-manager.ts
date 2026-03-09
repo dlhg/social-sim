@@ -172,9 +172,14 @@ export class ConversationManager {
   private llmAbort: AbortController | null = null;
   private llmStartedAt: number | null = null;
 
-  // TTS prefetch slot (runs independently from LLM)
-  private ttsPairIds: [string, string] | null = null;
-  private ttsStartedAt: number | null = null;
+  // TTS prefetch tracking (multiple can run concurrently)
+  private ttsInFlight = new Map<string, {
+    pairIds: [string, string];
+    turns: BatchTurnData[];
+    convType: ConversationType;
+    llmMs: number;
+    startedAt: number;
+  }>();
 
   // Rate limit backoff — don't retry LLM until this timestamp
   private llmBackoffUntil = 0;
@@ -191,10 +196,7 @@ export class ConversationManager {
   private llmDurations: number[] = [];
   private ttsDurations: number[] = [];
 
-  // TTS-in-progress conversation (LLM done, audio generating)
-  private ttsConvTurns: BatchTurnData[] | null = null;
-  private ttsConvType: ConversationType = "casual";
-  private ttsConvLlmMs = 0;
+  // (TTS-in-progress state moved into ttsInFlight map above)
 
   constructor(
     private store: NpcStore,
@@ -242,22 +244,22 @@ export class ConversationManager {
     // Build pipeline list: TTS-in-progress conversations + fully ready conversations
     const preparedConversations: PreparedConversationInfo[] = [];
 
-    // Show TTS-in-progress conversation first (LLM done, audio generating)
-    if (this.ttsPairIds && this.ttsConvTurns) {
+    // Show all TTS-in-progress conversations (LLM done, audio generating)
+    for (const [, info] of this.ttsInFlight) {
       preparedConversations.push({
-        npcAName: this.npcName(this.ttsPairIds[0]),
-        npcBName: this.npcName(this.ttsPairIds[1]),
-        convType: this.ttsConvType,
-        turnCount: this.ttsConvTurns.length,
-        speeches: this.ttsConvTurns.map(t => t.speech),
-        speakerNames: this.ttsConvTurns.map(t => this.npcName(t.speaker_id)),
+        npcAName: this.npcName(info.pairIds[0]),
+        npcBName: this.npcName(info.pairIds[1]),
+        convType: info.convType,
+        turnCount: info.turns.length,
+        speeches: info.turns.map(t => t.speech),
+        speakerNames: info.turns.map(t => this.npcName(t.speaker_id)),
         preparedAt: 0,
         ageMs: 0,
         maxAgeMs: this.PREPARED_MAX_AGE_MS,
-        llmDurationMs: this.ttsConvLlmMs,
+        llmDurationMs: info.llmMs,
         ttsDurationMs: 0,
         phase: "generating_tts",
-        ttsElapsedMs: this.ttsStartedAt ? now - this.ttsStartedAt : 0,
+        ttsElapsedMs: now - info.startedAt,
       });
     }
 
@@ -1067,11 +1069,15 @@ export class ConversationManager {
     this.kickNextLlm();
 
     // ── Phase 2: TTS prefetch (runs independently, doesn't block next LLM) ──
-    this.ttsPairIds = [npcAId, npcBId];
-    this.ttsStartedAt = Date.now();
-    this.ttsConvTurns = turns;
-    this.ttsConvType = convType;
-    this.ttsConvLlmMs = llmDurationMs;
+    const pKey = this.pairKey(npcAId, npcBId);
+    const ttsStart = Date.now();
+    this.ttsInFlight.set(pKey, {
+      pairIds: [npcAId, npcBId],
+      turns,
+      convType,
+      llmMs: llmDurationMs,
+      startedAt: ttsStart,
+    });
 
     let audioBuffers: (ArrayBuffer | null)[] = [];
     if (this.ttsService) {
@@ -1087,11 +1093,9 @@ export class ConversationManager {
       audioBuffers = await Promise.all(promises);
     }
 
-    const ttsDurationMs = Date.now() - (this.ttsStartedAt ?? Date.now());
+    const ttsDurationMs = Date.now() - ttsStart;
     this.ttsDurations.push(ttsDurationMs);
-    this.ttsPairIds = null;
-    this.ttsStartedAt = null;
-    this.ttsConvTurns = null;
+    this.ttsInFlight.delete(pKey);
 
     if (!this.running) return;
 
@@ -1112,7 +1116,7 @@ export class ConversationManager {
 
   /** Number of conversations ahead of playback (TTS-in-progress + ready queue). */
   private pipelineDepth(): number {
-    return this.preparedConversations.length + (this.ttsPairIds ? 1 : 0);
+    return this.preparedConversations.length + this.ttsInFlight.size;
   }
 
   private readonly MAX_PIPELINE_DEPTH = 3;
@@ -1188,7 +1192,7 @@ export class ConversationManager {
     // Skip pairs that already have a prepared conversation or are being TTS'd
     const preparedPairKeys = new Set([
       ...this.preparedConversations.map(p => this.pairKey(p.npcAId, p.npcBId)),
-      ...(this.ttsPairIds ? [this.pairKey(this.ttsPairIds[0], this.ttsPairIds[1])] : []),
+      ...this.ttsInFlight.keys(),
     ]);
 
     const now = Date.now();
