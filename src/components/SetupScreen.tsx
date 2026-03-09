@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { randomizeNpc } from "../npcs";
 import { NpcCreator } from "./NpcCreator";
 import type { NPC } from "../types";
