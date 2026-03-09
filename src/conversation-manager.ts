@@ -895,7 +895,8 @@ export class ConversationManager {
     });
 
     // ── Play prepared conversations ──
-    // Director fully orchestrates conversations — play the oldest eligible one immediately.
+    // Director plays the oldest eligible conversation, but only when the NPCs are close enough.
+    // Seek overrides keep them walking toward each other until proximity is met.
     if (!this.activeSession && this.preparedConversations.length > 0) {
       if (now - this.lastConversationEnd < this.GLOBAL_COOLDOWN_MS) return;
       for (let i = 0; i < this.preparedConversations.length; i++) {
@@ -903,6 +904,16 @@ export class ConversationManager {
         const pKey = this.pairKey(p.npcAId, p.npcBId);
         const lastTime = this.cooldowns.get(pKey) ?? 0;
         if (now - lastTime < this.COOLDOWN_MS) continue;
+
+        // Wait for NPCs to be near each other before playing
+        if (this.worldSim) {
+          const posA = this.worldSim.getNpcPosition(p.npcAId);
+          const posB = this.worldSim.getNpcPosition(p.npcBId);
+          if (posA && posB) {
+            const dist = Math.abs(posA.x - posB.x) + Math.abs(posA.y - posB.y);
+            if (dist > 5) continue; // still walking toward each other
+          }
+        }
 
         this.preparedConversations.splice(i, 1);
         this.preparedConsumed++;
