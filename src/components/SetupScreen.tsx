@@ -64,6 +64,7 @@ export function SetupScreen({
 }: SetupScreenProps) {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [creatorOpen, setCreatorOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [customPremades, setCustomPremades] = useState<PremadeTemplate[]>(
     () => {
       ensurePremadeSeeded();
@@ -123,40 +124,51 @@ export function SetupScreen({
     ...roster.map((n) => n.id),
   ];
 
+  const lang = language.toLowerCase().trim();
+  const isEnglish = lang === "english" || lang === "british english";
+
   return (
     <div className="setup-screen">
       <div className="setup-header">
         <h1 className="setup-title">NPC Playground</h1>
-        <p className="setup-subtitle">Assemble your cast</p>
+        <p className="setup-subtitle">Build your cast, then watch them come alive</p>
       </div>
 
       <div className="setup-columns">
         <div className="setup-left">
-          <div className="setup-actions">
-            <button
-              className="btn btn-premade"
-              disabled={atCapacity}
-              onClick={() => setGalleryOpen((p) => !p)}
-            >
-              {galleryOpen ? "− Premade" : "+ Premade"}
-            </button>
-            <button
-              className="btn btn-randomize"
-              disabled={atCapacity}
-              onClick={() => {
-                const npc = randomizeNpc(roster.map((n) => n.id));
-                onAddToRoster(npc);
-              }}
-            >
-              Randomize
-            </button>
-            <button
-              className="btn btn-create"
-              disabled={atCapacity}
-              onClick={() => setCreatorOpen(true)}
-            >
-              + Custom
-            </button>
+          <div className="setup-section">
+            <div className="setup-section-header">
+              <span className="setup-section-title">Add Characters</span>
+              <span className="setup-section-hint">
+                Choose from premades, randomize, or create your own
+              </span>
+            </div>
+            <div className="setup-actions">
+              <button
+                className="btn btn-premade"
+                disabled={atCapacity}
+                onClick={() => setGalleryOpen((p) => !p)}
+              >
+                {galleryOpen ? "− Premade" : "+ Premade"}
+              </button>
+              <button
+                className="btn btn-randomize"
+                disabled={atCapacity}
+                onClick={() => {
+                  const npc = randomizeNpc(roster.map((n) => n.id));
+                  onAddToRoster(npc);
+                }}
+              >
+                Randomize
+              </button>
+              <button
+                className="btn btn-create"
+                disabled={atCapacity}
+                onClick={() => setCreatorOpen(true)}
+              >
+                + Custom
+              </button>
+            </div>
           </div>
 
           {galleryOpen && (
@@ -220,141 +232,132 @@ export function SetupScreen({
             </div>
           )}
 
-          <div className="setup-language">
-            <label className="setup-language-label" htmlFor="language-select">
-              Language
-            </label>
-            <select
-              id="language-select"
-              className="setup-language-select"
-              value={language}
-              onChange={(e) => onLanguageChange(e.target.value)}
-            >
-              {LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="setup-llm-provider">
-            <span className="setup-tts-engine-label">LLM Provider</span>
-            <div className="setup-tts-engine-options">
-              <button
-                className={`tts-engine-btn ${llmConfig.provider === "ollama" ? "active" : ""}`}
-                onClick={() => onLlmConfigChange({ provider: "ollama" as LlmProvider })}
-              >
-                Local (Ollama)
-              </button>
-              <button
-                className={`tts-engine-btn ${llmConfig.provider === "groq" ? "active" : ""}`}
-                onClick={() => onLlmConfigChange({ provider: "groq" as LlmProvider })}
-              >
-                Cloud (Groq)
-              </button>
-            </div>
-            {llmConfig.provider === "ollama" && (
-              <div className="llm-detail">
-                <input
-                  className="llm-input"
-                  type="text"
-                  value={llmConfig.ollamaModel}
-                  onChange={(e) => onLlmConfigChange({ ollamaModel: e.target.value })}
-                  placeholder="Model name"
-                />
-              </div>
-            )}
-            {llmConfig.provider === "groq" && (
-              <div className="llm-detail">
-                <input
-                  className="llm-input"
-                  type="password"
-                  value={llmConfig.groqApiKey}
-                  onChange={(e) => onLlmConfigChange({ groqApiKey: e.target.value })}
-                  placeholder="Groq API key"
-                />
-                <select
-                  className="llm-select"
-                  value={llmConfig.groqModel}
-                  onChange={(e) => onLlmConfigChange({ groqModel: e.target.value })}
-                >
-                  {GROQ_MODELS.map((m) => (
-                    <option key={m.id} value={m.id}>{m.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-
-          {(() => {
-            const lang = language.toLowerCase().trim();
-            const isEnglish = lang === "english" || lang === "british english";
-            return (
-              <div className="setup-tts-engine">
-                <span className="setup-tts-engine-label">TTS Engine</span>
-                <div className="setup-tts-engine-options">
-                  <button
-                    className={`tts-engine-btn ${ttsEngine === "chatterbox" ? "active" : ""} ${!isEnglish ? "disabled" : ""}`}
-                    onClick={() => isEnglish && onTtsEngineChange("chatterbox")}
-                    disabled={!isEnglish}
-                  >
-                    Chatterbox Turbo
-                  </button>
-                  <button
-                    className={`tts-engine-btn ${ttsEngine === "kokoro" ? "active" : ""}`}
-                    onClick={() => onTtsEngineChange("kokoro")}
-                  >
-                    Kokoro
-                  </button>
-                </div>
-                {!isEnglish && (
-                  <span className="tts-engine-hint">
-                    Chatterbox Turbo only supports English
-                  </span>
-                )}
-                <div className="tts-test-area">
-                  <textarea
-                    className="tts-test-input"
-                    placeholder="Type a phrase to test..."
-                    value={testPhrase}
-                    onChange={(e) => setTestPhrase(e.target.value)}
-                  />
-                  <button
-                    className="btn tts-test-btn"
-                    disabled={!testPhrase.trim() || testPlaying}
-                    onClick={() => {
-                      setTestPlaying(true);
-                      onTestTts(testPhrase.trim(), ttsEngine);
-                      if (testTimeout.current) clearTimeout(testTimeout.current);
-                      testTimeout.current = window.setTimeout(() => setTestPlaying(false), 5000);
-                    }}
-                  >
-                    {testPlaying ? "Playing..." : "Test"}
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-
-          <div className="setup-start-area">
+          <div className="setup-section setup-settings-section">
             <button
-              className="btn btn-start-sim"
-              disabled={roster.length < 2}
-              onClick={onStartSimulation}
+              className="setup-settings-toggle"
+              onClick={() => setSettingsOpen((p) => !p)}
             >
-              Start Simulation
+              <span className="setup-section-title">Settings</span>
+              <span className="setup-settings-summary">
+                {llmConfig.provider === "ollama" ? "Ollama" : "Groq"} · {language} · {ttsEngine === "chatterbox" ? "Chatterbox" : "Kokoro"}
+              </span>
+              <span className={`setup-settings-chevron ${settingsOpen ? "open" : ""}`}>
+                ›
+              </span>
             </button>
-            {onTestMap && (
-              <button
-                className="btn btn-test-map"
-                onClick={onTestMap}
-              >
-                Test Map
-              </button>
-            )}
-            {roster.length < 2 && (
-              <p className="setup-start-hint">Add at least 2 characters</p>
+
+            {settingsOpen && (
+              <div className="setup-settings-body">
+                <div className="setup-setting-row">
+                  <span className="setup-setting-label">Language</span>
+                  <select
+                    id="language-select"
+                    className="setup-language-select"
+                    value={language}
+                    onChange={(e) => onLanguageChange(e.target.value)}
+                  >
+                    {LANGUAGES.map((l) => (
+                      <option key={l.code} value={l.code}>
+                        {l.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="setup-setting-group">
+                  <span className="setup-setting-label">LLM Provider</span>
+                  <div className="setup-tts-engine-options">
+                    <button
+                      className={`tts-engine-btn ${llmConfig.provider === "ollama" ? "active" : ""}`}
+                      onClick={() => onLlmConfigChange({ provider: "ollama" as LlmProvider })}
+                    >
+                      Local (Ollama)
+                    </button>
+                    <button
+                      className={`tts-engine-btn ${llmConfig.provider === "groq" ? "active" : ""}`}
+                      onClick={() => onLlmConfigChange({ provider: "groq" as LlmProvider })}
+                    >
+                      Cloud (Groq)
+                    </button>
+                  </div>
+                  {llmConfig.provider === "ollama" && (
+                    <div className="llm-detail">
+                      <input
+                        className="llm-input"
+                        type="text"
+                        value={llmConfig.ollamaModel}
+                        onChange={(e) => onLlmConfigChange({ ollamaModel: e.target.value })}
+                        placeholder="Model name"
+                      />
+                    </div>
+                  )}
+                  {llmConfig.provider === "groq" && (
+                    <div className="llm-detail">
+                      <input
+                        className="llm-input"
+                        type="password"
+                        value={llmConfig.groqApiKey}
+                        onChange={(e) => onLlmConfigChange({ groqApiKey: e.target.value })}
+                        placeholder="Groq API key"
+                      />
+                      <select
+                        className="llm-select"
+                        value={llmConfig.groqModel}
+                        onChange={(e) => onLlmConfigChange({ groqModel: e.target.value })}
+                      >
+                        {GROQ_MODELS.map((m) => (
+                          <option key={m.id} value={m.id}>{m.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="setup-setting-group">
+                  <span className="setup-setting-label">TTS Engine</span>
+                  <div className="setup-tts-engine-options">
+                    <button
+                      className={`tts-engine-btn ${ttsEngine === "chatterbox" ? "active" : ""} ${!isEnglish ? "disabled" : ""}`}
+                      onClick={() => isEnglish && onTtsEngineChange("chatterbox")}
+                      disabled={!isEnglish}
+                    >
+                      Chatterbox Turbo
+                    </button>
+                    <button
+                      className={`tts-engine-btn ${ttsEngine === "kokoro" ? "active" : ""}`}
+                      onClick={() => onTtsEngineChange("kokoro")}
+                    >
+                      Kokoro
+                    </button>
+                  </div>
+                  {!isEnglish && (
+                    <span className="tts-engine-hint">
+                      Chatterbox Turbo only supports English
+                    </span>
+                  )}
+                  <div className="tts-test-area">
+                    <input
+                      className="tts-test-input-inline"
+                      type="text"
+                      placeholder="Type a phrase to test..."
+                      value={testPhrase}
+                      onChange={(e) => setTestPhrase(e.target.value)}
+                    />
+                    <button
+                      className="btn tts-test-btn"
+                      disabled={!testPhrase.trim() || testPlaying}
+                      onClick={() => {
+                        setTestPlaying(true);
+                        onTestTts(testPhrase.trim(), ttsEngine);
+                        if (testTimeout.current) clearTimeout(testTimeout.current);
+                        testTimeout.current = window.setTimeout(() => setTestPlaying(false), 5000);
+                      }}
+                    >
+                      {testPlaying ? "Playing..." : "Test"}
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -370,7 +373,10 @@ export function SetupScreen({
 
             {roster.length === 0 ? (
               <div className="roster-empty">
-                Add characters to get started
+                <span className="roster-empty-icon">?</span>
+                <span className="roster-empty-text">
+                  No characters yet — add from premades, randomize, or create your own
+                </span>
               </div>
             ) : (
               <div className="roster-grid">
@@ -422,6 +428,28 @@ export function SetupScreen({
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="setup-start-bar">
+        <div className="setup-start-bar-inner">
+          {onTestMap && (
+            <button
+              className="btn btn-test-map"
+              onClick={onTestMap}
+            >
+              Test Map
+            </button>
+          )}
+          <button
+            className="btn btn-start-sim"
+            disabled={roster.length < 2}
+            onClick={onStartSimulation}
+          >
+            {roster.length < 2
+              ? `Add ${2 - roster.length} more character${2 - roster.length > 1 ? "s" : ""}`
+              : "Start Simulation"}
+          </button>
         </div>
       </div>
 
