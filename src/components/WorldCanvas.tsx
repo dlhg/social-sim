@@ -132,6 +132,8 @@ export function WorldCanvas({
   const rafRef = useRef<number>(0);
   const spritesRef = useRef(new SpriteSystem());
   const bubbleRefsMap = useRef(new Map<string, HTMLDivElement>());
+  const bubbleSizeCache = useRef(new Map<string, { w: number; h: number }>());
+  const bubbleResizeObserver = useRef<ResizeObserver | null>(null);
   const floaterRefsMap = useRef(new Map<string, HTMLDivElement>());
   const particlesRef = useRef<Particle[]>([]);
   const npcScreenPositions = useRef<{ npcId: string; x: number; y: number; radius: number }[]>([]);
@@ -194,6 +196,21 @@ export function WorldCanvas({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     });
     observer.observe(container);
+
+    // Observe bubble element sizes so the rAF loop never reads offsetWidth/Height
+    const bubbleRO = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const el = entry.target as HTMLElement;
+        const npcId = el.dataset.npcId;
+        if (npcId) {
+          bubbleSizeCache.current.set(npcId, {
+            w: entry.contentBoxSize?.[0]?.inlineSize ?? el.offsetWidth,
+            h: entry.contentBoxSize?.[0]?.blockSize ?? el.offsetHeight,
+          });
+        }
+      }
+    });
+    bubbleResizeObserver.current = bubbleRO;
 
     // Arrow key + zoom listeners for free cam
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -514,8 +531,9 @@ export function WorldCanvas({
         const bubbleEl = bubbleRefsMap.current.get(spatial.npcId);
         if (bubbleEl) {
           const aboveAnchorY = feetY - sprH - 8;
-          const bubbleHeight = bubbleEl.offsetHeight || 60;
-          const bubbleWidth = bubbleEl.offsetWidth || 200;
+          const cached = bubbleSizeCache.current.get(spatial.npcId);
+          const bubbleHeight = cached?.h || 60;
+          const bubbleWidth = cached?.w || 200;
           // Clamp x so the bubble stays within the canvas bounds
           const halfBubble = bubbleWidth / 2;
           const clampedPx = Math.max(halfBubble, Math.min(width - halfBubble, px));
@@ -584,6 +602,7 @@ export function WorldCanvas({
 
     return () => {
       observer.disconnect();
+      bubbleRO.disconnect();
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
@@ -618,9 +637,17 @@ export function WorldCanvas({
           return (
             <div
               key={`${b.npcId}-${b.type}`}
+              data-npc-id={b.npcId}
               ref={(el) => {
-                if (el) bubbleRefsMap.current.set(b.npcId, el);
-                else bubbleRefsMap.current.delete(b.npcId);
+                const prev = bubbleRefsMap.current.get(b.npcId);
+                if (el) {
+                  bubbleRefsMap.current.set(b.npcId, el);
+                  bubbleResizeObserver.current?.observe(el);
+                } else {
+                  if (prev) bubbleResizeObserver.current?.unobserve(prev);
+                  bubbleRefsMap.current.delete(b.npcId);
+                  bubbleSizeCache.current.delete(b.npcId);
+                }
               }}
               className={`bubble bubble-${b.type}${b.completedAt ? " bubble-fading" : ""}`}
               style={{ "--bubble-color": npc?.color ?? "#6ec6ff" } as React.CSSProperties}
