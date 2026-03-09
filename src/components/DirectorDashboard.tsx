@@ -120,8 +120,8 @@ function PreparedCard({ info, convIndex, onPlayTurn }: {
       <TurnList
         speeches={info.speeches}
         speakerNames={info.speakerNames}
-        convIndex={convIndex}
-        onPlayTurn={onPlayTurn}
+        convIndex={allTtsDone ? convIndex : undefined}
+        onPlayTurn={allTtsDone ? onPlayTurn : undefined}
         ttsCompletedTurns={allTtsDone ? undefined : (info.ttsCompletedTurns ?? 0)}
       />
     </div>
