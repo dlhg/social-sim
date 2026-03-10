@@ -198,9 +198,17 @@ export function buildSystemPrompt(
     ? `WHO YOU ARE:\n${speaker.backstory}`
     : `PERSONALITY: ${speaker.personalityTraits.join(", ")}\nCORE DESIRES: ${speaker.coreDesires.join(", ")}`;
 
+  const arcBlock = speaker.characterArc
+    ? `\nCHARACTER GROWTH: ${speaker.characterArc}`
+    : "";
+
+  const moodBlock = speaker.mood && speaker.moodSince && (Date.now() - speaker.moodSince > 60_000)
+    ? `\nPERSISTENT MOOD: You've been feeling ${speaker.mood} for a while now. This colors everything — your patience, your openness, your reactions. It's not just a momentary feeling; it's a state you're carrying.`
+    : "";
+
   return `You are ${speaker.name}.
 
-${identityBlock}
+${identityBlock}${arcBlock}${moodBlock}
 CURRENT EMOTIONAL STATE: ${emotionSummary}
 CURRENT GOAL: ${speaker.currentGoal ?? "none"}
 ${secretsBlock}${inventoryBlock}
@@ -319,10 +327,20 @@ export function buildConversationMessages(
       ? ` You're both near ${ctx.locationContext}.`
       : "";
 
-    const relationshipFraming =
-      rel <= -0.3 ? `You notice ${listener.name} nearby. You're not thrilled about it.${locationSeed}`
-      : rel >= 0.5 ? `You spot ${listener.name} — someone you're glad to see.${locationSeed}`
-      : `You notice ${listener.name} nearby.${locationSeed}`;
+    // Goal-aware framing: if the speaker's goal involves the listener, lead with urgency
+    const goalInvolvesListener = speaker.currentGoal &&
+      listener.name && speaker.currentGoal.toLowerCase().includes(listener.name.toLowerCase());
+
+    let relationshipFraming: string;
+    if (goalInvolvesListener) {
+      relationshipFraming = `You spot ${listener.name} — you've been wanting to talk to them.${locationSeed} Your goal involves them: "${speaker.currentGoal}"`;
+    } else if (rel <= -0.3) {
+      relationshipFraming = `You notice ${listener.name} nearby. You're not thrilled about it.${locationSeed}`;
+    } else if (rel >= 0.5) {
+      relationshipFraming = `You spot ${listener.name} — someone you're glad to see.${locationSeed}`;
+    } else {
+      relationshipFraming = `You notice ${listener.name} nearby.${locationSeed}`;
+    }
 
     msgs.push({
       role: "user",
@@ -426,10 +444,20 @@ export function buildBatchConversationMessages(
     ? `Who they are: ${npcB.backstory}`
     : `Personality: ${npcB.personalityTraits.join(", ")}\nCore desires: ${npcB.coreDesires.join(", ")}`;
 
+  const arcA = npcA.characterArc ? `\nCharacter growth: ${npcA.characterArc}` : "";
+  const arcB = npcB.characterArc ? `\nCharacter growth: ${npcB.characterArc}` : "";
+
+  const moodA = npcA.mood && npcA.moodSince && (Date.now() - npcA.moodSince > 60_000)
+    ? `\nPersistent mood: ${npcA.mood} (this colors their patience, openness, and reactions)`
+    : "";
+  const moodB = npcB.mood && npcB.moodSince && (Date.now() - npcB.moodSince > 60_000)
+    ? `\nPersistent mood: ${npcB.mood} (this colors their patience, openness, and reactions)`
+    : "";
+
   const system = `You are a dialogue writer. Generate a complete conversation between two characters.
 
 CHARACTER A: ${npcA.name} (id: "${npcA.id}")
-${identityA}
+${identityA}${arcA}${moodA}
 Emotional state: ${emotionsA}
 Current goal: ${npcA.currentGoal ?? "none"}${secretsA}${inventoryA}${plansBlockA}
 Relationship with ${npcB.name}: ${relationshipLabel(relAtoB)} (regard: ${relAtoB.toFixed(2)})${affAtoB > 0.15 ? ` | Romantic: ${describeAffection(affAtoB)}` : ""}
@@ -438,7 +466,7 @@ Memories of ${npcB.name}:
 ${memDirectA || "(none)"}${memAboutA ? `\nThings heard about ${npcB.name}:\n${memAboutA}` : ""}${memGossipA ? `\nGossip heard:\n${memGossipA}` : ""}${actionHintsA}
 
 CHARACTER B: ${npcB.name} (id: "${npcB.id}")
-${identityB}
+${identityB}${arcB}${moodB}
 Emotional state: ${emotionsB}
 Current goal: ${npcB.currentGoal ?? "none"}${secretsB}${inventoryB}${plansBlockB}
 Relationship with ${npcA.name}: ${relationshipLabel(relBtoA)} (regard: ${relBtoA.toFixed(2)})${affBtoA > 0.15 ? ` | Romantic: ${describeAffection(affBtoA)}` : ""}
@@ -521,27 +549,97 @@ export function buildReflectionMessages(
     ? `WHO YOU ARE:\n${npc.backstory}`
     : `PERSONALITY: ${npc.personalityTraits.join(", ")}\nCORE DESIRES: ${npc.coreDesires.join(", ")}`;
 
+  const arcBlock = npc.characterArc
+    ? `\nYOUR CHARACTER ARC SO FAR: ${npc.characterArc}`
+    : "";
+
   return [
     {
       role: "system",
       content: `You are ${npc.name}. You just finished a conversation with ${otherNpcName}.
 
-${reflectionIdentity}
+${reflectionIdentity}${arcBlock}
 CURRENT EMOTIONAL STATE: ${emotionSummary}
+CURRENT GOAL: ${npc.currentGoal ?? "none"}
 
 Here's what happened in the conversation:
 ${conversationSummary}
 
 Now reflect privately. What are you really thinking? What did you learn? How do you feel? Are you suspicious, hopeful, worried, amused? Be honest — no one can hear this.
 
+Also consider: has this conversation changed what you want? Do you have a new goal, or does your old goal still matter? Has this experience changed you as a person in any way?
+
 Respond with ONLY a single JSON object:
 {
   "thought": "your private inner thought, 1-2 sentences",
-  "interpretation": "what this conversation meant to you — what was the other person really after? what shifted between you? 1 sentence"
+  "interpretation": "what this conversation meant to you — what was the other person really after? what shifted between you? 1 sentence",
+  "goal_update": "your new goal or intention based on what happened (e.g. 'confront Mara about the rumor', 'spend more time with Bob', 'find out what Ellis is hiding') — or null if your current goal hasn't changed",
+  "arc_update": "how this experience has changed you as a person, in 1 sentence (e.g. 'I'm starting to realize that being right matters less than being kind') — or null if you haven't changed"
 }
 
 Output ONLY the JSON object. No markdown, no code fences, no extra text.
 You MUST write ALL text in ${language}. Never use any other language.`,
+    },
+  ];
+}
+
+// ── Soliloquy prompt (solo inner monologue at reflective waypoints) ──
+
+export function buildSoliloquyMessages(
+  npc: NPC,
+  waypointName: string,
+  activityLabel: string,
+  allNpcs: Array<{ id: string; name: string }>,
+  language = "English",
+): ChatMessage[] {
+  const emotionSummary = describeEmotions(npc.emotionalState);
+  const identity = npc.backstory
+    ? npc.backstory
+    : `${npc.personalityTraits.join(", ")}; wants ${npc.coreDesires.join(", ")}`;
+
+  const arcBlock = npc.characterArc
+    ? `\nCharacter arc: ${npc.characterArc}`
+    : "";
+
+  const moodBlock = npc.mood && npc.moodSince && (Date.now() - npc.moodSince > 60_000)
+    ? `\nPersistent mood: ${npc.mood}`
+    : "";
+
+  const recentMemories = [...npc.shortTermMemory]
+    .sort((a, b) => b.recency * b.importance - a.recency * a.importance)
+    .slice(0, 5)
+    .map(m => `- ${m.text}`)
+    .join("\n");
+
+  const otherNames = allNpcs
+    .filter(n => n.id !== npc.id)
+    .map(n => n.name)
+    .join(", ");
+
+  return [
+    {
+      role: "system",
+      content: `You are ${npc.name}, alone at ${waypointName}, ${activityLabel}.
+
+Who you are: ${identity}${arcBlock}${moodBlock}
+Emotional state: ${emotionSummary}
+Current goal: ${npc.currentGoal ?? "none"}
+
+Recent memories:
+${recentMemories || "(none)"}
+
+People you know: ${otherNames || "(none)"}
+
+You're having a quiet moment alone. Let your mind wander. What are you really feeling? What's weighing on you? What do you hope for or dread? This is your private inner world — honest, unguarded, maybe a little raw.
+
+Respond with ONLY a JSON object:
+{
+  "soliloquy": "your private inner monologue, 2-3 sentences — what you're really thinking and feeling right now",
+  "goal_update": "a new goal or intention if this reflection has clarified what you want — or null"
+}
+
+Output ONLY the JSON object. No markdown, no code fences.
+You MUST write ALL text in ${language}.`,
     },
   ];
 }
@@ -768,6 +866,8 @@ export interface SceneDirectionContext {
   memoriesB?: RetrievedMemories;
   narrativeSummary?: string;
   language?: string;
+  /** Detected dramatic patterns to inform scene direction */
+  narrativePatterns?: string[];
 }
 
 const VALID_CONVERSATION_TYPES: ConversationType[] = [
@@ -820,7 +920,7 @@ ${ctx.trajectoryContext ? `\nRelationship trajectory: ${ctx.trajectoryContext}` 
 
 Based on their emotional states, relationship, memories, and secrets, decide:
 1. What TYPE of conversation this should be (from: ${VALID_CONVERSATION_TYPES.join(", ")})
-2. A brief SCENE DIRECTION — 2-3 sentences of creative guidance for how this conversation should unfold. What tensions should surface? What emotional beats should hit? What could make this interaction surprising or meaningful? Be specific to these characters.
+2. A brief SCENE DIRECTION — 2-3 sentences of creative guidance for how this conversation should unfold. What tensions should surface? What emotional beats should hit? What could make this interaction surprising or meaningful? Be specific to these characters.${(ctx as SceneDirectionContext).narrativePatterns?.length ? `\n\nDRAMATIC PATTERNS DETECTED (use these to inform your direction):\n${(ctx as SceneDirectionContext).narrativePatterns!.map(p => `- ${p}`).join("\n")}` : ""}
 
 Respond with ONLY a JSON object:
 {

@@ -25,6 +25,8 @@ export interface WorldSimulationOptions {
   onActivityEnd?: (npcId: string, activityId: string, waypointName: string, memoryText: string) => void;
   onItemAcquired?: (npcId: string, itemLabel: string, itemEmoji: string) => void;
   onObserveActivity?: (observerId: string, actorId: string, activityId: string) => void;
+  /** Fires when an NPC finishes a solo activity at a reflective waypoint — opportunity for inner monologue */
+  onSoliloquyTrigger?: (npcId: string, waypointName: string, activityLabel: string) => void;
   onTick?: () => void;
   getPhase?: () => DayPhase;
   npcStore?: NpcStore;
@@ -53,6 +55,7 @@ export class WorldSimulation {
   private onActivityEnd: ((npcId: string, activityId: string, waypointName: string, memoryText: string) => void) | null;
   private onItemAcquired: ((npcId: string, itemLabel: string, itemEmoji: string) => void) | null;
   private onObserveActivity: ((observerId: string, actorId: string, activityId: string) => void) | null;
+  private onSoliloquyTrigger: ((npcId: string, waypointName: string, activityLabel: string) => void) | null;
   private onTickCallback: (() => void) | null;
   /** Track which observer→actor observations already fired to avoid spam */
   private observationCooldowns: Map<string, number> = new Map();
@@ -75,6 +78,7 @@ export class WorldSimulation {
     this.onActivityEnd = options.onActivityEnd ?? null;
     this.onItemAcquired = options.onItemAcquired ?? null;
     this.onObserveActivity = options.onObserveActivity ?? null;
+    this.onSoliloquyTrigger = options.onSoliloquyTrigger ?? null;
     this.onTickCallback = options.onTick ?? null;
     this.getPhase = options.getPhase ?? null;
     this.npcStore = options.npcStore ?? null;
@@ -740,6 +744,13 @@ export class WorldSimulation {
     return result;
   }
 
+  /** Check if an NPC has any other NPCs within range */
+  private isNpcNearOthers(npcId: string, range: number): boolean {
+    const npc = this.npcs.get(npcId);
+    if (!npc) return false;
+    return this.getNpcsWithinRange(npc.position, range, [npcId]).length > 0;
+  }
+
   getNearestWaypoint(npcId: string): Waypoint | undefined {
     const npc = this.npcs.get(npcId);
     if (!npc) return undefined;
@@ -832,6 +843,18 @@ export class WorldSimulation {
     }
 
     this.onActivityEnd?.(npc.npcId, activity.activityId, waypointName, memoryText);
+
+    // Soliloquy trigger: reflective waypoints + solo activities → inner monologue opportunity
+    if (this.onSoliloquyTrigger && waypoint) {
+      const isReflective = waypoint.moods?.some(
+        m => ["reflective", "intimate", "mysterious"].includes(m)
+      );
+      const isAlone = !this.isNpcNearOthers(npc.npcId, 5);
+      if (isReflective && isAlone) {
+        const actLabel = actDef?.label ?? activity.activityId;
+        this.onSoliloquyTrigger(npc.npcId, waypointName, actLabel);
+      }
+    }
 
     // Roll for item yield
     if (this.npcStore) {

@@ -317,6 +317,9 @@ export function createNpc(partial: {
     behavioralOverride: null,
     inventory: partial.inventory ?? [],
     customVoiceId: partial.customVoiceId,
+    characterArc: undefined,
+    mood: undefined,
+    moodSince: undefined,
   };
 }
 

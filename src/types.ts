@@ -67,6 +67,19 @@ export interface BehavioralOverride {
   reason: string;
 }
 
+// ── Reactive Impulses ────────────────────────
+/** Generated when high-impact events demand follow-up (eavesdropped insult, learned secret, broken promise) */
+export interface ReactiveImpulse {
+  id: string;
+  npcId: string;                    // the NPC who feels the impulse
+  targetNpcId: string;              // who they want to interact with
+  reason: string;                   // human-readable explanation
+  conversationType: ConversationType; // suggested conversation type
+  urgency: number;                  // 0-1, affects director scoring
+  expiresAt: number;                // Date.now() + duration
+  sourceMemoryText: string;         // what triggered this impulse
+}
+
 // ── Memory ─────────────────────────────────────
 export type MemoryType =
   | "conversation"
@@ -126,6 +139,12 @@ export interface NPC {
   behavioralOverride?: BehavioralOverride | null;
   inventory: InventoryItem[];
   customVoiceId?: string;
+  /** Accumulated narrative of character growth, updated after reflections */
+  characterArc?: string;
+  /** Persistent emotional state derived from sustained emotions (e.g. "melancholy", "paranoid") */
+  mood?: string;
+  /** When the current mood started (Date.now()) — only shown in prompts if persistent */
+  moodSince?: number;
 }
 
 // ── Promises / Plans ─────────────────────────

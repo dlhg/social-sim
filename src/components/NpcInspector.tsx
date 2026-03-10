@@ -250,6 +250,45 @@ export function NpcInspector({
               </ul>
             </div>
 
+            {selected.currentGoal && (
+              <div className="npc-section">
+                <div className="section-label">Current Goal</div>
+                <p style={{ margin: 0, fontSize: "0.85em", lineHeight: 1.5, fontStyle: "italic", opacity: 0.9 }}>
+                  {selected.currentGoal}
+                </p>
+              </div>
+            )}
+
+            {selected.mood && (
+              <div className="npc-section">
+                <div className="section-label">Mood</div>
+                <span style={{
+                  fontSize: "0.85em",
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  background: "rgba(255,255,255,0.08)",
+                  color: selected.mood === "euphoric" ? "#ffd54f" :
+                         selected.mood === "melancholy" ? "#90a4ae" :
+                         selected.mood === "paranoid" ? "#ce93d8" :
+                         selected.mood === "bitter" ? "#ff7043" :
+                         selected.mood === "volatile" ? "#e53935" :
+                         selected.mood === "guilt-ridden" ? "#b39ddb" :
+                         selected.mood === "restless" ? "#4fc3f7" : "#ccc",
+                }}>
+                  {selected.mood}
+                </span>
+              </div>
+            )}
+
+            {selected.characterArc && (
+              <div className="npc-section">
+                <div className="section-label">Character Growth</div>
+                <p style={{ margin: 0, fontSize: "0.82em", lineHeight: 1.5, opacity: 0.8, fontStyle: "italic" }}>
+                  {selected.characterArc}
+                </p>
+              </div>
+            )}
+
             {selected.backstory && (
               <div className="npc-section">
                 <div className="section-label">Backstory</div>

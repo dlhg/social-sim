@@ -377,6 +377,10 @@ function App() {
           },
         }]);
       },
+      onSoliloquyTrigger: (npcId, waypointName, activityLabel) => {
+        // Fire-and-forget soliloquy generation via ConversationManager
+        managerRef.current?.generateSoliloquy(npcId, waypointName, activityLabel);
+      },
       onTick: () => {
         dayCycleRef.current?.tick();
       },

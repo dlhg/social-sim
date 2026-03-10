@@ -16,7 +16,7 @@ import type { MemoryService } from "./memory-service";
 import type { WorldSimulation } from "./world-simulation";
 import type { DayCycle } from "./day-cycle";
 import type { TTSService } from "./tts-service";
-import { buildConversationMessages, buildBatchConversationMessages, buildReflectionMessages, buildSceneDirectionMessages } from "./prompt-builder";
+import { buildConversationMessages, buildBatchConversationMessages, buildReflectionMessages, buildSceneDirectionMessages, buildSoliloquyMessages } from "./prompt-builder";
 import { accumulateChat, getGroqRateLimits } from "./ollama";
 import type { GroqRateLimits } from "./ollama";
 import { loadLlmConfig, GROQ_MODELS } from "./llm-config";
@@ -908,7 +908,13 @@ export class ConversationManager {
     this.appendNarrativeArc(npcAId, npcBId, session);
     this.applyEmotionalContagion(npcAId, npcBId, session);
     this.triggerPostConversationBehavior(npcAId, npcBId, session);
+    this.generateReactiveChains(npcAId, npcBId, session);
     this.runPostConversationReflection(npcAId, npcBId, session).catch(() => {});
+
+    // Compute persistent moods after emotional changes settle
+    this.store.computeAndSetMood(npcAId);
+    this.store.computeAndSetMood(npcBId);
+    this.store.clearExpiredImpulses();
   }
 
   // ── Director: proactive conversation scheduling ──
@@ -1075,11 +1081,13 @@ export class ConversationManager {
     const modelOverride = loadLlmConfig().provider === "groq" ? this.pickGroqModel() : undefined;
 
     try {
+      const narrativePatterns = this.detectNarrativePatterns(npcA, npcB);
       const sdMessages = buildSceneDirectionMessages(npcA, npcB, {
         trajectoryContext, locationContext, timeOfDay,
         memoriesA, memoriesB,
         narrativeSummary: this.narrativeSummary || undefined,
         language: this.language,
+        narrativePatterns,
       });
       const sdRaw = await accumulateChat(sdMessages, {
         signal: this.llmAbort.signal,
@@ -1089,7 +1097,16 @@ export class ConversationManager {
       const sd = parseSceneDirection(sdRaw);
       convType = sd.conversationType;
       sceneDirection = sd.sceneDirection || undefined;
-      this.log(`[director] Scene direction: ${convType} — "${sceneDirection?.slice(0, 80)}..."`);
+
+      // Consume reactive impulse if it drove this conversation
+      const impulse = this.store.getReactiveImpulseForPair(npcAId, npcBId);
+      if (impulse) {
+        convType = impulse.conversationType; // override with impulse's suggested type
+        this.store.consumeReactiveImpulse(impulse.npcId, impulse.targetNpcId);
+        this.log(`[director] Reactive impulse consumed: ${impulse.reason}`);
+      }
+
+      this.log(`[director] Scene direction: ${convType} — "${sceneDirection?.slice(0, 80)}..."${narrativePatterns.length ? ` (${narrativePatterns.length} patterns detected)` : ""}`);
     } catch (e) {
       // Fallback to hardcoded classification if scene direction fails
       convType = this.classifyConversationType(npcA, npcB);
@@ -1392,7 +1409,7 @@ export class ConversationManager {
           score += 3;
         }
 
-        // Pending promises between them
+        // Pending promises between them (unfinished business)
         const promises = this.store.getPromisesFor(a.id)
           .filter(p => p.status === "active" &&
             (p.promiseeId === b.id || p.promiserId === b.id));
@@ -1412,6 +1429,44 @@ export class ConversationManager {
         // Relationship extremes are interesting
         const regard = a.relationships[b.id]?.regard ?? 0;
         score += Math.abs(regard) * 2;
+
+        // ── Reactive impulses — highest priority signal ──
+        const impulseAB = this.store.getReactiveImpulseForPair(a.id, b.id);
+        if (impulseAB) {
+          score += impulseAB.urgency * 8; // up to 8 points for max urgency
+        }
+
+        // ── Information asymmetry — dramatic irony ──
+        // A knows B's secret but B doesn't know A knows
+        const aKnowsBSecrets = a.knownSecrets[b.id]?.length ?? 0;
+        const bKnowsASecrets = b.knownSecrets[a.id]?.length ?? 0;
+        if (aKnowsBSecrets > 0 || bKnowsASecrets > 0) {
+          score += 3;
+        }
+        // A has unrevealed secrets that B might extract
+        if (a.secrets.length > 0 && (b.emotionalState.curiosity > 0.5 || b.personalityTraits.some(
+          t => ["perceptive", "curious", "suspicious", "calculating"].includes(t.toLowerCase())
+        ))) {
+          score += 1.5;
+        }
+
+        // ── Goal-directed conversations — NPC wants to talk to this specific person ──
+        const aGoalInvolvesB = a.currentGoal?.toLowerCase().includes(b.name.toLowerCase());
+        const bGoalInvolvesA = b.currentGoal?.toLowerCase().includes(a.name.toLowerCase());
+        if (aGoalInvolvesB) score += 4;
+        if (bGoalInvolvesA) score += 4;
+
+        // ── Triangulation — love triangles and jealousy patterns ──
+        score += this.triangulationScore(a, b, allNpcs);
+
+        // ── Isolation — NPC who hasn't had a positive interaction in a while ──
+        const lastContactA = this.cooldowns.get(a.id) ?? 0;
+        const lastContactB = this.cooldowns.get(b.id) ?? 0;
+        const isolationA = Math.min(3, (now - lastContactA) / 120_000); // up to 3 for 4+ min isolation
+        const isolationB = Math.min(3, (now - lastContactB) / 120_000);
+        if (isolationA > 1 || isolationB > 1) {
+          score += Math.max(isolationA, isolationB);
+        }
 
         // Small random factor to prevent always picking the same pair
         score += Math.random() * 1.5;
@@ -1443,6 +1498,92 @@ export class ConversationManager {
     }
 
     return null;
+  }
+
+  /** Detect love triangle / jealousy patterns involving a third NPC */
+  private triangulationScore(a: NPC, b: NPC, allNpcs: NPC[]): number {
+    let score = 0;
+    for (const c of allNpcs) {
+      if (c.id === a.id || c.id === b.id) continue;
+
+      const affAC = a.relationships[c.id]?.affection ?? 0;
+      const affBC = b.relationships[c.id]?.affection ?? 0;
+      const affCA = c.relationships[a.id]?.affection ?? 0;
+      const affCB = c.relationships[b.id]?.affection ?? 0;
+
+      // Love triangle: A and B both have affection for C (rivalry)
+      if (affAC > 0.2 && affBC > 0.2) {
+        score += 3;
+        break; // one triangle is enough
+      }
+
+      // Jealousy: C likes A, but A is getting closer to B
+      if (affCA > 0.25 && a.relationships[b.id]?.regard > 0.3) {
+        score += 2;
+        break;
+      }
+
+      // Betrayal setup: A told C about B's secret, and B doesn't know
+      const aKnowsBSecret = (a.knownSecrets[b.id]?.length ?? 0) > 0;
+      const cKnowsBSecret = (c.knownSecrets[b.id]?.length ?? 0) > 0;
+      if (aKnowsBSecret && cKnowsBSecret) {
+        score += 2.5;
+        break;
+      }
+    }
+    return score;
+  }
+
+  /** Detect narrative patterns for scene direction */
+  private detectNarrativePatterns(a: NPC, b: NPC): string[] {
+    const patterns: string[] = [];
+    const allNpcs = this.store.getAll();
+
+    // Information asymmetry
+    const aKnowsB = a.knownSecrets[b.id]?.length ?? 0;
+    if (aKnowsB > 0) {
+      patterns.push(`${a.name} knows ${b.name}'s secret but hasn't confronted them about it`);
+    }
+    const bKnowsA = b.knownSecrets[a.id]?.length ?? 0;
+    if (bKnowsA > 0) {
+      patterns.push(`${b.name} knows ${a.name}'s secret but hasn't confronted them about it`);
+    }
+
+    // Love triangle
+    for (const c of allNpcs) {
+      if (c.id === a.id || c.id === b.id) continue;
+      const affAC = a.relationships[c.id]?.affection ?? 0;
+      const affBC = b.relationships[c.id]?.affection ?? 0;
+      if (affAC > 0.2 && affBC > 0.2) {
+        patterns.push(`Both ${a.name} and ${b.name} have feelings for ${c.name} — potential rivalry`);
+        break;
+      }
+    }
+
+    // Goal-directed tension
+    if (a.currentGoal?.toLowerCase().includes(b.name.toLowerCase())) {
+      patterns.push(`${a.name}'s current goal involves ${b.name}: "${a.currentGoal}"`);
+    }
+    if (b.currentGoal?.toLowerCase().includes(a.name.toLowerCase())) {
+      patterns.push(`${b.name}'s current goal involves ${a.name}: "${b.currentGoal}"`);
+    }
+
+    // Reactive impulse
+    const impulse = this.store.getReactiveImpulseForPair(a.id, b.id);
+    if (impulse) {
+      const owner = impulse.npcId === a.id ? a : b;
+      patterns.push(`${owner.name} has been wanting to confront/talk to the other: "${impulse.reason}"`);
+    }
+
+    // Unfinished business (active promises)
+    const promises = this.store.getPromisesFor(a.id)
+      .filter(p => p.status === "active" &&
+        (p.promiseeId === b.id || p.promiserId === b.id));
+    for (const p of promises) {
+      patterns.push(`There's an active promise between them: "${p.text}"`);
+    }
+
+    return patterns;
   }
 
   /** Check if there's a prepared conversation for this pair and consume it */
@@ -2611,6 +2752,252 @@ export class ConversationManager {
     this.log(`Mood: ${a.name} is ${moodA} | ${b.name} is ${moodB}`);
   }
 
+  // ── Reactive Chain Generation ───────────────
+
+  /**
+   * After a conversation, check for high-impact events that should trigger
+   * follow-up conversations (reactive chains). This creates behavioral
+   * impulses that strongly influence the director's pair scoring.
+   */
+  private generateReactiveChains(
+    npcAId: string,
+    npcBId: string,
+    session: ConversationSession,
+  ): void {
+    const npcA = this.store.get(npcAId);
+    const npcB = this.store.get(npcBId);
+    if (!npcA || !npcB) return;
+    const allNpcs = this.store.getAll();
+    const now = Date.now();
+    const IMPULSE_DURATION = 5 * 60_000; // 5 minutes
+
+    for (const msg of session.messages) {
+      const r = msg.rawResponse;
+      if (!r) continue;
+
+      // ── Secret revealed to untrustworthy NPC → secret may spread ──
+      if (r.secret_revealed) {
+        const listenerId = msg.npcId === npcAId ? npcBId : npcAId;
+        const listener = this.store.get(listenerId);
+        if (listener) {
+          const listenerTrust = listener.relationships[msg.npcId]?.trust ?? 0.3;
+          // Untrustworthy listeners spread secrets
+          if (listenerTrust < 0.3 || listener.personalityTraits.some(
+            t => ["calculating", "manipulative", "two-faced", "gossip"].includes(t.toLowerCase())
+          )) {
+            // Find someone the listener would gossip to (highest regard, not the secret-holder)
+            const gossipTarget = allNpcs
+              .filter(n => n.id !== msg.npcId && n.id !== listenerId)
+              .sort((a, b) => (listener.relationships[b.id]?.regard ?? 0) - (listener.relationships[a.id]?.regard ?? 0))
+              [0];
+            if (gossipTarget) {
+              this.store.addReactiveImpulse({
+                id: `impulse_${now}_${Math.random().toString(36).slice(2, 6)}`,
+                npcId: listenerId,
+                targetNpcId: gossipTarget.id,
+                reason: `Wants to gossip about ${this.npcName(msg.npcId)}'s secret`,
+                conversationType: "gossip_session",
+                urgency: 0.8,
+                expiresAt: now + IMPULSE_DURATION,
+                sourceMemoryText: `Learned a secret: "${r.secret_revealed}"`,
+              });
+              this.log(`[reactive] ${listener.name} may spread ${this.npcName(msg.npcId)}'s secret to ${gossipTarget.name}`);
+            }
+          }
+        }
+      }
+
+      // ── Gossip about a third NPC → that NPC may want to confront ──
+      if (r.mentioned_npcs) {
+        for (const mention of r.mentioned_npcs) {
+          if (mention.sentiment < -0.2) {
+            // Negative gossip — the target might hear about it through eavesdropping
+            // Create impulse for the gossiped-about NPC to confront the gossiper
+            const gossipedAbout = this.store.get(mention.npc_id);
+            if (gossipedAbout) {
+              // Only if the target has heard the gossip (check memories)
+              const hasHeard = gossipedAbout.shortTermMemory.some(
+                m => m.type === "eavesdrop" && m.involvedNpcIds.includes(msg.npcId)
+              ) || gossipedAbout.shortTermMemory.some(
+                m => m.type === "gossip" && m.aboutNpcIds?.includes(gossipedAbout.id)
+              );
+              if (hasHeard) {
+                this.store.addReactiveImpulse({
+                  id: `impulse_${now}_${Math.random().toString(36).slice(2, 6)}`,
+                  npcId: mention.npc_id,
+                  targetNpcId: msg.npcId,
+                  reason: `Heard ${this.npcName(msg.npcId)} was talking negatively about them`,
+                  conversationType: "confrontation",
+                  urgency: 0.7,
+                  expiresAt: now + IMPULSE_DURATION,
+                  sourceMemoryText: mention.what_was_said,
+                });
+                this.log(`[reactive] ${gossipedAbout.name} wants to confront ${this.npcName(msg.npcId)} about gossip`);
+              }
+            }
+          }
+        }
+      }
+
+      // ── Threat or mock → target may want revenge or avoid ──
+      if (r.action?.action === "threaten" || r.action?.action === "mock") {
+        const targetId = msg.npcId === npcAId ? npcBId : npcAId;
+        const target = this.store.get(targetId);
+        if (target) {
+          const isDefiant = target.personalityTraits.some(
+            t => ["competitive", "confrontational", "defiant", "blunt", "bold"].includes(t.toLowerCase())
+          );
+          if (isDefiant) {
+            // Defiant NPCs seek confrontation
+            this.store.addReactiveImpulse({
+              id: `impulse_${now}_${Math.random().toString(36).slice(2, 6)}`,
+              npcId: targetId,
+              targetNpcId: msg.npcId,
+              reason: `Wants payback after being ${r.action.action === "threaten" ? "threatened" : "mocked"} by ${this.npcName(msg.npcId)}`,
+              conversationType: "confrontation",
+              urgency: 0.6,
+              expiresAt: now + IMPULSE_DURATION,
+              sourceMemoryText: r.action.detail ?? r.action.action,
+            });
+          } else {
+            // Non-defiant NPCs seek comfort from a friend
+            const friend = allNpcs
+              .filter(n => n.id !== targetId && n.id !== msg.npcId)
+              .sort((a, b) => (target.relationships[b.id]?.regard ?? 0) - (target.relationships[a.id]?.regard ?? 0))
+              [0];
+            if (friend && (target.relationships[friend.id]?.regard ?? 0) > 0.1) {
+              this.store.addReactiveImpulse({
+                id: `impulse_${now}_${Math.random().toString(36).slice(2, 6)}`,
+                npcId: targetId,
+                targetNpcId: friend.id,
+                reason: `Needs comfort after being ${r.action.action === "threaten" ? "threatened" : "mocked"}`,
+                conversationType: "confession",
+                urgency: 0.5,
+                expiresAt: now + IMPULSE_DURATION,
+                sourceMemoryText: r.action.detail ?? r.action.action,
+              });
+            }
+          }
+        }
+      }
+
+      // ── Conspiracy against a third NPC → conspirator seeks target ──
+      if (r.action?.action === "conspire" && r.action.target_npc_id) {
+        // Both conspirators get impulse to approach the target
+        const conspirators = [npcAId, npcBId];
+        for (const cId of conspirators) {
+          if (!this.store.get(cId)?.behavioralOverride) {
+            this.store.addReactiveImpulse({
+              id: `impulse_${now}_${Math.random().toString(36).slice(2, 6)}`,
+              npcId: cId,
+              targetNpcId: r.action.target_npc_id,
+              reason: `Acting on conspiracy against ${this.npcName(r.action.target_npc_id)}`,
+              conversationType: "casual",
+              urgency: 0.5,
+              expiresAt: now + IMPULSE_DURATION,
+              sourceMemoryText: r.action.detail ?? "conspiracy",
+            });
+          }
+        }
+      }
+    }
+
+    // ── Eavesdropper reactions: nearby NPCs who overheard something negative about themselves ──
+    if (this.worldSim) {
+      for (const eavesdropperId of this.conversationEavesdroppers) {
+        const eavesdropper = this.store.get(eavesdropperId);
+        if (!eavesdropper) continue;
+
+        // Check if anything negative was said about the eavesdropper
+        for (const msg of session.messages) {
+          if (!msg.rawResponse?.mentioned_npcs) continue;
+          for (const mention of msg.rawResponse.mentioned_npcs) {
+            if (mention.npc_id === eavesdropperId && mention.sentiment < -0.15) {
+              this.store.addReactiveImpulse({
+                id: `impulse_${now}_${Math.random().toString(36).slice(2, 6)}`,
+                npcId: eavesdropperId,
+                targetNpcId: msg.npcId,
+                reason: `Overheard ${this.npcName(msg.npcId)} saying something negative about them`,
+                conversationType: "confrontation",
+                urgency: 0.75,
+                expiresAt: now + IMPULSE_DURATION,
+                sourceMemoryText: mention.what_was_said,
+              });
+              this.log(`[reactive] ${eavesdropper.name} overheard ${this.npcName(msg.npcId)} badmouthing them — wants to confront`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ── Soliloquy (solo inner monologue) ──────────
+
+  /**
+   * Generate a private inner monologue for an NPC who is alone at a reflective spot.
+   * Much lighter than a full conversation — small LLM call, no TTS.
+   */
+  async generateSoliloquy(npcId: string, waypointName: string, activityLabel: string): Promise<void> {
+    const npc = this.store.get(npcId);
+    if (!npc) return;
+
+    // Only soliloquize if emotionally intense or has recent important memories
+    const emo = npc.emotionalState;
+    const intensity = Math.max(emo.anger, emo.fear, emo.sadness, emo.guilt, emo.joy * 0.5);
+    const hasImportantMemories = npc.shortTermMemory.some(m => m.importance >= 0.6 && m.recency > 0.5);
+    if (intensity < 0.4 && !hasImportantMemories && !npc.mood) return;
+
+    // Don't soliloquize if in conversation or recently spoke
+    if (this.activeSession?.participantIds.includes(npcId)) return;
+
+    const allNpcs = this.store.getAll().map(n => ({ id: n.id, name: n.name }));
+
+    try {
+      const messages = buildSoliloquyMessages(npc, waypointName, activityLabel, allNpcs, this.language);
+      const modelOverride = loadLlmConfig().provider === "groq" ? this.pickGroqModel() : undefined;
+      const raw = await accumulateChat(messages, { numPredict: 512, modelOverride });
+      const json = extractJson(raw);
+      const parsed = JSON.parse(json);
+
+      const soliloquy = typeof parsed.soliloquy === "string" ? parsed.soliloquy.trim() : null;
+      if (!soliloquy) return;
+
+      // Store as inner thought memory
+      this.memory.add(
+        npcId,
+        {
+          text: soliloquy,
+          importance: 0.5,
+          recency: 1,
+          emotionalWeight: 0.3,
+          involvedNpcIds: [],
+          type: "inner_thought",
+          category: "emotional",
+          timestamp: Date.now(),
+        },
+        "shortTermMemory"
+      );
+
+      this.callbacks.onActivity({
+        timestamp: new Date(),
+        text: `${npc.name} thinks to themselves: "${soliloquy}"`,
+        activityType: "thought",
+        npcId,
+      });
+
+      // Apply goal update if provided
+      const goalUpdate = typeof parsed.goal_update === "string" && parsed.goal_update.trim().length > 0
+        ? parsed.goal_update.trim()
+        : null;
+      if (goalUpdate) {
+        this.store.setGoal(npcId, goalUpdate);
+        this.log(`[soliloquy] ${npc.name}'s new goal: "${goalUpdate}"`);
+      }
+    } catch (err) {
+      console.warn(`[soliloquy] ${npc.name} soliloquy failed:`, err);
+    }
+  }
+
   // ── Narrative Arc Tracking ──────────────────
 
   private readonly NARRATIVE_MAX_ENTRIES = 20;
@@ -2967,6 +3354,30 @@ Respond with ONLY the summary text, no JSON, no markdown.`,
             activityType: "thought",
             npcId: npc.id,
           });
+
+          // ── Dynamic goal update ──
+          const goalUpdate = typeof parsed.goal_update === "string" && parsed.goal_update.trim().length > 0
+            ? parsed.goal_update.trim()
+            : null;
+          if (goalUpdate) {
+            this.store.setGoal(npcId, goalUpdate);
+            this.log(`[reflection] ${npc.name}'s new goal: "${goalUpdate}"`);
+          }
+
+          // ── Character arc update ──
+          const arcUpdate = typeof parsed.arc_update === "string" && parsed.arc_update.trim().length > 0
+            ? parsed.arc_update.trim()
+            : null;
+          if (arcUpdate) {
+            // Accumulate arc (keep last 3 entries to stay concise)
+            const existingArc = npc.characterArc || "";
+            const arcLines = existingArc ? existingArc.split(". ").filter(Boolean) : [];
+            arcLines.push(arcUpdate);
+            // Keep only the last 3 arc entries
+            const trimmedArc = arcLines.slice(-3).join(". ");
+            this.store.setCharacterArc(npcId, trimmedArc);
+            this.log(`[reflection] ${npc.name}'s arc: "${arcUpdate}"`);
+          }
         } catch (err) {
           console.warn(`[reflection] ${npc.name} reflection failed:`, err);
         }

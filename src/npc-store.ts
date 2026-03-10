@@ -1,4 +1,4 @@
-import type { NPC, EmotionalState, NpcPromise, BehavioralOverride, InventoryItem, ItemCategory, RelationshipState } from "./types";
+import type { NPC, EmotionalState, NpcPromise, BehavioralOverride, InventoryItem, ItemCategory, RelationshipState, ReactiveImpulse } from "./types";
 
 type Listener = () => void;
 
@@ -172,6 +172,85 @@ export class NpcStore {
     return this.promises.filter(
       (p) => p.promiserId === npcId || p.promiseeId === npcId
     );
+  }
+
+  // ── Reactive Impulses ──────────────────────
+
+  private reactiveImpulses: ReactiveImpulse[] = [];
+
+  addReactiveImpulse(impulse: ReactiveImpulse): void {
+    // Deduplicate: don't add if same NPC already has impulse toward same target
+    const existing = this.reactiveImpulses.find(
+      i => i.npcId === impulse.npcId && i.targetNpcId === impulse.targetNpcId
+    );
+    if (existing) {
+      // Replace if new impulse is more urgent
+      if (impulse.urgency > existing.urgency) {
+        const idx = this.reactiveImpulses.indexOf(existing);
+        this.reactiveImpulses[idx] = impulse;
+      }
+      return;
+    }
+    this.reactiveImpulses.push(impulse);
+  }
+
+  getReactiveImpulses(npcId: string): ReactiveImpulse[] {
+    return this.reactiveImpulses.filter(i => i.npcId === npcId);
+  }
+
+  getReactiveImpulseForPair(npcAId: string, npcBId: string): ReactiveImpulse | undefined {
+    return this.reactiveImpulses.find(
+      i => (i.npcId === npcAId && i.targetNpcId === npcBId) ||
+           (i.npcId === npcBId && i.targetNpcId === npcAId)
+    );
+  }
+
+  consumeReactiveImpulse(npcId: string, targetNpcId: string): ReactiveImpulse | undefined {
+    const idx = this.reactiveImpulses.findIndex(
+      i => i.npcId === npcId && i.targetNpcId === targetNpcId
+    );
+    if (idx === -1) return undefined;
+    return this.reactiveImpulses.splice(idx, 1)[0];
+  }
+
+  clearExpiredImpulses(): void {
+    const now = Date.now();
+    this.reactiveImpulses = this.reactiveImpulses.filter(i => i.expiresAt > now);
+  }
+
+  // ── Character Arc & Mood ──────────────────
+
+  setCharacterArc(npcId: string, arc: string): void {
+    const npc = this.npcs.get(npcId);
+    if (!npc) return;
+    npc.characterArc = arc;
+    this.notify();
+  }
+
+  /** Derive persistent mood from current emotional state. Returns the mood label or null. */
+  computeAndSetMood(npcId: string): string | null {
+    const npc = this.npcs.get(npcId);
+    if (!npc) return null;
+
+    const s = npc.emotionalState;
+    let newMood: string | null = null;
+
+    // Priority: negative moods first (most dramatically interesting)
+    if (s.fear > 0.5 && s.trust < 0.3) newMood = "paranoid";
+    else if (s.anger > 0.5 && s.disgust > 0.3) newMood = "bitter";
+    else if (s.sadness > 0.5) newMood = "melancholy";
+    else if (s.guilt > 0.5) newMood = "guilt-ridden";
+    else if (s.anger > 0.6) newMood = "volatile";
+    else if (s.curiosity > 0.6 && s.joy < 0.3) newMood = "restless";
+    // Positive moods
+    else if (s.joy > 0.7) newMood = "euphoric";
+
+    if (newMood !== npc.mood) {
+      npc.mood = newMood ?? undefined;
+      npc.moodSince = newMood ? Date.now() : undefined;
+      this.notify();
+    }
+    return newMood;
   }
 
   // ── Inventory ────────────────────────────────
