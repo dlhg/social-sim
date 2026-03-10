@@ -409,14 +409,21 @@ export class WorldSimulation {
       // 4. Waypoint mood matching
       const moods = wp.moods;
       if (moods.length > 0) {
-        if (moods.includes("reflective") && (emo.fear > 0.4 || emo.joy < 0.3))
+        if ((moods.includes("reflective") || moods.includes("contemplative")) && (emo.fear > 0.4 || emo.joy < 0.3))
           score += 1.5;
         if (moods.includes("social") && emo.joy > 0.5) score += 1.5;
-        if (moods.includes("intimate") && emo.trust > 0.6) score += 1;
+        if ((moods.includes("intimate") || moods.includes("romantic")) && emo.trust > 0.6) score += 1;
         if (moods.includes("gathering") && traits.includes("enthusiastic"))
           score += 1;
-        if (moods.includes("mysterious") && traits.includes("curious"))
+        if ((moods.includes("mysterious") || moods.includes("adventurous")) && traits.includes("curious"))
           score += 2;
+        if (moods.includes("competitive") && (traits.includes("competitive") || traits.includes("aggressive")))
+          score += 1.5;
+        if (moods.includes("melancholy") && emo.sadness > 0.4) score += 1.5;
+        if ((moods.includes("scholarly") || moods.includes("creative")) && emo.curiosity > 0.5)
+          score += 1.5;
+        if (moods.includes("spiritual") && (emo.guilt > 0.4 || emo.sadness > 0.4))
+          score += 1;
       }
 
       // 5. Time-of-day preferences
@@ -847,7 +854,7 @@ export class WorldSimulation {
     // Soliloquy trigger: reflective waypoints + solo activities → inner monologue opportunity
     if (this.onSoliloquyTrigger && waypoint) {
       const isReflective = waypoint.moods?.some(
-        m => ["reflective", "intimate", "mysterious"].includes(m)
+        m => ["reflective", "contemplative", "intimate", "mysterious", "spiritual", "melancholy"].includes(m)
       );
       const isAlone = !this.isNpcNearOthers(npc.npcId, 5);
       if (isReflective && isAlone) {

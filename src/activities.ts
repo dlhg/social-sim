@@ -267,19 +267,57 @@ export const ACTIVITIES: Record<WaypointActivityId, WaypointActivity> = {
 // ── Waypoint → Available Activities ─────────────
 
 export const WAYPOINT_ACTIVITIES: Record<string, WaypointActivityId[]> = {
+  // Legacy waypoints (kept for backwards compatibility with testmap)
   fountain:       ["people_watching", "sketching", "meditating", "napping"],
   bench:          ["reading", "writing", "sketching", "people_watching", "napping"],
   tree:           ["meditating", "reading", "napping", "stargazing"],
   garden:         ["gardening", "foraging", "meditating", "sketching"],
+
+  // Village center
+  town_square:    ["people_watching", "sketching", "shopping"],
   market:         ["shopping", "cooking", "people_watching"],
-  well:           ["wishing", "meditating", "fishing"],
-  bridge:         ["fishing", "people_watching", "sketching", "stargazing"],
+  well:           ["wishing", "meditating", "people_watching"],
+  notice_board:   ["reading", "writing", "people_watching"],
+  tavern_porch:   ["cooking", "people_watching", "napping"],
+
+  // Residential
+  cottage_row:    ["napping", "reading", "writing"],
+  clothesline:    ["people_watching"],
+  herb_garden:    ["gardening", "foraging", "meditating"],
+
+  // Nature / water
+  bridge:         ["fishing", "people_watching", "sketching", "meditating"],
+  pond:           ["fishing", "foraging", "meditating", "sketching"],
+  stream_bank:    ["fishing", "meditating", "sketching"],
+  meadow:         ["meditating", "napping", "foraging", "sketching"],
+
+  // Hills / outskirts
+  hilltop:        ["stargazing", "meditating", "sketching"],
+  eastern_ridge:  ["meditating", "sketching", "stargazing", "foraging"],
+  orchard:        ["foraging", "napping", "meditating"],
+  ancient_tree:   ["meditating", "reading", "napping", "stargazing"],
+
+  // Work / craft
+  blacksmith:     ["training", "people_watching"],
+  workshop:       ["sketching", "writing"],
+  mill:           ["people_watching", "meditating"],
+  stables:        ["people_watching", "napping"],
+
+  // Spiritual / historical
   chapel:         ["meditating", "writing", "napping"],
+  graveyard:      ["meditating", "writing"],
+  shrine:         ["meditating", "wishing"],
+  ruins:          ["foraging", "reading", "sketching"],
+
+  // Culture / recreation
   training_yard:  ["training", "people_watching"],
   library_ruins:  ["reading", "writing", "foraging"],
-  tavern_porch:   ["cooking", "people_watching", "napping"],
-  hilltop:        ["stargazing", "meditating", "sketching"],
-  pond:           ["fishing", "foraging", "meditating"],
+  theater_stage:  ["people_watching", "sketching"],
+
+  // Exploration / mystery
+  cave_entrance:  ["foraging", "meditating"],
+  watchtower:     ["stargazing", "sketching", "meditating"],
+  crossroads:     ["people_watching"],
 };
 
 // ── Selection Logic ─────────────────────────────

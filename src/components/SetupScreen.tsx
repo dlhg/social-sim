@@ -33,11 +33,18 @@ const LANGUAGES = [
 
 type TTSEngine = "chatterbox" | "kokoro";
 
+const MAPS = [
+  { url: "/assets/levels/village.tmj", label: "Village", description: "30 narrative waypoints, no art" },
+  { url: "/assets/levels/testmap.tmj", label: "Test Map", description: "Original tilemap with art" },
+];
+
 interface SetupScreenProps {
   roster: NPC[];
   language: string;
   ttsEngine: TTSEngine;
   llmConfig: LlmConfig;
+  mapUrl: string;
+  onMapChange: (url: string) => void;
   onAddToRoster: (npc: NPC) => void;
   onRemoveFromRoster: (npcId: string) => void;
   onLanguageChange: (language: string) => void;
@@ -57,6 +64,8 @@ export function SetupScreen({
   onRemoveFromRoster,
   onLanguageChange,
   onTtsEngineChange,
+  mapUrl,
+  onMapChange,
   onLlmConfigChange,
   onTestTts,
   onStartSimulation,
@@ -239,7 +248,7 @@ export function SetupScreen({
             >
               <span className="setup-section-title">Settings</span>
               <span className="setup-settings-summary">
-                {llmConfig.provider === "ollama" ? "Ollama" : "Groq"} · {language} · {ttsEngine === "chatterbox" ? "Chatterbox" : "Kokoro"}
+                {llmConfig.provider === "ollama" ? "Ollama" : "Groq"} · {language} · {ttsEngine === "chatterbox" ? "Chatterbox" : "Kokoro"} · {MAPS.find(m => m.url === mapUrl)?.label ?? "Custom"}
               </span>
               <span className={`setup-settings-chevron ${settingsOpen ? "open" : ""}`}>
                 ›
@@ -262,6 +271,24 @@ export function SetupScreen({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="setup-setting-group">
+                  <span className="setup-setting-label">Map</span>
+                  <div className="setup-tts-engine-options">
+                    {MAPS.map((m) => (
+                      <button
+                        key={m.url}
+                        className={`tts-engine-btn ${mapUrl === m.url ? "active" : ""}`}
+                        onClick={() => onMapChange(m.url)}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="tts-engine-hint">
+                    {MAPS.find(m => m.url === mapUrl)?.description ?? ""}
+                  </span>
                 </div>
 
                 <div className="setup-setting-group">

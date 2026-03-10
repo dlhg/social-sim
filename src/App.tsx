@@ -66,6 +66,9 @@ function App() {
   const ttsEngineRef = useRef(ttsEngine);
   ttsEngineRef.current = ttsEngine;
   const [llmConfig, setLlmConfig] = useState<LlmConfig>(() => loadLlmConfig());
+  const [mapUrl, setMapUrl] = useState("/assets/levels/village.tmj");
+  const mapUrlRef = useRef(mapUrl);
+  mapUrlRef.current = mapUrl;
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [dmToolsOpen, setDmToolsOpen] = useState(false);
   const [npcViewerOpen, setNpcViewerOpen] = useState(false);
@@ -231,11 +234,10 @@ function App() {
     for (const t of bubbleTimersRef.current.values()) clearTimeout(t);
     bubbleTimersRef.current.clear();
 
-    // Load tilemap (waypoints + collision)
+    // Load tilemap (waypoints + collision) — always reload to pick up map changes
     const tilemap = tilemapRef.current;
-    if (!tilemap.ready) {
-      await tilemap.load("/assets/levels/testmap.tmj");
-    }
+    tilemap.destroy();
+    await tilemap.load(mapUrlRef.current);
 
     // Create world simulation
     const world = new WorldSimulation({
@@ -833,6 +835,8 @@ function App() {
           language={language}
           ttsEngine={ttsEngine}
           llmConfig={llmConfig}
+          mapUrl={mapUrl}
+          onMapChange={setMapUrl}
           onAddToRoster={handleAddToRoster}
           onRemoveFromRoster={handleRemoveFromRoster}
           onLanguageChange={(lang) => {

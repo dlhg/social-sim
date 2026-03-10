@@ -83,18 +83,20 @@ export class TilemapRenderer {
     this.map = await resp.json();
 
     const ts = this.map!.tilesets[0];
-    this.tileset = ts;
+    if (ts?.image) {
+      this.tileset = ts;
 
-    // Resolve tileset image relative to the map URL
-    const mapBase = mapUrl.substring(0, mapUrl.lastIndexOf("/") + 1);
-    const imgUrl = mapBase + ts.image.replace(/\\/g, "/");
+      // Resolve tileset image relative to the map URL
+      const mapBase = mapUrl.substring(0, mapUrl.lastIndexOf("/") + 1);
+      const imgUrl = mapBase + ts.image.replace(/\\/g, "/");
 
-    await new Promise<void>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => { this.tilesetImage = img; resolve(); };
-      img.onerror = reject;
-      img.src = imgUrl;
-    });
+      await new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => { this.tilesetImage = img; resolve(); };
+        img.onerror = reject;
+        img.src = imgUrl;
+      });
+    }
 
     // Categorize layers
     const groundLayers: TiledLayer[] = [];
@@ -156,12 +158,16 @@ export class TilemapRenderer {
       const raw = objMood ?? layerMood ?? "social";
       const moods = raw.split(",").map(s => s.trim()).filter(Boolean);
 
+      // Use custom description if provided, otherwise generate one
+      const customDesc = obj.properties?.find(p => p.name === "description")?.value;
+      const description = customDesc || `${obj.name}, a ${moods.join(", ")} spot`;
+
       this.waypoints.push({
         id,
-        name: obj.name,
+        name: obj.name.trim(),
         position: { x: gridX, y: gridY },
         moods,
-        description: `${obj.name}, a ${moods.join(", ")} spot`,
+        description,
       });
     }
   }

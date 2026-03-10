@@ -1,0 +1,717 @@
+{ "compressionlevel":-1,
+ "height":80,
+ "infinite":false,
+ "layers":[
+        {
+         "draworder":"topdown",
+         "id":2,
+         "name":"Object Layer",
+         "objects":[
+                {
+                 "height":0,
+                 "id":1,
+                 "name":"Town Square",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"social, gathering"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Town Square, a cobblestone gathering place where paths converge and news travels fast"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":640,
+                 "y":640
+                },
+                {
+                 "height":0,
+                 "id":2,
+                 "name":"Market",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"shopping, social"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Market, a cluster of wooden stalls where villagers trade goods and gossip"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":704,
+                 "y":608
+                },
+                {
+                 "height":0,
+                 "id":3,
+                 "name":"Well",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"social, gathering"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the old stone Well, where people gather to draw water and share stories"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":592,
+                 "y":672
+                },
+                {
+                 "height":0,
+                 "id":4,
+                 "name":"Notice Board",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"curious, social"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Notice Board, a weathered wooden board covered in handwritten notices and announcements"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":672,
+                 "y":576
+                },
+                {
+                 "height":0,
+                 "id":5,
+                 "name":"Tavern Porch",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"social, relaxed"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Tavern Porch, a shaded spot where people sit with drinks and watch the world go by"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":560,
+                 "y":608
+                },
+                {
+                 "height":0,
+                 "id":6,
+                 "name":"Cottage Row",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"intimate, peaceful"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"Cottage Row, a quiet lane of stone cottages with flower boxes in the windows"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":448,
+                 "y":560
+                },
+                {
+                 "height":0,
+                 "id":7,
+                 "name":"Clothesline",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"mundane, social"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Clothesline, a sunny spot between cottages where laundry flutters on the line"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":416,
+                 "y":608
+                },
+                {
+                 "height":0,
+                 "id":8,
+                 "name":"Herb Garden",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"contemplative, nurturing"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Herb Garden, a small fenced plot bursting with medicinal herbs and fragrant flowers"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":480,
+                 "y":480
+                },
+                {
+                 "height":0,
+                 "id":9,
+                 "name":"Bridge",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"contemplative, mysterious"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Bridge, a creaky wooden crossing over a murmuring stream whose old planks groan underfoot"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":320,
+                 "y":880
+                },
+                {
+                 "height":0,
+                 "id":10,
+                 "name":"Pond",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"contemplative, relaxed"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Pond, a still body of water surrounded by cattails with the sky reflected on its surface"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":224,
+                 "y":800
+                },
+                {
+                 "height":0,
+                 "id":11,
+                 "name":"Hilltop",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"contemplative, reflective"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Hilltop, a grassy knoll offering a sweeping view of the village and surrounding countryside"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":960,
+                 "y":192
+                },
+                {
+                 "height":0,
+                 "id":12,
+                 "name":"Meadow",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"relaxed, romantic"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Meadow, a wildflower field buzzing with bees and tucked away from the village bustle"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":192,
+                 "y":672
+                },
+                {
+                 "height":0,
+                 "id":13,
+                 "name":"Orchard",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"foraging, relaxed"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Orchard, rows of gnarled apple trees heavy with fruit in season"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":896,
+                 "y":288
+                },
+                {
+                 "height":0,
+                 "id":14,
+                 "name":"Ancient Tree",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"spiritual, mysterious"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Ancient Tree, a massive oak that has stood for centuries with old symbols carved into its trunk"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":352,
+                 "y":256
+                },
+                {
+                 "height":0,
+                 "id":15,
+                 "name":"Stream Bank",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"contemplative, relaxed"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Stream Bank, a gentle stretch where water pools between mossy rocks"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":288,
+                 "y":768
+                },
+                {
+                 "height":0,
+                 "id":16,
+                 "name":"Eastern Ridge",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"adventurous, contemplative"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Eastern Ridge, a rocky trail along the ridge with views of the distant valley"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":1152,
+                 "y":352
+                },
+                {
+                 "height":0,
+                 "id":17,
+                 "name":"Blacksmith",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"industrious, social"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Blacksmith's forge, where the ring of hammer on anvil fills the air"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":832,
+                 "y":704
+                },
+                {
+                 "height":0,
+                 "id":18,
+                 "name":"Workshop",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"creative, industrious"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Workshop, a cluttered carpenter's space smelling of fresh-cut wood and varnish"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":880,
+                 "y":672
+                },
+                {
+                 "height":0,
+                 "id":19,
+                 "name":"Mill",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"industrious, contemplative"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Mill, its waterwheel turning slowly in the current as grain is ground to flour"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":800,
+                 "y":800
+                },
+                {
+                 "height":0,
+                 "id":20,
+                 "name":"Stables",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"nurturing, social"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Stables, a hay-scented shelter where horses and mules are tended"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":928,
+                 "y":768
+                },
+                {
+                 "height":0,
+                 "id":21,
+                 "name":"Chapel",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"contemplative, spiritual"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Chapel, a small stone building with stained glass windows casting colored light on the floor"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":896,
+                 "y":512
+                },
+                {
+                 "height":0,
+                 "id":22,
+                 "name":"Graveyard",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"contemplative, melancholy"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Graveyard, a quiet burial ground with weathered headstones and overgrown paths"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":992,
+                 "y":576
+                },
+                {
+                 "height":0,
+                 "id":23,
+                 "name":"Shrine",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"spiritual, mysterious"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Shrine, a mossy roadside altar to an old spirit adorned with faded ribbons and small offerings"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":768,
+                 "y":384
+                },
+                {
+                 "height":0,
+                 "id":24,
+                 "name":"Ruins",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"mysterious, curious"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Ruins, crumbling stone walls from a structure older than anyone can remember"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":160,
+                 "y":224
+                },
+                {
+                 "height":0,
+                 "id":25,
+                 "name":"Training Yard",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"competitive, social"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Training Yard, a packed-earth yard with practice dummies and weapon racks"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":736,
+                 "y":880
+                },
+                {
+                 "height":0,
+                 "id":26,
+                 "name":"Library Ruins",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"curious, scholarly"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Library Ruins, roofless remains of an old library with stone shelves still holding fragments of books"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":544,
+                 "y":288
+                },
+                {
+                 "height":0,
+                 "id":27,
+                 "name":"Theater Stage",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"social, creative"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Theater Stage, a simple open-air stage of worn wooden planks facing rows of log benches"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":608,
+                 "y":800
+                },
+                {
+                 "height":0,
+                 "id":28,
+                 "name":"Cave Entrance",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"mysterious, adventurous"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Cave Entrance, a dark opening in the hillside half-hidden by brambles exhaling cool damp air"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":128,
+                 "y":992
+                },
+                {
+                 "height":0,
+                 "id":29,
+                 "name":"Watchtower",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"mysterious, contemplative"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Watchtower, an abandoned stone tower at the village edge with stairs still climbable to the top"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":1120,
+                 "y":992
+                },
+                {
+                 "height":0,
+                 "id":30,
+                 "name":"Crossroads",
+                 "point":true,
+                 "properties":[
+                        {
+                         "name":"mood",
+                         "type":"string",
+                         "value":"social, transient"
+                        },
+                        {
+                         "name":"description",
+                         "type":"string",
+                         "value":"the Crossroads, where the main road forks at an old signpost pointing in three directions"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":640,
+                 "y":448
+                }],
+         "opacity":1,
+         "type":"objectgroup",
+         "visible":true,
+         "x":0,
+         "y":0
+        }],
+ "nextlayerid":3,
+ "nextobjectid":31,
+ "orientation":"orthogonal",
+ "renderorder":"right-down",
+ "tiledversion":"1.11.2",
+ "tileheight":16,
+ "tilesets":[],
+ "tilewidth":16,
+ "type":"map",
+ "version":"1.10",
+ "width":80
+}
