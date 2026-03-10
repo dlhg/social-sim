@@ -210,7 +210,7 @@ export function FeedPanel({
             ? `activity-entry activity-${item.event.activityType}`
             : "activity-entry";
           return (
-            <div key={`act-${+item.event.timestamp}-${item.event.npcId ?? i}`} className={`${activityClass} feed-item ${visible ? "feed-item-visible" : "feed-item-hidden"}`}>
+            <div key={`act-${i}-${+item.event.timestamp}-${item.event.npcId ?? ''}`} className={`${activityClass} feed-item ${visible ? "feed-item-visible" : "feed-item-hidden"}`}>
               <span className="activity-time">
                 {formatTime(item.event.timestamp)}
               </span>{" "}
