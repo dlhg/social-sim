@@ -222,6 +222,10 @@ export class ConversationManager {
 
   // (TTS-in-progress state moved into ttsInFlight map above)
 
+  // Soliloquy rate limiting — one per NPC per 3 minutes
+  private soliloquyCooldowns = new Map<string, number>();
+  private readonly SOLILOQUY_COOLDOWN_MS = 180_000;
+
   constructor(
     private store: NpcStore,
     private memory: MemoryService,
@@ -664,6 +668,8 @@ export class ConversationManager {
         frozenAffectionBtoA: frozenBtoA?.affection,
         sceneDirection,
         narrativeSummary: this.narrativeSummary || undefined,
+        betrayalsKnownByA: this.getDiscoveredBetrayals(npcAId),
+        betrayalsKnownByB: this.getDiscoveredBetrayals(npcBId),
       }
     );
 
@@ -1131,6 +1137,8 @@ export class ConversationManager {
         previousConversation,
         sceneDirection,
         narrativeSummary: this.narrativeSummary || undefined,
+        betrayalsKnownByA: this.getDiscoveredBetrayals(npcAId),
+        betrayalsKnownByB: this.getDiscoveredBetrayals(npcBId),
       }
     );
 
@@ -1459,6 +1467,17 @@ export class ConversationManager {
         // ── Triangulation — love triangles and jealousy patterns ──
         score += this.triangulationScore(a, b, allNpcs);
 
+        // ── Undiscovered betrayals — dramatic tension waiting to explode ──
+        const betrayalsAB = this.store.getBetrayalsBetween(a.id, b.id);
+        const undiscoveredBetrayals = betrayalsAB.filter(bt => !bt.discoveredByVictim);
+        const discoveredBetrayals = betrayalsAB.filter(bt => bt.discoveredByVictim);
+        if (undiscoveredBetrayals.length > 0) {
+          score += 4; // high tension — betrayal could surface
+        }
+        if (discoveredBetrayals.length > 0) {
+          score += 3; // victim knows — confrontation likely
+        }
+
         // ── Isolation — NPC who hasn't had a positive interaction in a while ──
         const lastContactA = this.cooldowns.get(a.id) ?? 0;
         const lastContactB = this.cooldowns.get(b.id) ?? 0;
@@ -1581,6 +1600,18 @@ export class ConversationManager {
         (p.promiseeId === b.id || p.promiserId === b.id));
     for (const p of promises) {
       patterns.push(`There's an active promise between them: "${p.text}"`);
+    }
+
+    // Betrayals — discovered and undiscovered
+    const betrayals = this.store.getBetrayalsBetween(a.id, b.id);
+    for (const bt of betrayals) {
+      const betrayer = bt.betrayerId === a.id ? a : b;
+      const victim = bt.victimId === a.id ? a : b;
+      if (bt.discoveredByVictim) {
+        patterns.push(`${victim.name} knows that ${betrayer.name} betrayed them: "${bt.description}" — this is a deep wound`);
+      } else {
+        patterns.push(`${betrayer.name} betrayed ${victim.name} ("${bt.description}") but ${victim.name} doesn't know yet — dramatic irony`);
+      }
     }
 
     return patterns;
@@ -2059,6 +2090,35 @@ export class ConversationManager {
         );
 
         this.log(`${speaker.name} gossiped about ${mentionedName} to ${listener.name}`);
+
+        // ── Betrayal discovery: if gossip reveals a conspiracy/rumor against the listener ──
+        // Check if the mentioned NPC betrayed the listener and the gossip content hints at it
+        if (mention.npc_id !== listener.id) {
+          const undiscovered = this.store.getBetrayals(listener.id)
+            .filter(b => !b.discoveredByVictim && b.betrayerId === mention.npc_id);
+          for (const betrayal of undiscovered) {
+            // Fuzzy match: if the gossip mentions conspiracy, rumor, or the betrayal description keywords
+            const gossipLower = mention.what_was_said.toLowerCase();
+            const betrayalLower = betrayal.description.toLowerCase();
+            const hasOverlap = betrayalLower.split(" ").some(w =>
+              w.length > 4 && gossipLower.includes(w)
+            ) || gossipLower.includes("conspir") || gossipLower.includes("rumor") || gossipLower.includes("behind");
+            if (hasOverlap) {
+              this.store.discoverBetrayal(betrayal.betrayerId, listener.id);
+              this.store.addReactiveImpulse({
+                id: `impulse_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                npcId: listener.id,
+                targetNpcId: betrayal.betrayerId,
+                reason: `Discovered that ${this.npcName(betrayal.betrayerId)} betrayed them: ${betrayal.description}`,
+                conversationType: "confrontation",
+                urgency: 0.95,
+                expiresAt: Date.now() + 5 * 60_000,
+                sourceMemoryText: `Learned from ${speaker.name} that ${this.npcName(betrayal.betrayerId)} acted against me`,
+              });
+              this.log(`[betrayal-discovered] ${listener.name} learned from gossip that ${this.npcName(betrayal.betrayerId)} betrayed them!`);
+            }
+          }
+        }
       }
     }
 
@@ -2662,21 +2722,37 @@ export class ConversationManager {
       avgSentiment < -0.03 ? "tense" :
       "neutral";
 
-    // Pick 1-2 representative quotes (first speaker line + last line)
-    const firstMsg = session.messages[0];
-    const lastMsg = session.messages[session.messages.length - 1];
+    // Pick the most emotionally impactful quote from the other person
+    const findKeyQuote = (selfId: string): string | null => {
+      const theirMsgs = session.messages.filter(m => m.npcId !== selfId && m.rawResponse);
+      if (theirMsgs.length === 0) return null;
+
+      // Score each message by emotional impact (sum of absolute deltas)
+      let bestMsg = theirMsgs[theirMsgs.length - 1]; // fallback to last
+      let bestScore = 0;
+      for (const msg of theirMsgs) {
+        const r = msg.rawResponse;
+        if (!r) continue;
+        const score = Object.values(r.emotion_delta).reduce((sum, v) => sum + Math.abs(v), 0)
+          + Math.abs(r.relationship_delta) * 3
+          + (r.secret_revealed ? 2 : 0)
+          + (r.action ? 1.5 : 0);
+        if (score > bestScore) {
+          bestScore = score;
+          bestMsg = msg;
+        }
+      }
+      return bestMsg.text;
+    };
 
     const buildSummary = (selfId: string, otherName: string) => {
-      const myMsgs = session.messages.filter(m => m.npcId === selfId);
-      const theirMsgs = session.messages.filter(m => m.npcId !== selfId);
-      const myLastSpeech = myMsgs[myMsgs.length - 1]?.text;
-      const theirLastSpeech = theirMsgs[theirMsgs.length - 1]?.text;
+      const keyQuote = findKeyQuote(selfId);
 
       let summary = `I had a ${toneWord} conversation with ${otherName} (${session.turnCount} turns).`;
-      if (theirLastSpeech) {
-        const truncated = theirLastSpeech.length > 80
-          ? theirLastSpeech.slice(0, 77) + "..."
-          : theirLastSpeech;
+      if (keyQuote) {
+        const truncated = keyQuote.length > 120
+          ? keyQuote.slice(0, 117) + "..."
+          : keyQuote;
         summary += ` They said: "${truncated}"`;
       }
       if (hadAction) summary += " Something significant happened.";
@@ -2881,8 +2957,9 @@ export class ConversationManager {
         }
       }
 
-      // ── Conspiracy against a third NPC → conspirator seeks target ──
+      // ── Conspiracy against a third NPC → conspirator seeks target + betrayal check ──
       if (r.action?.action === "conspire" && r.action.target_npc_id) {
+        const targetId = r.action.target_npc_id;
         // Both conspirators get impulse to approach the target
         const conspirators = [npcAId, npcBId];
         for (const cId of conspirators) {
@@ -2890,13 +2967,56 @@ export class ConversationManager {
             this.store.addReactiveImpulse({
               id: `impulse_${now}_${Math.random().toString(36).slice(2, 6)}`,
               npcId: cId,
-              targetNpcId: r.action.target_npc_id,
-              reason: `Acting on conspiracy against ${this.npcName(r.action.target_npc_id)}`,
+              targetNpcId: targetId,
+              reason: `Acting on conspiracy against ${this.npcName(targetId)}`,
               conversationType: "casual",
               urgency: 0.5,
               expiresAt: now + IMPULSE_DURATION,
               sourceMemoryText: r.action.detail ?? "conspiracy",
             });
+          }
+
+          // ── Betrayal detection: conspiring against someone you have a promise/alliance with ──
+          const conspirator = this.store.get(cId);
+          if (conspirator) {
+            const hasPromiseWith = this.store.getPromisesFor(cId)
+              .some(p => p.status === "active" &&
+                (p.promiseeId === targetId || p.promiserId === targetId));
+            const hasPositiveRelation = (conspirator.relationships[targetId]?.regard ?? 0) > 0.3;
+
+            if (hasPromiseWith || hasPositiveRelation) {
+              this.store.addBetrayal({
+                betrayerId: cId,
+                victimId: targetId,
+                description: `Conspired against ${this.npcName(targetId)} with ${this.npcName(cId === npcAId ? npcBId : npcAId)}: ${r.action.detail ?? ""}`,
+                discoveredByVictim: false,
+                timestamp: now,
+              });
+              this.log(`[betrayal] ${conspirator.name} betrayed ${this.npcName(targetId)} by conspiring against them`);
+            }
+          }
+        }
+      }
+
+      // ── Spread rumor about someone → betrayal if they're an ally ──
+      if (r.action?.action === "spread_rumor" && r.action.target_npc_id) {
+        const rumorTargetId = r.action.target_npc_id;
+        const spreader = this.store.get(msg.npcId);
+        if (spreader) {
+          const hasPositiveRelation = (spreader.relationships[rumorTargetId]?.regard ?? 0) > 0.2;
+          const hasPromiseWith = this.store.getPromisesFor(msg.npcId)
+            .some(p => p.status === "active" &&
+              (p.promiseeId === rumorTargetId || p.promiserId === rumorTargetId));
+
+          if (hasPositiveRelation || hasPromiseWith) {
+            this.store.addBetrayal({
+              betrayerId: msg.npcId,
+              victimId: rumorTargetId,
+              description: `Spread a rumor about ${this.npcName(rumorTargetId)}: ${r.action.detail ?? ""}`,
+              discoveredByVictim: false,
+              timestamp: now,
+            });
+            this.log(`[betrayal] ${spreader.name} betrayed ${this.npcName(rumorTargetId)} by spreading a rumor about them`);
           }
         }
       }
@@ -2941,6 +3061,14 @@ export class ConversationManager {
     const npc = this.store.get(npcId);
     if (!npc) return;
 
+    // Rate limit: one soliloquy per NPC per 3 minutes
+    const now = Date.now();
+    const lastSoliloquy = this.soliloquyCooldowns.get(npcId) ?? 0;
+    if (now - lastSoliloquy < this.SOLILOQUY_COOLDOWN_MS) return;
+
+    // Don't compete with the director for LLM slot
+    if (this.llmPairKey) return;
+
     // Only soliloquize if emotionally intense or has recent important memories
     const emo = npc.emotionalState;
     const intensity = Math.max(emo.anger, emo.fear, emo.sadness, emo.guilt, emo.joy * 0.5);
@@ -2949,6 +3077,8 @@ export class ConversationManager {
 
     // Don't soliloquize if in conversation or recently spoke
     if (this.activeSession?.participantIds.includes(npcId)) return;
+
+    this.soliloquyCooldowns.set(npcId, now);
 
     const allNpcs = this.store.getAll().map(n => ({ id: n.id, name: n.name }));
 
@@ -3378,11 +3508,39 @@ Respond with ONLY the summary text, no JSON, no markdown.`,
             this.store.setCharacterArc(npcId, trimmedArc);
             this.log(`[reflection] ${npc.name}'s arc: "${arcUpdate}"`);
           }
+
+          // ── Trait evolution ──
+          const traitEvolution = typeof parsed.trait_evolution === "string" && parsed.trait_evolution.trim().length > 0
+            ? parsed.trait_evolution.trim().toLowerCase()
+            : null;
+          if (traitEvolution) {
+            const currentNpc = this.store.get(npcId);
+            if (currentNpc && !currentNpc.personalityTraits.some(
+              t => t.toLowerCase() === traitEvolution
+            )) {
+              // Cap at 7 traits to prevent unbounded growth
+              if (currentNpc.personalityTraits.length < 7) {
+                currentNpc.personalityTraits.push(traitEvolution);
+                this.store.notifyChange();
+                this.log(`[reflection] ${npc.name} develops new trait: "${traitEvolution}"`);
+              }
+            }
+          }
         } catch (err) {
           console.warn(`[reflection] ${npc.name} reflection failed:`, err);
         }
       })
     );
+  }
+
+  /** Get discovered betrayals for an NPC (for prompt injection) */
+  private getDiscoveredBetrayals(npcId: string): Array<{ betrayerName: string; description: string }> {
+    return this.store.getBetrayals(npcId)
+      .filter(b => b.discoveredByVictim)
+      .map(b => ({
+        betrayerName: this.npcName(b.betrayerId),
+        description: b.description,
+      }));
   }
 
   private npcName(id: string): string {

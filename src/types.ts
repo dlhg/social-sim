@@ -158,6 +158,16 @@ export interface NpcPromise {
   resolveAtPhase?: number; // phase index when this plan should resolve
 }
 
+// ── Betrayal Tracking ───────────────────────
+/** Tracks when an NPC acts against someone they promised loyalty to or conspires behind their back */
+export interface BetrayalRecord {
+  betrayerId: string;
+  victimId: string;
+  description: string;      // what the betrayal was
+  discoveredByVictim: boolean; // has the victim found out?
+  timestamp: number;
+}
+
 // ── Day Cycle ────────────────────────────────
 export type DayPhase = "morning" | "afternoon" | "evening";
 

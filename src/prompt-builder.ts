@@ -132,6 +132,8 @@ export interface PromptContext {
   conversationType?: ConversationType;
   frozenRegard?: number;
   frozenAffection?: number;
+  /** Betrayals this speaker has discovered */
+  betrayalsKnown?: Array<{ betrayerName: string; description: string }>;
 }
 
 export function buildSystemPrompt(
@@ -206,12 +208,16 @@ export function buildSystemPrompt(
     ? `\nPERSISTENT MOOD: You've been feeling ${speaker.mood} for a while now. This colors everything — your patience, your openness, your reactions. It's not just a momentary feeling; it's a state you're carrying.`
     : "";
 
+  const betrayalBlock = ctx.betrayalsKnown?.length
+    ? `\nBETRAYALS DISCOVERED: ${ctx.betrayalsKnown.map(b => `${b.betrayerName} betrayed you — ${b.description}`).join("; ")}. This knowledge burns. You may confront them, act cold, or use it strategically.`
+    : "";
+
   return `You are ${speaker.name}.
 
 ${identityBlock}${arcBlock}${moodBlock}
 CURRENT EMOTIONAL STATE: ${emotionSummary}
 CURRENT GOAL: ${speaker.currentGoal ?? "none"}
-${secretsBlock}${inventoryBlock}
+${secretsBlock}${inventoryBlock}${betrayalBlock}
 
 You are talking to ${listener.name}.
 YOUR RELATIONSHIP WITH ${listener.name}: ${relLabel} (regard: ${relationship.toFixed(2)})${affection > 0.15 ? `\nROMANTIC FEELINGS: ${describeAffection(affection)}` : ""}
@@ -374,6 +380,10 @@ export interface BatchPromptContext {
   sceneDirection?: string;
   /** Cumulative narrative arc summary fed from conversation-manager */
   narrativeSummary?: string;
+  /** Betrayals that NPC A knows about (discovered) */
+  betrayalsKnownByA?: Array<{ betrayerName: string; description: string }>;
+  /** Betrayals that NPC B knows about (discovered) */
+  betrayalsKnownByB?: Array<{ betrayerName: string; description: string }>;
 }
 
 export function buildBatchConversationMessages(
@@ -454,12 +464,19 @@ export function buildBatchConversationMessages(
     ? `\nPersistent mood: ${npcB.mood} (this colors their patience, openness, and reactions)`
     : "";
 
+  const betrayalBlockA = ctx.betrayalsKnownByA?.length
+    ? `\nBETRAYALS DISCOVERED: ${ctx.betrayalsKnownByA.map(b => `${b.betrayerName} betrayed you — ${b.description}`).join("; ")}. This knowledge burns. You may confront them, act cold, or use it strategically.`
+    : "";
+  const betrayalBlockB = ctx.betrayalsKnownByB?.length
+    ? `\nBETRAYALS DISCOVERED: ${ctx.betrayalsKnownByB.map(b => `${b.betrayerName} betrayed you — ${b.description}`).join("; ")}. This knowledge burns. You may confront them, act cold, or use it strategically.`
+    : "";
+
   const system = `You are a dialogue writer. Generate a complete conversation between two characters.
 
 CHARACTER A: ${npcA.name} (id: "${npcA.id}")
 ${identityA}${arcA}${moodA}
 Emotional state: ${emotionsA}
-Current goal: ${npcA.currentGoal ?? "none"}${secretsA}${inventoryA}${plansBlockA}
+Current goal: ${npcA.currentGoal ?? "none"}${secretsA}${inventoryA}${plansBlockA}${betrayalBlockA}
 Relationship with ${npcB.name}: ${relationshipLabel(relAtoB)} (regard: ${relAtoB.toFixed(2)})${affAtoB > 0.15 ? ` | Romantic: ${describeAffection(affAtoB)}` : ""}
 ${describeRelationshipDimensions(npcA, npcB)}
 Memories of ${npcB.name}:
@@ -468,7 +485,7 @@ ${memDirectA || "(none)"}${memAboutA ? `\nThings heard about ${npcB.name}:\n${me
 CHARACTER B: ${npcB.name} (id: "${npcB.id}")
 ${identityB}${arcB}${moodB}
 Emotional state: ${emotionsB}
-Current goal: ${npcB.currentGoal ?? "none"}${secretsB}${inventoryB}${plansBlockB}
+Current goal: ${npcB.currentGoal ?? "none"}${secretsB}${inventoryB}${plansBlockB}${betrayalBlockB}
 Relationship with ${npcA.name}: ${relationshipLabel(relBtoA)} (regard: ${relBtoA.toFixed(2)})${affBtoA > 0.15 ? ` | Romantic: ${describeAffection(affBtoA)}` : ""}
 ${describeRelationshipDimensions(npcB, npcA)}
 Memories of ${npcA.name}:
@@ -567,14 +584,17 @@ ${conversationSummary}
 
 Now reflect privately. What are you really thinking? What did you learn? How do you feel? Are you suspicious, hopeful, worried, amused? Be honest — no one can hear this.
 
-Also consider: has this conversation changed what you want? Do you have a new goal, or does your old goal still matter? Has this experience changed you as a person in any way?
+Also consider: has this conversation changed what you want? Do you have a new goal, or does your old goal still matter? Has this experience changed you as a person in any way? Have you grown beyond one of your personality traits, or is a new side of you emerging?
+
+YOUR PERSONALITY TRAITS: ${npc.personalityTraits.join(", ")}
 
 Respond with ONLY a single JSON object:
 {
   "thought": "your private inner thought, 1-2 sentences",
   "interpretation": "what this conversation meant to you — what was the other person really after? what shifted between you? 1 sentence",
   "goal_update": "your new goal or intention based on what happened (e.g. 'confront Mara about the rumor', 'spend more time with Bob', 'find out what Ellis is hiding') — or null if your current goal hasn't changed",
-  "arc_update": "how this experience has changed you as a person, in 1 sentence (e.g. 'I'm starting to realize that being right matters less than being kind') — or null if you haven't changed"
+  "arc_update": "how this experience has changed you as a person, in 1 sentence (e.g. 'I'm starting to realize that being right matters less than being kind') — or null if you haven't changed",
+  "trait_evolution": "a NEW personality trait you're developing that you didn't have before (e.g. an anxious person becoming 'growing confident', or a cynical person becoming 'cautiously hopeful') — or null if no trait change. This should be rare and meaningful, not every conversation."
 }
 
 Output ONLY the JSON object. No markdown, no code fences, no extra text.

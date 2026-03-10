@@ -1,4 +1,4 @@
-import type { NPC, EmotionalState, NpcPromise, BehavioralOverride, InventoryItem, ItemCategory, RelationshipState, ReactiveImpulse } from "./types";
+import type { NPC, EmotionalState, NpcPromise, BehavioralOverride, InventoryItem, ItemCategory, RelationshipState, ReactiveImpulse, BetrayalRecord } from "./types";
 
 type Listener = () => void;
 
@@ -216,6 +216,34 @@ export class NpcStore {
   clearExpiredImpulses(): void {
     const now = Date.now();
     this.reactiveImpulses = this.reactiveImpulses.filter(i => i.expiresAt > now);
+  }
+
+  // ── Betrayal Tracking ──────────────────────
+
+  private betrayals: BetrayalRecord[] = [];
+
+  addBetrayal(record: BetrayalRecord): void {
+    this.betrayals.push(record);
+  }
+
+  getBetrayals(victimId: string): BetrayalRecord[] {
+    return this.betrayals.filter(b => b.victimId === victimId);
+  }
+
+  getBetrayalsBetween(npcAId: string, npcBId: string): BetrayalRecord[] {
+    return this.betrayals.filter(
+      b => (b.betrayerId === npcAId && b.victimId === npcBId) ||
+           (b.betrayerId === npcBId && b.victimId === npcAId)
+    );
+  }
+
+  /** Mark a betrayal as discovered by the victim */
+  discoverBetrayal(betrayerId: string, victimId: string): BetrayalRecord | undefined {
+    const b = this.betrayals.find(
+      r => r.betrayerId === betrayerId && r.victimId === victimId && !r.discoveredByVictim
+    );
+    if (b) b.discoveredByVictim = true;
+    return b;
   }
 
   // ── Character Arc & Mood ──────────────────
