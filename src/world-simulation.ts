@@ -646,7 +646,7 @@ export class WorldSimulation {
       [0, -1], [0, 1], [-1, 0], [1, 0],
     ];
 
-    const MAX_ITER = 3000;
+    const MAX_ITER = 10000;
     let iter = 0;
 
     while (heap.length > 0 && iter < MAX_ITER) {
