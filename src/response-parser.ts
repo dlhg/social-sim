@@ -53,6 +53,9 @@ export function repairJson(s: string): string {
   // Replace undefined with null
   r = r.replace(/:\s*undefined\b/g, ": null");
 
+  // Fix missing values: {"key":} or {"key":, -> {"key":null} or {"key":null,
+  r = r.replace(/:\s*([},\]])/g, ": null$1");
+
   // Close truncated JSON — count unmatched braces/brackets
   let openBraces = 0;
   let openBrackets = 0;
