@@ -20,6 +20,7 @@ import type { NPC, BubbleData, FloaterData, ActionType, WaypointActivityId, DayP
 import { ACTIVITIES } from "./activities";
 import { pickInteraction, executeInteraction } from "./interactions";
 import { TTSService } from "./tts-service";
+import { PRESET_PROMISES, PRESET_IMPULSES } from "./npcs";
 import type { NpcSnapshot, FeedItem } from "./components/SidePanel";
 import "./App.css";
 
@@ -121,8 +122,23 @@ function App() {
   }, []);
 
   const handleStartSimulation = useCallback(() => {
-    storeRef.current = new NpcStore(roster);
-    memoryRef.current = new MemoryService(storeRef.current);
+    const store = new NpcStore(roster);
+    storeRef.current = store;
+    memoryRef.current = new MemoryService(store);
+
+    // Seed preset promises and impulses if the relevant NPCs are in the roster
+    const rosterIds = new Set(roster.map(n => n.id));
+    for (const promise of PRESET_PROMISES) {
+      if (rosterIds.has(promise.promiserId) && rosterIds.has(promise.promiseeId)) {
+        store.addPromise({ ...promise, madeAt: Date.now() - 300_000 });
+      }
+    }
+    for (const impulse of PRESET_IMPULSES) {
+      if (rosterIds.has(impulse.npcId) && rosterIds.has(impulse.targetNpcId)) {
+        store.addReactiveImpulse({ ...impulse, expiresAt: Date.now() + 10 * 60_000 });
+      }
+    }
+
     handleStart();
   }, [roster]);
 

@@ -1,4 +1,4 @@
-import type { NPC, EmotionalState, InventoryItem, ItemCategory } from "./types";
+import type { NPC, EmotionalState, InventoryItem, ItemCategory, NpcPromise, BetrayalRecord, ReactiveImpulse, MemoryType, MemoryCategory } from "./types";
 import { ITEM_LIFETIME_BY_CATEGORY } from "./types";
 
 export const COLOR_SWATCHES = [
@@ -258,6 +258,24 @@ export function randomizeFields(existingIds: string[]): RandomNpcFields {
   };
 }
 
+const RANDOM_GOALS = [
+  "find out who's been leaving strange marks on the old oak tree",
+  "gather herbs for a remedy they've been working on",
+  "find a quiet place to think without being interrupted",
+  "figure out what that noise was last night near the bridge",
+  "trade something they found for something they actually need",
+  "settle a score from a conversation that's been nagging at them",
+  "find someone willing to listen to a story they've been carrying",
+  "explore the path beyond the eastern ridge",
+  "sketch the view from the highest point before sunset",
+  "track down the source of a rumor they overheard",
+  "test whether someone they met recently can be trusted",
+  "practice something in private before anyone sees",
+  "return something they borrowed and never gave back",
+  "avoid a certain person for the rest of the day",
+  "find out if their suspicion about someone is justified",
+];
+
 export function randomizeNpc(existingIds: string[]): NPC {
   const usedNames = new Set(existingIds);
   let name = pick(RANDOM_NAMES);
@@ -279,9 +297,58 @@ export function randomizeNpc(existingIds: string[]): NPC {
   const coreDesires = pickN(RANDOM_DESIRES, 1, 3);
   const secrets = pickN(RANDOM_SECRETS, 1, 2);
   const backstory = generateBackstory(name, personalityTraits, coreDesires, secrets);
-
   const inventory = randomizeInventory();
-  return createNpc({ id, name, avatar, color, personalityTraits, coreDesires, backstory, secrets, inventory });
+
+  // Derive initial emotional state from personality traits
+  const emotionalState = deriveEmotionsFromTraits(personalityTraits);
+
+  const npc = createNpc({ id, name, avatar, color, personalityTraits, coreDesires, backstory, secrets, inventory, emotionalState });
+
+  // Give them a starting goal
+  npc.currentGoal = pick(RANDOM_GOALS);
+
+  // Derive mood from emotional state
+  computeInitialMood(npc);
+
+  return npc;
+}
+
+/** Derive a starting emotional state from personality traits */
+function deriveEmotionsFromTraits(traits: string[]): Partial<EmotionalState> {
+  const emo: Partial<EmotionalState> = {};
+  for (const t of traits) {
+    const tl = t.toLowerCase();
+    if (["anxious", "paranoid", "suspicious"].includes(tl)) { emo.fear = (emo.fear ?? 0.3) + 0.25; emo.trust = Math.min(emo.trust ?? 0.3, 0.2); }
+    if (["brooding", "melancholic", "wistful", "pessimistic"].includes(tl)) { emo.sadness = (emo.sadness ?? 0.1) + 0.2; emo.joy = Math.min(emo.joy ?? 0.5, 0.25); }
+    if (["competitive", "confrontational", "vindictive", "territorial"].includes(tl)) { emo.anger = (emo.anger ?? 0) + 0.2; }
+    if (["playful", "optimistic", "enthusiastic", "whimsical"].includes(tl)) { emo.joy = (emo.joy ?? 0.5) + 0.15; }
+    if (["curious", "perceptive", "dreamy"].includes(tl)) { emo.curiosity = (emo.curiosity ?? 0.4) + 0.15; }
+    if (["cynical", "calculating", "detached"].includes(tl)) { emo.trust = Math.min(emo.trust ?? 0.5, 0.2); emo.disgust = (emo.disgust ?? 0) + 0.1; }
+    if (["loyal", "nurturing", "compassionate", "gentle"].includes(tl)) { emo.trust = (emo.trust ?? 0.5) + 0.1; }
+    if (["self-destructive", "reckless"].includes(tl)) { emo.guilt = (emo.guilt ?? 0) + 0.15; }
+  }
+  // Clamp all values to [0, 1]
+  for (const key of Object.keys(emo) as (keyof EmotionalState)[]) {
+    emo[key] = Math.max(0, Math.min(1, emo[key]!));
+  }
+  return emo;
+}
+
+/** Compute initial mood from emotional state (mirrors NpcStore.computeAndSetMood logic) */
+function computeInitialMood(npc: NPC): void {
+  const s = npc.emotionalState;
+  let mood: string | undefined;
+  if (s.fear > 0.5 && s.trust < 0.3) mood = "paranoid";
+  else if (s.anger > 0.5 && s.disgust > 0.3) mood = "bitter";
+  else if (s.sadness > 0.5) mood = "melancholy";
+  else if (s.guilt > 0.5) mood = "guilt-ridden";
+  else if (s.anger > 0.6) mood = "volatile";
+  else if (s.curiosity > 0.6 && s.joy < 0.3) mood = "restless";
+  else if (s.joy > 0.7) mood = "euphoric";
+  if (mood) {
+    npc.mood = mood;
+    npc.moodSince = Date.now() - 120_000; // pre-aged so it shows in prompts immediately
+  }
 }
 
 function defaultEmotionalState(): EmotionalState {
@@ -585,11 +652,118 @@ export const initialNpcs: NPC[] = (() => {
   ellis.currentGoal = "figure out whether Mara knows what I saw";
 
   // ── Seed known secrets (cross-references) ──
-  // Mara has picked up hints about Alice's guilt (not the exact secret, but she senses it)
   // Ellis overheard Victor's university rejection mentioned in passing
   ellis.knownSecrets = {
     victor: ["He was rejected from his dream university"],
   };
+  // Mara has picked up on Alice's guilt (perceptive + Alice "told her about her old colleague")
+  mara.knownSecrets = {
+    alice: ["She sabotaged a colleague's experiment out of jealousy"],
+  };
+  // Bob suspects Mara keeps notes on people (sardonic observation)
+  bob.knownSecrets = {
+    mara: ["She keeps detailed notes about people's vulnerabilities"],
+  };
+
+  // ── Seed moods (derived from pre-set emotional states) ──
+  // Ellis: fear 0.7, trust 0.15 → paranoid
+  ellis.mood = "paranoid";
+  ellis.moodSince = Date.now() - 180_000;
+  // Victor: anger 0.6 → volatile (just under the threshold at 0.6, but combined with disgust 0.2)
+  victor.mood = "volatile";
+  victor.moodSince = Date.now() - 120_000;
+
+  // ── Seed character arcs ──
+  alice.characterArc = "Starting to question whether her generosity is genuine or just guilt wearing a mask.";
+  victor.characterArc = "Realizing that winning every argument hasn't brought the respect he craves.";
+  ellis.characterArc = "Slowly learning that not every kind gesture hides a motive.";
+  mara.characterArc = "Feeling the first cracks in her carefully constructed persona.";
+
+  // ── Seed richer memory types ──
+  // Give some characters inner thoughts and gossip memories
+  alice.shortTermMemory.push(
+    seedMemory("I keep thinking about what I did to my colleague. Would these people still like me if they knew?", ["alice"], {
+      importance: 0.7, sentiment: -0.4, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "The guilt follows me everywhere. I try to make up for it by sharing everything, but it never feels like enough.",
+    }),
+  );
+  bob.shortTermMemory.push(
+    seedMemory("I heard Mara praising Victor to his face while rolling her eyes the moment he turned away. Classic.", ["mara", "victor"], {
+      importance: 0.6, sentiment: -0.2, type: "eavesdrop" as MemoryType, category: "social" as MemoryCategory,
+      interpretation: "She's performing for everyone. The question is what she's after.",
+      aboutNpcIds: ["mara"],
+    }),
+  );
+  mara.shortTermMemory.push(
+    seedMemory("Alice mentioned sabotaging someone's work once — she tried to pass it off casually but her hands were shaking.", ["alice"], {
+      importance: 0.8, sentiment: 0.1, type: "gossip" as MemoryType, category: "discovery" as MemoryCategory,
+      interpretation: "She practically handed me leverage. The guilt is eating her alive and she doesn't even realize she's confessing.",
+      aboutNpcIds: ["alice"],
+    }),
+  );
+  ellis.longTermMemory.push(
+    seedMemory("I saw what happened at the old mill. I can never tell anyone. If they find out I was there...", [], {
+      importance: 0.95, sentiment: -0.5, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "This secret is going to destroy me. But telling the truth would be worse.",
+    }),
+  );
 
   return [alice, bob, victor, mara, ellis];
 })();
+
+// ── Seed data for the premade conflict web ──
+// These are consumed by premade-storage.ts during initial seeding
+
+/** Initial promises between preset characters */
+export const PRESET_PROMISES: NpcPromise[] = [
+  {
+    id: "promise_preset_1",
+    promiserId: "bob",
+    promiseeId: "alice",
+    text: "I'll take a look at those moss samples you collected and give you an honest opinion",
+    madeAt: Date.now() - 300_000,
+    status: "active",
+  },
+  {
+    id: "promise_preset_2",
+    promiserId: "mara",
+    promiseeId: "ellis",
+    text: "I won't tell anyone about your nervousness around the old mill — your secret is safe with me",
+    madeAt: Date.now() - 240_000,
+    status: "active",
+  },
+];
+
+/** Initial reactive impulses for preset characters */
+export const PRESET_IMPULSES: ReactiveImpulse[] = [
+  {
+    id: "impulse_preset_1",
+    npcId: "victor",
+    targetNpcId: "alice",
+    reason: "Wants to challenge Alice's fungal network theory before she convinces everyone",
+    conversationType: "confrontation",
+    urgency: 0.6,
+    expiresAt: Date.now() + 10 * 60_000,
+    sourceMemoryText: "Alice made a point about symbiotic relationships that I couldn't counter",
+  },
+  {
+    id: "impulse_preset_2",
+    npcId: "mara",
+    targetNpcId: "ellis",
+    reason: "Wants to probe Ellis about the old mill — they flinched when she mentioned it",
+    conversationType: "casual",
+    urgency: 0.7,
+    expiresAt: Date.now() + 10 * 60_000,
+    sourceMemoryText: "Ellis flinched when I mentioned the old mill",
+  },
+  {
+    id: "impulse_preset_3",
+    npcId: "ellis",
+    targetNpcId: "bob",
+    reason: "Needs to find out if Bob can actually be trusted — he seems kind but Ellis can't be sure",
+    conversationType: "confession",
+    urgency: 0.45,
+    expiresAt: Date.now() + 10 * 60_000,
+    sourceMemoryText: "Bob brought me tea without asking. Didn't ask anything in return.",
+  },
+];
