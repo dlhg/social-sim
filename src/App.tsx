@@ -625,6 +625,10 @@ function App() {
             activityType: "plan",
           },
         }]);
+        // Notify conversation manager about broken promises → reactive impulses
+        if (!kept) {
+          managerRef.current?.onPromiseResolved(promise);
+        }
       },
     });
     dayCycleRef.current = dayCycle;

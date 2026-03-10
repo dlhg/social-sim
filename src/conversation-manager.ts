@@ -10,6 +10,7 @@ import type {
   ActionType,
   FloaterData,
   FloaterCategory,
+  NpcPromise,
 } from "./types";
 import type { NpcStore } from "./npc-store";
 import type { MemoryService } from "./memory-service";
@@ -670,6 +671,8 @@ export class ConversationManager {
         narrativeSummary: this.narrativeSummary || undefined,
         betrayalsKnownByA: this.getDiscoveredBetrayals(npcAId),
         betrayalsKnownByB: this.getDiscoveredBetrayals(npcBId),
+        brokenPromisesA: this.getBrokenPromisesFor(npcAId),
+        brokenPromisesB: this.getBrokenPromisesFor(npcBId),
       }
     );
 
@@ -1139,6 +1142,8 @@ export class ConversationManager {
         narrativeSummary: this.narrativeSummary || undefined,
         betrayalsKnownByA: this.getDiscoveredBetrayals(npcAId),
         betrayalsKnownByB: this.getDiscoveredBetrayals(npcBId),
+        brokenPromisesA: this.getBrokenPromisesFor(npcAId),
+        brokenPromisesB: this.getBrokenPromisesFor(npcBId),
       }
     );
 
@@ -1470,12 +1475,24 @@ export class ConversationManager {
         // ── Undiscovered betrayals — dramatic tension waiting to explode ──
         const betrayalsAB = this.store.getBetrayalsBetween(a.id, b.id);
         const undiscoveredBetrayals = betrayalsAB.filter(bt => !bt.discoveredByVictim);
-        const discoveredBetrayals = betrayalsAB.filter(bt => bt.discoveredByVictim);
+        const activeGrudges = betrayalsAB.filter(bt => bt.discoveredByVictim && !bt.forgiven);
         if (undiscoveredBetrayals.length > 0) {
           score += 4; // high tension — betrayal could surface
         }
-        if (discoveredBetrayals.length > 0) {
-          score += 3; // victim knows — confrontation likely
+        if (activeGrudges.length > 0) {
+          // Older grudges push toward reconciliation (time heals)
+          const oldestGrudge = Math.min(...activeGrudges.map(bt => bt.timestamp));
+          const grudgeAgeMin = (now - oldestGrudge) / 60_000;
+          score += grudgeAgeMin > 3 ? 5 : 3; // extra boost for old grudges — time for resolution
+        }
+
+        // ── Broken promises — unfinished business ──
+        const brokenPromises = this.store.getPromisesFor(a.id)
+          .filter(p => p.status === "broken" &&
+            ((p.promiseeId === a.id && p.promiserId === b.id) ||
+             (p.promiseeId === b.id && p.promiserId === a.id)));
+        if (brokenPromises.length > 0) {
+          score += 2.5;
         }
 
         // ── Isolation — NPC who hasn't had a positive interaction in a while ──
@@ -1607,11 +1624,29 @@ export class ConversationManager {
     for (const bt of betrayals) {
       const betrayer = bt.betrayerId === a.id ? a : b;
       const victim = bt.victimId === a.id ? a : b;
-      if (bt.discoveredByVictim) {
-        patterns.push(`${victim.name} knows that ${betrayer.name} betrayed them: "${bt.description}" — this is a deep wound`);
+      if (bt.forgiven) {
+        patterns.push(`${victim.name} forgave ${betrayer.name} for "${bt.description}" — the wound is healing but the scar remains`);
+      } else if (bt.discoveredByVictim) {
+        const ageMin = (Date.now() - bt.timestamp) / 60_000;
+        if (ageMin > 3) {
+          patterns.push(`${victim.name} has been carrying a grudge against ${betrayer.name} for a while: "${bt.description}" — this might be the time for reconciliation or a final reckoning`);
+        } else {
+          patterns.push(`${victim.name} knows that ${betrayer.name} betrayed them: "${bt.description}" — this is a fresh, deep wound`);
+        }
       } else {
         patterns.push(`${betrayer.name} betrayed ${victim.name} ("${bt.description}") but ${victim.name} doesn't know yet — dramatic irony`);
       }
+    }
+
+    // Broken promises
+    const brokenPromises = this.store.getPromisesFor(a.id)
+      .filter(p => p.status === "broken" &&
+        ((p.promiseeId === a.id && p.promiserId === b.id) ||
+         (p.promiseeId === b.id && p.promiserId === a.id)));
+    for (const p of brokenPromises) {
+      const promiser = p.promiserId === a.id ? a : b;
+      const promisee = p.promiseeId === a.id ? a : b;
+      patterns.push(`${promiser.name} broke their promise to ${promisee.name}: "${p.text}" — unfinished business`);
     }
 
     return patterns;
@@ -2127,6 +2162,95 @@ export class ConversationManager {
       this.processAction(speaker, listener, response.action);
     }
 
+    // Forgiveness
+    if (response.forgive) {
+      this.processForgiveness(speaker, response.forgive);
+    }
+
+  }
+
+  // ── Forgiveness Processing ─────────────────
+
+  private processForgiveness(forgiver: NPC, forgivenNpcId: string): void {
+    const forgivenNpc = this.store.get(forgivenNpcId);
+    if (!forgivenNpc) return;
+
+    const forgiven = this.store.forgiveBetrayal(forgiver.id, forgivenNpcId);
+    if (forgiven.length === 0) return;
+
+    this.log(`[forgiveness] ${forgiver.name} forgives ${forgivenNpc.name} for ${forgiven.length} betrayal(s)`);
+
+    // Partially restore trust and regard
+    this.store.applyRelationshipDelta(
+      forgiver.id, forgivenNpcId, 0.1, 0, { trust: 0.15 }
+    );
+
+    // Create significant memories for both
+    this.memory.add(
+      forgiver.id,
+      {
+        text: `I forgave ${forgivenNpc.name} for what they did. It wasn't easy, but I chose to let it go.`,
+        importance: 0.9,
+        recency: 1,
+        emotionalWeight: 0.8,
+        involvedNpcIds: [forgivenNpcId],
+        aboutNpcIds: [forgivenNpcId],
+        type: "conversation",
+        category: "emotional",
+        sentiment: 0.3,
+        timestamp: Date.now(),
+      },
+      "longTermMemory"
+    );
+
+    this.memory.add(
+      forgivenNpcId,
+      {
+        text: `${forgiver.name} forgave me. After everything I did, they chose to move past it.`,
+        importance: 0.9,
+        recency: 1,
+        emotionalWeight: 0.8,
+        involvedNpcIds: [forgiver.id],
+        aboutNpcIds: [forgiver.id],
+        type: "conversation",
+        category: "emotional",
+        sentiment: 0.4,
+        timestamp: Date.now(),
+      },
+      "longTermMemory"
+    );
+
+    // Emotional effects — relief for both
+    this.store.applyEmotionDelta(forgiver.id, {
+      anger: -0.15, trust: 0.1, fear: -0.05, joy: 0.1,
+      sadness: -0.05, curiosity: 0, disgust: -0.1, guilt: 0,
+    });
+    this.store.applyEmotionDelta(forgivenNpcId, {
+      anger: 0, trust: 0.05, fear: -0.1, joy: 0.1,
+      sadness: -0.05, curiosity: 0, disgust: 0, guilt: -0.2,
+    });
+
+    // Activity feed
+    this.callbacks.onActivity({
+      timestamp: new Date(),
+      text: `${forgiver.name} forgave ${forgivenNpc.name}`,
+      activityType: "action",
+      npcId: forgiver.id,
+    });
+
+    // Floater
+    this.callbacks.onFloater?.({
+      id: `floater_forgive_${Date.now()}`,
+      npcId: forgiver.id,
+      text: `forgave ${forgivenNpc.name}`,
+      color: "#81c784",
+      category: "relationship",
+      spawnedAt: Date.now(),
+      directionX: this.awayDirection(forgiver.id),
+      delay: 0,
+      offsetY: 0,
+      driftScale: 1,
+    });
   }
 
   // ── Action Processing ───────────────────────
@@ -2990,6 +3114,7 @@ export class ConversationManager {
                 victimId: targetId,
                 description: `Conspired against ${this.npcName(targetId)} with ${this.npcName(cId === npcAId ? npcBId : npcAId)}: ${r.action.detail ?? ""}`,
                 discoveredByVictim: false,
+                forgiven: false,
                 timestamp: now,
               });
               this.log(`[betrayal] ${conspirator.name} betrayed ${this.npcName(targetId)} by conspiring against them`);
@@ -3014,6 +3139,7 @@ export class ConversationManager {
               victimId: rumorTargetId,
               description: `Spread a rumor about ${this.npcName(rumorTargetId)}: ${r.action.detail ?? ""}`,
               discoveredByVictim: false,
+              forgiven: false,
               timestamp: now,
             });
             this.log(`[betrayal] ${spreader.name} betrayed ${this.npcName(rumorTargetId)} by spreading a rumor about them`);
@@ -3057,6 +3183,38 @@ export class ConversationManager {
    * Generate a private inner monologue for an NPC who is alone at a reflective spot.
    * Much lighter than a full conversation — small LLM call, no TTS.
    */
+  /** Called when the day-cycle resolves a promise — creates reactive impulses for broken promises */
+  onPromiseResolved(promise: NpcPromise): void {
+    if (promise.status !== "broken") return;
+
+    const promisee = this.store.get(promise.promiseeId);
+    const promiser = this.store.get(promise.promiserId);
+    if (!promisee || !promiser) return;
+
+    // Promisee may want to confront the promiser about the broken promise
+    const regard = promisee.relationships[promise.promiserId]?.regard ?? 0;
+    const isConfrontational = promisee.personalityTraits.some(
+      t => ["confrontational", "defiant", "blunt", "bold", "direct"].includes(t.toLowerCase())
+    );
+
+    // Higher urgency if the relationship was positive (felt like a real betrayal)
+    const urgency = regard > 0.2 ? 0.7 : isConfrontational ? 0.6 : 0.4;
+    const convType = regard > 0 ? "confrontation" as const : "casual" as const;
+
+    this.store.addReactiveImpulse({
+      id: `impulse_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      npcId: promise.promiseeId,
+      targetNpcId: promise.promiserId,
+      reason: `${promiser.name} broke their promise: "${promise.text}"`,
+      conversationType: convType,
+      urgency,
+      expiresAt: Date.now() + 5 * 60_000,
+      sourceMemoryText: `${promiser.name} promised me "${promise.text}" but didn't follow through`,
+    });
+
+    this.log(`[promise-broken] ${promisee.name} wants to confront ${promiser.name} about broken promise: "${promise.text}"`);
+  }
+
   async generateSoliloquy(npcId: string, waypointName: string, activityLabel: string): Promise<void> {
     const npc = this.store.get(npcId);
     if (!npc) return;
@@ -3330,6 +3488,18 @@ Respond with ONLY the summary text, no JSON, no markdown.`,
       return "reconciliation";
     }
 
+    // Reconciliation: old grudge + anger has cooled → time for resolution
+    const grudgesBetween = this.store.getBetrayalsBetween(a.id, b.id)
+      .filter(bt => bt.discoveredByVictim && !bt.forgiven);
+    if (grudgesBetween.length > 0) {
+      const oldestGrudge = Math.min(...grudgesBetween.map(bt => bt.timestamp));
+      const grudgeAgeMin = (Date.now() - oldestGrudge) / 60_000;
+      const angerCooled = a.emotionalState.anger < 0.4 && b.emotionalState.anger < 0.4;
+      if (grudgeAgeMin > 3 && angerCooled) {
+        return "reconciliation";
+      }
+    }
+
     // Alliance forming: positive relationship + high trust
     if (
       avgRel > 0.4 &&
@@ -3534,12 +3704,23 @@ Respond with ONLY the summary text, no JSON, no markdown.`,
   }
 
   /** Get discovered betrayals for an NPC (for prompt injection) */
-  private getDiscoveredBetrayals(npcId: string): Array<{ betrayerName: string; description: string }> {
+  private getDiscoveredBetrayals(npcId: string): Array<{ betrayerName: string; description: string; forgiven: boolean }> {
     return this.store.getBetrayals(npcId)
       .filter(b => b.discoveredByVictim)
       .map(b => ({
         betrayerName: this.npcName(b.betrayerId),
         description: b.description,
+        forgiven: b.forgiven,
+      }));
+  }
+
+  /** Get broken promises where this NPC was the promisee (for prompt injection) */
+  private getBrokenPromisesFor(npcId: string): Array<{ promiserName: string; text: string }> {
+    return this.store.getPromisesFor(npcId)
+      .filter(p => p.status === "broken" && p.promiseeId === npcId)
+      .map(p => ({
+        promiserName: this.npcName(p.promiserId),
+        text: p.text,
       }));
   }
 

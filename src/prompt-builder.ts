@@ -58,7 +58,8 @@ const RESPONSE_JSON_SCHEMA = `- Your response MUST be a single JSON object with 
   "mentioned_npcs": [],
   "secret_revealed": null,
   "promise": null,
-  "action": null
+  "action": null,
+  "forgive": null
 }
 
 RULES FOR DELTAS:
@@ -74,6 +75,7 @@ RULES FOR DELTAS:
 - mentioned_npcs is optional. Only include if you talk about someone not in this conversation. Format: [{"npc_id": "id", "sentiment": 0.3, "what_was_said": "brief summary"}]
 - secret_revealed: set to the exact text of a secret you're revealing, or null
 - promise: set to what you promise, or null. Promises are remembered and breaking them has consequences
+- forgive: set to the NPC ID of someone you're forgiving for a betrayal, or null. Forgiveness is a significant dramatic moment — only forgive when you genuinely mean it, after a real emotional shift. You can forgive someone you're currently talking to, or someone else you've been holding a grudge against. Forgiveness doesn't mean forgetting.
 
 ACTIONS (optional — set "action" to one of these, or null):
 - {"action": "give_gift", "detail": "description of the gift"} — Give a symbolic gift to show goodwill. Only if you genuinely want to strengthen the bond.
@@ -133,7 +135,9 @@ export interface PromptContext {
   frozenRegard?: number;
   frozenAffection?: number;
   /** Betrayals this speaker has discovered */
-  betrayalsKnown?: Array<{ betrayerName: string; description: string }>;
+  betrayalsKnown?: Array<{ betrayerName: string; description: string; forgiven: boolean }>;
+  /** Promises broken by others toward this speaker */
+  brokenPromises?: Array<{ promiserName: string; text: string }>;
 }
 
 export function buildSystemPrompt(
@@ -208,8 +212,17 @@ export function buildSystemPrompt(
     ? `\nPERSISTENT MOOD: You've been feeling ${speaker.mood} for a while now. This colors everything — your patience, your openness, your reactions. It's not just a momentary feeling; it's a state you're carrying.`
     : "";
 
-  const betrayalBlock = ctx.betrayalsKnown?.length
-    ? `\nBETRAYALS DISCOVERED: ${ctx.betrayalsKnown.map(b => `${b.betrayerName} betrayed you — ${b.description}`).join("; ")}. This knowledge burns. You may confront them, act cold, or use it strategically.`
+  const activeGrudges = ctx.betrayalsKnown?.filter(b => !b.forgiven) ?? [];
+  const forgivenBetrayals = ctx.betrayalsKnown?.filter(b => b.forgiven) ?? [];
+  const grudgeBlock = activeGrudges.length > 0
+    ? `\nBETRAYALS DISCOVERED: ${activeGrudges.map(b => `${b.betrayerName} betrayed you — ${b.description}`).join("; ")}. This knowledge burns. You may confront them, act cold, or use it strategically — or, if the moment is right, choose to forgive.`
+    : "";
+  const forgivenBlock = forgivenBetrayals.length > 0
+    ? `\nFORGIVEN WOUNDS: ${forgivenBetrayals.map(b => `You forgave ${b.betrayerName} for: ${b.description}`).join("; ")}. The scar remains but you've chosen to move past it.`
+    : "";
+  const betrayalBlock = grudgeBlock + forgivenBlock;
+  const brokenPromisesBlock = ctx.brokenPromises?.length
+    ? `\nBROKEN PROMISES: ${ctx.brokenPromises.map(p => `${p.promiserName} promised "${p.text}" but didn't follow through`).join("; ")}. This weighs on you.`
     : "";
 
   return `You are ${speaker.name}.
@@ -217,7 +230,7 @@ export function buildSystemPrompt(
 ${identityBlock}${arcBlock}${moodBlock}
 CURRENT EMOTIONAL STATE: ${emotionSummary}
 CURRENT GOAL: ${speaker.currentGoal ?? "none"}
-${secretsBlock}${inventoryBlock}${betrayalBlock}
+${secretsBlock}${inventoryBlock}${betrayalBlock}${brokenPromisesBlock}
 
 You are talking to ${listener.name}.
 YOUR RELATIONSHIP WITH ${listener.name}: ${relLabel} (regard: ${relationship.toFixed(2)})${affection > 0.15 ? `\nROMANTIC FEELINGS: ${describeAffection(affection)}` : ""}
@@ -381,9 +394,13 @@ export interface BatchPromptContext {
   /** Cumulative narrative arc summary fed from conversation-manager */
   narrativeSummary?: string;
   /** Betrayals that NPC A knows about (discovered) */
-  betrayalsKnownByA?: Array<{ betrayerName: string; description: string }>;
+  betrayalsKnownByA?: Array<{ betrayerName: string; description: string; forgiven: boolean }>;
   /** Betrayals that NPC B knows about (discovered) */
-  betrayalsKnownByB?: Array<{ betrayerName: string; description: string }>;
+  betrayalsKnownByB?: Array<{ betrayerName: string; description: string; forgiven: boolean }>;
+  /** Promises broken toward NPC A */
+  brokenPromisesA?: Array<{ promiserName: string; text: string }>;
+  /** Promises broken toward NPC B */
+  brokenPromisesB?: Array<{ promiserName: string; text: string }>;
 }
 
 export function buildBatchConversationMessages(
@@ -464,11 +481,26 @@ export function buildBatchConversationMessages(
     ? `\nPersistent mood: ${npcB.mood} (this colors their patience, openness, and reactions)`
     : "";
 
-  const betrayalBlockA = ctx.betrayalsKnownByA?.length
-    ? `\nBETRAYALS DISCOVERED: ${ctx.betrayalsKnownByA.map(b => `${b.betrayerName} betrayed you — ${b.description}`).join("; ")}. This knowledge burns. You may confront them, act cold, or use it strategically.`
+  const buildBetrayalBlock = (betrayals: Array<{ betrayerName: string; description: string; forgiven: boolean }> | undefined) => {
+    if (!betrayals?.length) return "";
+    const active = betrayals.filter(b => !b.forgiven);
+    const forgiven = betrayals.filter(b => b.forgiven);
+    let block = "";
+    if (active.length > 0) {
+      block += `\nBETRAYALS DISCOVERED: ${active.map(b => `${b.betrayerName} betrayed them — ${b.description}`).join("; ")}. This knowledge burns. They may confront, act cold, use it strategically — or choose to forgive.`;
+    }
+    if (forgiven.length > 0) {
+      block += `\nFORGIVEN WOUNDS: ${forgiven.map(b => `Forgave ${b.betrayerName} for: ${b.description}`).join("; ")}. The scar remains but they've moved past it.`;
+    }
+    return block;
+  };
+  const betrayalBlockA = buildBetrayalBlock(ctx.betrayalsKnownByA);
+  const betrayalBlockB = buildBetrayalBlock(ctx.betrayalsKnownByB);
+  const brokenPromisesBlockA = ctx.brokenPromisesA?.length
+    ? `\nBROKEN PROMISES: ${ctx.brokenPromisesA.map(p => `${p.promiserName} promised "${p.text}" but didn't follow through`).join("; ")}`
     : "";
-  const betrayalBlockB = ctx.betrayalsKnownByB?.length
-    ? `\nBETRAYALS DISCOVERED: ${ctx.betrayalsKnownByB.map(b => `${b.betrayerName} betrayed you — ${b.description}`).join("; ")}. This knowledge burns. You may confront them, act cold, or use it strategically.`
+  const brokenPromisesBlockB = ctx.brokenPromisesB?.length
+    ? `\nBROKEN PROMISES: ${ctx.brokenPromisesB.map(p => `${p.promiserName} promised "${p.text}" but didn't follow through`).join("; ")}`
     : "";
 
   const system = `You are a dialogue writer. Generate a complete conversation between two characters.
@@ -476,7 +508,7 @@ export function buildBatchConversationMessages(
 CHARACTER A: ${npcA.name} (id: "${npcA.id}")
 ${identityA}${arcA}${moodA}
 Emotional state: ${emotionsA}
-Current goal: ${npcA.currentGoal ?? "none"}${secretsA}${inventoryA}${plansBlockA}${betrayalBlockA}
+Current goal: ${npcA.currentGoal ?? "none"}${secretsA}${inventoryA}${plansBlockA}${betrayalBlockA}${brokenPromisesBlockA}
 Relationship with ${npcB.name}: ${relationshipLabel(relAtoB)} (regard: ${relAtoB.toFixed(2)})${affAtoB > 0.15 ? ` | Romantic: ${describeAffection(affAtoB)}` : ""}
 ${describeRelationshipDimensions(npcA, npcB)}
 Memories of ${npcB.name}:
@@ -485,7 +517,7 @@ ${memDirectA || "(none)"}${memAboutA ? `\nThings heard about ${npcB.name}:\n${me
 CHARACTER B: ${npcB.name} (id: "${npcB.id}")
 ${identityB}${arcB}${moodB}
 Emotional state: ${emotionsB}
-Current goal: ${npcB.currentGoal ?? "none"}${secretsB}${inventoryB}${plansBlockB}${betrayalBlockB}
+Current goal: ${npcB.currentGoal ?? "none"}${secretsB}${inventoryB}${plansBlockB}${betrayalBlockB}${brokenPromisesBlockB}
 Relationship with ${npcA.name}: ${relationshipLabel(relBtoA)} (regard: ${relBtoA.toFixed(2)})${affBtoA > 0.15 ? ` | Romantic: ${describeAffection(affBtoA)}` : ""}
 ${describeRelationshipDimensions(npcB, npcA)}
 Memories of ${npcA.name}:
@@ -519,7 +551,8 @@ RESPONSE FORMAT — respond with ONLY a JSON object:
       "mentioned_npcs": [],
       "secret_revealed": null,
       "promise": null,
-      "action": null
+      "action": null,
+      "forgive": null
     }
   ]
 }
@@ -537,6 +570,7 @@ RULES FOR DELTAS:
 - mentioned_npcs: only if talking about someone not in this conversation. Format: [{"npc_id": "id", "sentiment": 0.3, "what_was_said": "summary"}]
 - secret_revealed: exact text of a secret being revealed, or null
 - promise: what is promised, or null. Promises are remembered and breaking them has consequences
+- forgive: set to the NPC ID of someone being forgiven for a betrayal, or null. Forgiveness is a significant dramatic moment — only when genuinely meant, after a real emotional shift. Forgiveness doesn't mean forgetting.
 - action: one of give_gift, embrace, mock, threaten, storm_off, conspire, spread_rumor — or null. Most turns should have NO action. At most 1-2 actions in the entire conversation.
 
 SPEECH RULES:

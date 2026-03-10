@@ -246,6 +246,27 @@ export class NpcStore {
     return b;
   }
 
+  /** Mark all discovered betrayals by a specific betrayer as forgiven */
+  forgiveBetrayal(victimId: string, betrayerId: string): BetrayalRecord[] {
+    const forgiven: BetrayalRecord[] = [];
+    for (const b of this.betrayals) {
+      if (b.victimId === victimId && b.betrayerId === betrayerId &&
+          b.discoveredByVictim && !b.forgiven) {
+        b.forgiven = true;
+        b.forgivenAt = Date.now();
+        forgiven.push(b);
+      }
+    }
+    return forgiven;
+  }
+
+  /** Get unforgiven, discovered betrayals for an NPC (active grudges) */
+  getActiveGrudges(victimId: string): BetrayalRecord[] {
+    return this.betrayals.filter(
+      b => b.victimId === victimId && b.discoveredByVictim && !b.forgiven
+    );
+  }
+
   // ── Character Arc & Mood ──────────────────
 
   setCharacterArc(npcId: string, arc: string): void {

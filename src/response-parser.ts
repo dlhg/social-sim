@@ -166,6 +166,11 @@ function validate(obj: unknown): LLMResponse {
   const fearDelta = o.fear_delta != null ? clampRelDelta(toNumber(o.fear_delta, 0)) : undefined;
   const debtDelta = o.debt_delta != null ? clampRelDelta(toNumber(o.debt_delta, 0)) : undefined;
 
+  const forgive =
+    typeof o.forgive === "string" && o.forgive.length > 0
+      ? o.forgive
+      : undefined;
+
   return {
     inner_thought: innerThought,
     speech: o.speech as string,
@@ -183,6 +188,7 @@ function validate(obj: unknown): LLMResponse {
     secret_revealed: secretRevealed,
     promise,
     action,
+    forgive,
   };
 }
 
@@ -245,6 +251,7 @@ export function parseBatchLLMResponse(raw: string, validSpeakerIds: [string, str
       secret_revealed: validated.secret_revealed,
       promise: validated.promise,
       action: validated.action,
+      forgive: validated.forgive,
     };
   });
 }

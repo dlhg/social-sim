@@ -165,6 +165,8 @@ export interface BetrayalRecord {
   victimId: string;
   description: string;      // what the betrayal was
   discoveredByVictim: boolean; // has the victim found out?
+  forgiven: boolean;         // has the victim forgiven?
+  forgivenAt?: number;       // when forgiveness happened
   timestamp: number;
 }
 
@@ -202,6 +204,7 @@ export interface LLMResponse {
   secret_revealed?: string;
   promise?: string;
   action?: ActionData;
+  forgive?: string; // NPC ID of someone being forgiven for a betrayal
 }
 
 // ── Batch Conversation (full-conversation-in-one-shot) ──
@@ -223,6 +226,7 @@ export interface BatchTurnData {
   secret_revealed?: string;
   promise?: string;
   action?: ActionData;
+  forgive?: string; // NPC ID of someone being forgiven for a betrayal
 }
 
 // ── Conversation Types ───────────────────────
