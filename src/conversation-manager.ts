@@ -629,7 +629,7 @@ export class ConversationManager {
       const sd = parseSceneDirection(sdRaw);
       convType = sd.conversationType;
       sceneDirection = sd.sceneDirection || undefined;
-      this.log(`[batch] Scene direction: ${convType} — "${sceneDirection?.slice(0, 80)}..."`);
+      this.log(`[batch] Scene direction: ${convType}${sceneDirection ? ` — "${sceneDirection.slice(0, 80)}..."` : ""}`);
     } catch (e) {
       convType = this.classifyConversationType(npcA, npcB);
       this.log(`[batch] Scene direction failed, using heuristic: ${convType} (${e})`);
@@ -1115,7 +1115,7 @@ export class ConversationManager {
         this.log(`[director] Reactive impulse consumed: ${impulse.reason}`);
       }
 
-      this.log(`[director] Scene direction: ${convType} — "${sceneDirection?.slice(0, 80)}..."${narrativePatterns.length ? ` (${narrativePatterns.length} patterns detected)` : ""}`);
+      this.log(`[director] Scene direction: ${convType}${sceneDirection ? ` — "${sceneDirection.slice(0, 80)}..."` : ""}${narrativePatterns.length ? ` (${narrativePatterns.length} patterns detected)` : ""}`);
     } catch (e) {
       // Fallback to hardcoded classification if scene direction fails
       convType = this.classifyConversationType(npcA, npcB);

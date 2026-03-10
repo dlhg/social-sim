@@ -12,7 +12,7 @@ import {
 } from "../premade-storage";
 import type { PremadeTemplate } from "../premade-storage";
 import type { LlmProvider, LlmConfig } from "../llm-config";
-import { GROQ_MODELS } from "../llm-config";
+import { GROQ_MODELS, GEMINI_MODELS } from "../llm-config";
 
 const MAX_ROSTER = 13;
 
@@ -248,7 +248,7 @@ export function SetupScreen({
             >
               <span className="setup-section-title">Settings</span>
               <span className="setup-settings-summary">
-                {llmConfig.provider === "ollama" ? "Ollama" : "Groq"} · {language} · {ttsEngine === "chatterbox" ? "Chatterbox" : "Kokoro"} · {MAPS.find(m => m.url === mapUrl)?.label ?? "Custom"}
+                {{ ollama: "Ollama", groq: "Groq", gemini: "Gemini" }[llmConfig.provider]} · {language} · {ttsEngine === "chatterbox" ? "Chatterbox" : "Kokoro"} · {MAPS.find(m => m.url === mapUrl)?.label ?? "Custom"}
               </span>
               <span className={`setup-settings-chevron ${settingsOpen ? "open" : ""}`}>
                 ›
@@ -306,6 +306,12 @@ export function SetupScreen({
                     >
                       Cloud (Groq)
                     </button>
+                    <button
+                      className={`tts-engine-btn ${llmConfig.provider === "gemini" ? "active" : ""}`}
+                      onClick={() => onLlmConfigChange({ provider: "gemini" as LlmProvider })}
+                    >
+                      Cloud (Gemini)
+                    </button>
                   </div>
                   {llmConfig.provider === "ollama" && (
                     <div className="llm-detail">
@@ -333,6 +339,26 @@ export function SetupScreen({
                         onChange={(e) => onLlmConfigChange({ groqModel: e.target.value })}
                       >
                         {GROQ_MODELS.map((m) => (
+                          <option key={m.id} value={m.id}>{m.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {llmConfig.provider === "gemini" && (
+                    <div className="llm-detail">
+                      <input
+                        className="llm-input"
+                        type="password"
+                        value={llmConfig.geminiApiKey}
+                        onChange={(e) => onLlmConfigChange({ geminiApiKey: e.target.value })}
+                        placeholder="Gemini API key"
+                      />
+                      <select
+                        className="llm-select"
+                        value={llmConfig.geminiModel}
+                        onChange={(e) => onLlmConfigChange({ geminiModel: e.target.value })}
+                      >
+                        {GEMINI_MODELS.map((m) => (
                           <option key={m.id} value={m.id}>{m.label}</option>
                         ))}
                       </select>

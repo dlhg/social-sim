@@ -7,6 +7,7 @@ import { loadLlmConfig } from "./llm-config";
 
 const OLLAMA_URL = "/api/chat";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -62,6 +63,10 @@ export async function accumulateChat(
   if (config.provider === "groq") {
     const model = modelOverride ?? config.groqModel;
     return accumulateGroq(messages, config.groqApiKey, model, numPredict, onProgress, abortSignal);
+  }
+  if (config.provider === "gemini") {
+    const model = modelOverride ?? config.geminiModel;
+    return accumulateGemini(messages, config.geminiApiKey, model, numPredict, onProgress, abortSignal);
   }
   return accumulateOllama(messages, config.ollamaModel, numPredict, onProgress, abortSignal);
 }
@@ -181,6 +186,82 @@ async function accumulateGroq(
 
   if (!res.body) {
     throw new Error("Groq response body is null");
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let full = "";
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed === "data: [DONE]") continue;
+      if (!trimmed.startsWith("data: ")) continue;
+
+      try {
+        const json = JSON.parse(trimmed.slice(6));
+        const content = json.choices?.[0]?.delta?.content;
+        if (content) {
+          full += content;
+          onProgress?.(full);
+        }
+      } catch {
+        // skip malformed SSE lines
+      }
+    }
+  }
+
+  return full;
+}
+
+// ── Gemini (cloud, OpenAI-compatible SSE stream) ──
+
+async function accumulateGemini(
+  messages: ChatMessage[],
+  apiKey: string,
+  model: string,
+  numPredict: number | undefined,
+  onProgress: ((accumulated: string) => void) | undefined,
+  signal: AbortSignal | undefined,
+): Promise<string> {
+  if (!apiKey) {
+    throw new Error("Gemini API key is not set. Configure it in the setup screen.");
+  }
+
+  const body: Record<string, unknown> = {
+    model,
+    messages,
+    stream: true,
+    response_format: { type: "json_object" },
+  };
+  if (numPredict) {
+    body.max_tokens = numPredict;
+  }
+
+  const res = await fetch(GEMINI_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Gemini error: ${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`);
+  }
+
+  if (!res.body) {
+    throw new Error("Gemini response body is null");
   }
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

@@ -1,10 +1,12 @@
-export type LlmProvider = "ollama" | "groq";
+export type LlmProvider = "ollama" | "groq" | "gemini";
 
 export interface LlmConfig {
   provider: LlmProvider;
   ollamaModel: string;
   groqApiKey: string;
   groqModel: string;
+  geminiApiKey: string;
+  geminiModel: string;
 }
 
 const STORAGE_KEY = "llm-config";
@@ -14,6 +16,8 @@ const DEFAULTS: LlmConfig = {
   ollamaModel: "qwen2.5:7b",
   groqApiKey: "",
   groqModel: "llama-3.3-70b-versatile",
+  geminiApiKey: "",
+  geminiModel: "gemini-2.5-flash",
 };
 
 export const GROQ_MODELS = [
@@ -23,6 +27,12 @@ export const GROQ_MODELS = [
   { id: "openai/gpt-oss-20b", label: "GPT OSS 20B (fast)" },
   { id: "meta-llama/llama-4-scout-17b-16e-instruct", label: "Llama 4 Scout 17B" },
   { id: "qwen/qwen3-32b", label: "Qwen 3 32B" },
+];
+
+export const GEMINI_MODELS = [
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite (fast)" },
 ];
 
 export function loadLlmConfig(): LlmConfig {

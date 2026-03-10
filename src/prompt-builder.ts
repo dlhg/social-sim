@@ -985,5 +985,8 @@ Respond with ONLY a JSON object:
 Output ONLY the JSON object. No markdown, no code fences.
 ${ctx.language ? `Write the scene_direction in ${ctx.language}.` : ""}`;
 
-  return [{ role: "system", content: system }];
+  return [
+    { role: "system", content: system },
+    { role: "user", content: "Direct the scene." },
+  ];
 }
