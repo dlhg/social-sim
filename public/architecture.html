@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NPC System Architecture</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box}
+
+:root{
+  --bg:#0a0b10;
+  --bg2:#0e1018;
+  --ring-inner:#1a1c2e;
+  --ring-mid:#12141f;
+  --ring-outer:#0d0f18;
+  --accent-director:#ff6b4a;
+  --accent-world:#4ae8ff;
+  --accent-day:#ffd44a;
+  --accent-llm:#c084fc;
+  --accent-tts:#34d399;
+  --accent-tilemap:#f97316;
+  --accent-npc:#ff4a8d;
+  --accent-prompt:#a78bfa;
+  --text:#e2e4ef;
+  --text-dim:#6b6f8a;
+  --text-mid:#9498b5;
+  --glow-director:rgba(255,107,74,.15);
+  --glow-world:rgba(74,232,255,.15);
+  --glow-day:rgba(255,212,74,.15);
+}
+
+html,body{
+  height:100%;overflow:hidden;
+  background:var(--bg);color:var(--text);
+  font-family:'Outfit',sans-serif;
+}
+
+canvas#bg-canvas{
+  position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;
+}
+
+.app{
+  position:relative;z-index:1;width:100%;height:100%;
+  display:flex;flex-direction:column;
+}
+
+header{
+  padding:20px 32px 0;display:flex;align-items:baseline;gap:16px;flex-shrink:0;
+}
+header h1{
+  font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;
+  letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);
+}
+header .dot{
+  width:6px;height:6px;border-radius:50%;background:var(--accent-npc);
+  animation:pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
+
+.diagram-area{
+  flex:1;position:relative;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
+}
+
+svg.rings{
+  width:min(90vw,90vh);height:min(90vw,90vh);
+}
+
+/* Detail panel */
+.detail-panel{
+  position:fixed;right:-420px;top:0;bottom:0;width:400px;
+  background:rgba(10,11,16,.96);border-left:1px solid rgba(255,255,255,.06);
+  backdrop-filter:blur(20px);z-index:100;
+  transition:right .4s cubic-bezier(.16,1,.3,1);
+  display:flex;flex-direction:column;
+  overflow-y:auto;
+}
+.detail-panel.open{right:0}
+.detail-panel .close-btn{
+  position:absolute;top:16px;right:16px;width:32px;height:32px;
+  border:1px solid rgba(255,255,255,.1);border-radius:8px;
+  background:transparent;color:var(--text-dim);font-size:18px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all .2s;
+}
+.detail-panel .close-btn:hover{color:var(--text);border-color:rgba(255,255,255,.2)}
+.detail-header{
+  padding:40px 28px 20px;border-bottom:1px solid rgba(255,255,255,.05);
+}
+.detail-header .tag{
+  font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;
+  text-transform:uppercase;margin-bottom:8px;
+}
+.detail-header h2{
+  font-size:22px;font-weight:700;line-height:1.3;
+}
+.detail-body{
+  padding:24px 28px;flex:1;
+}
+.detail-body p{
+  font-size:13px;line-height:1.8;color:var(--text-mid);margin-bottom:16px;
+}
+.detail-body .detail-list{
+  list-style:none;padding:0;
+}
+.detail-body .detail-list li{
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  padding:8px 12px;border-left:2px solid var(--text-dim);
+  margin-bottom:6px;color:var(--text-mid);line-height:1.5;
+  background:rgba(255,255,255,.02);border-radius:0 6px 6px 0;
+  transition:all .15s;
+}
+.detail-body .detail-list li:hover{
+  background:rgba(255,255,255,.04);color:var(--text);
+}
+.detail-body h3{
+  font-size:11px;font-family:'JetBrains Mono',monospace;
+  letter-spacing:1px;text-transform:uppercase;
+  color:var(--text-dim);margin:20px 0 10px;
+}
+
+/* Tooltip */
+.tooltip{
+  position:fixed;pointer-events:none;z-index:200;
+  background:rgba(14,16,24,.95);border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;padding:8px 14px;backdrop-filter:blur(12px);
+  font-size:12px;color:var(--text);white-space:nowrap;
+  opacity:0;transition:opacity .15s;
+  font-family:'JetBrains Mono',monospace;
+}
+.tooltip.visible{opacity:1}
+
+/* Legend */
+.legend{
+  position:fixed;bottom:20px;left:24px;z-index:50;
+  display:flex;gap:20px;
+}
+.legend-item{
+  display:flex;align-items:center;gap:6px;
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  letter-spacing:.5px;color:var(--text-dim);
+}
+.legend-swatch{
+  width:10px;height:10px;border-radius:3px;
+}
+
+.hint{
+  position:fixed;bottom:20px;right:24px;z-index:50;
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  color:var(--text-dim);letter-spacing:.5px;
+  animation:fade-hint 3s ease-in-out infinite alternate;
+}
+@keyframes fade-hint{0%{opacity:.3}100%{opacity:.7}}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+
+<div class="app">
+  <header>
+    <h1>NPC System Architecture</h1>
+    <div class="dot"></div>
+  </header>
+  <div class="diagram-area">
+    <svg class="rings" id="diagram" viewBox="-500 -500 1000 1000"></svg>
+  </div>
+</div>
+
+<div class="detail-panel" id="detail-panel">
+  <button class="close-btn" onclick="closePanel()">&times;</button>
+  <div class="detail-header" id="detail-header"></div>
+  <div class="detail-body" id="detail-body"></div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-director)"></div>Director</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-world)"></div>World</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-day)"></div>Day Cycle</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-npc)"></div>NPC State</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-llm)"></div>LLM</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-tts)"></div>TTS</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-tilemap)"></div>Tilemap</div>
+</div>
+
+<div class="hint">click any element to explore</div>
+
+<script>
+// ─── Background particles ──────────────────────
+const bgCanvas = document.getElementById('bg-canvas');
+const bgCtx = bgCanvas.getContext('2d');
+let W, H;
+function resizeBg(){ W=bgCanvas.width=innerWidth; H=bgCanvas.height=innerHeight; }
+resizeBg(); addEventListener('resize', resizeBg);
+
+const particles = Array.from({length:80},()=>({
+  x:Math.random()*2000-500, y:Math.random()*2000-500,
+  vx:(Math.random()-.5)*.15, vy:(Math.random()-.5)*.15,
+  r:Math.random()*1.5+.5, a:Math.random()*.15+.03
+}));
+
+function drawBg(){
+  bgCtx.clearRect(0,0,W,H);
+  for(const p of particles){
+    p.x+=p.vx; p.y+=p.vy;
+    if(p.x<-10)p.x=W+10; if(p.x>W+10)p.x=-10;
+    if(p.y<-10)p.y=H+10; if(p.y>H+10)p.y=-10;
+    bgCtx.beginPath();
+    bgCtx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    bgCtx.fillStyle=`rgba(120,130,180,${p.a})`;
+    bgCtx.fill();
+  }
+  requestAnimationFrame(drawBg);
+}
+drawBg();
+
+// ─── SVG helpers ───────────────────────────────
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('diagram');
+let globalTime = 0;
+
+function el(tag, attrs={}){
+  const e = document.createElementNS(SVG_NS, tag);
+  for(const [k,v] of Object.entries(attrs)) e.setAttribute(k,v);
+  return e;
+}
+
+function polarToXY(cx, cy, r, angleDeg){
+  const rad = (angleDeg - 90) * Math.PI / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function arcPath(cx, cy, r, startAngle, endAngle){
+  const s = polarToXY(cx, cy, r, startAngle);
+  const e = polarToXY(cx, cy, r, endAngle);
+  const large = endAngle - startAngle > 180 ? 1 : 0;
+  return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y}`;
+}
+
+// ─── Defs (gradients, filters, markers) ────────
+const defs = el('defs');
+svg.appendChild(defs);
+
+// Glow filter
+function makeGlow(id, color, stdDev=4){
+  const f = el('filter',{id, x:'-50%', y:'-50%', width:'200%', height:'200%'});
+  const gb = el('feGaussianBlur',{in:'SourceGraphic',stdDeviation:String(stdDev),result:'blur'});
+  const merge = el('feMerge');
+  const mn1 = el('feMergeNode',{in:'blur'});
+  const mn2 = el('feMergeNode',{in:'SourceGraphic'});
+  merge.appendChild(mn1); merge.appendChild(mn2);
+  f.appendChild(gb); f.appendChild(merge);
+  defs.appendChild(f);
+}
+makeGlow('glow-director','#ff6b4a',6);
+makeGlow('glow-world','#4ae8ff',6);
+makeGlow('glow-day','#ffd44a',6);
+makeGlow('glow-npc','#ff4a8d',6);
+makeGlow('glow-llm','#c084fc',6);
+makeGlow('glow-tts','#34d399',6);
+makeGlow('glow-tilemap','#f97316',6);
+makeGlow('glow-prompt','#a78bfa',5);
+makeGlow('glow-soft','#fff',2);
+
+// ─── Layer groups ──────────────────────────────
+const layerBg = el('g',{id:'layer-bg'});
+const layerRings = el('g',{id:'layer-rings'});
+const layerConnections = el('g',{id:'layer-connections'});
+const layerNodes = el('g',{id:'layer-nodes'});
+const layerLabels = el('g',{id:'layer-labels'});
+const layerParticles = el('g',{id:'layer-particles'});
+svg.append(layerBg, layerRings, layerConnections, layerNodes, layerLabels, layerParticles);
+
+// ─── Ring backgrounds ──────────────────────────
+// Outer ring zone
+const outerRingBg = el('circle',{cx:0,cy:0,r:440,fill:'none',stroke:'rgba(255,255,255,.018)',
+  'stroke-width':120});
+layerBg.appendChild(outerRingBg);
+
+// Middle ring zone
+const midRingBg = el('circle',{cx:0,cy:0,r:290,fill:'none',stroke:'rgba(255,255,255,.025)',
+  'stroke-width':100});
+layerBg.appendChild(midRingBg);
+
+// Inner ring zone
+const innerRingBg = el('circle',{cx:0,cy:0,r:140,fill:'rgba(255,74,141,.02)',stroke:'rgba(255,74,141,.06)',
+  'stroke-width':1});
+layerBg.appendChild(innerRingBg);
+
+// Decorative concentric dashes
+[190, 340, 440].forEach((r,i)=>{
+  const c = el('circle',{cx:0,cy:0,r,fill:'none',
+    stroke:'rgba(255,255,255,.04)','stroke-width':.5,
+    'stroke-dasharray':'3 8'});
+  layerBg.appendChild(c);
+});
+
+// ─── DATA ──────────────────────────────────────
+const INNER_NODES = [
+  {id:'emotions', label:'Emotions', icon:'', angle:0,
+    detail:{
+      tag:'NPC STATE', title:'8-Dimensional Emotions',
+      desc:'Every NPC has 8 continuous emotion axes (0-1) that shift in real-time during conversations, activities, and interactions. Emotions decay toward personality-specific baselines between events.',
+      items:['anger (baseline .3)','trust (baseline .3)','fear (baseline .3)','joy (baseline .3)','sadness (baseline .15)','curiosity (baseline .4)','disgust (baseline .1)','guilt (baseline .1)']
+    }},
+  {id:'relationships', label:'Relationships', icon:'', angle:45,
+    detail:{
+      tag:'NPC STATE', title:'Per-Pair Relationships',
+      desc:'Every NPC pair tracks a 7-axis relationship that evolves through conversations and interactions. Regard is the core axis ranging from -1 (enemy) to +1 (beloved). Velocity tracking detects warming/cooling trends.',
+      items:['regard: -1 to 1 (stranger → enemy / beloved)','affection, respect, trust, fear, debt: 0-1','familiarity: 0-1 (increments per conversation)','velocity tracking (last 10 snapshots)','trajectory labels: warming / deteriorating / stable']
+    }},
+  {id:'memory', label:'Memory', icon:'', angle:90,
+    detail:{
+      tag:'NPC STATE', title:'Dual Memory System',
+      desc:'Short-term memory holds recent events (40 entries). When evicted, high-importance memories promote to long-term storage (100 entries). Recency decays at 0.85x per conversation cycle, creating natural forgetting.',
+      items:['short-term: 40 entries, evict lowest recency\u00d7importance','long-term: 100 entries, promote at importance \u2265 0.7','14 memory types (conversation, gossip, secret_learned, promise_made, eavesdrop, etc.)','retrieval: sorted by recency\u00d7importance, filtered by involvement','unresolved flag for unfinished business (promises, betrayals)','sentiment tracking per memory (-1 to 1)']
+    }},
+  {id:'secrets', label:'Secrets', icon:'', angle:135,
+    detail:{
+      tag:'NPC STATE', title:'Secrets & Known Secrets',
+      desc:'Each NPC holds private secrets and tracks what they\'ve learned about others. Secrets drive dramatic tension\u2014the Director scores information asymmetry heavily when choosing conversation pairs.',
+      items:['own secrets[] (private, revealable at trust \u2265 0.7)','knownSecrets map: NPC id \u2192 discovered secrets','secret_revealed in conversation triggers memory + gossip','information asymmetry = major Director scoring factor']
+    }},
+  {id:'promises', label:'Promises', icon:'', angle:180,
+    detail:{
+      tag:'NPC STATE', title:'Promises & Betrayals',
+      desc:'NPCs make promises during conversations that resolve 1-2 day phases later. The LLM decides if each promise is kept or broken based on personalities and circumstances. Broken promises create betrayal records that fuel confrontations.',
+      items:['promise: text, fromId, toId, resolveAtPhase','betrayal: betrayerId, victimId, discoveredByVictim, forgiven','broken promises auto-resolve after 6+ phases','kept: +regard, +trust, +joy, -anger, -guilt','broken: -regard, -trust, -joy, +anger, +sadness, +guilt','forgiveness possible during reconciliation conversations']
+    }},
+  {id:'inventory', label:'Inventory', icon:'', angle:225,
+    detail:{
+      tag:'NPC STATE', title:'Items & Inventory',
+      desc:'NPCs carry up to 8 items acquired through activities (fishing, foraging, cooking, etc.). Items decay by category and can be gifted or referenced in conversations. Item-based interactions get priority scoring.',
+      items:['max 8 items per NPC','6 categories: food, herb, fish, trinket, craft, book','decay timers: fish 2m, food 3m, herb 5m, craft 8m, trinket 10m, book 12m','items referenced in prompt builder for natural speech','gift-giving: relationship boost + memory creation']
+    }},
+  {id:'goals', label:'Goals & Arcs', icon:'', angle:270,
+    detail:{
+      tag:'NPC STATE', title:'Goals, Moods & Character Arcs',
+      desc:'Each NPC has a current goal (influences waypoint selection and conversation topics), a persistent mood derived from emotional state, and a growing character arc narrative updated after reflective moments.',
+      items:['currentGoal: string (influences waypoint picks + prompts)','mood: derived from emotion extremes (paranoid, bitter, euphoric, etc.)','moodSince: timestamp (mentioned in prompt after 1+ min)','characterArc: narrative of growth, appended post-conversation','behavioralOverride: seek/avoid specific NPC (time-limited)','reactiveImpulse: high-urgency follow-up desire (0-1 urgency)']
+    }},
+  {id:'identity', label:'Identity', icon:'', angle:315,
+    detail:{
+      tag:'NPC STATE', title:'Core Identity',
+      desc:'The foundation of each NPC: name, visual appearance, personality traits, core desires, and backstory. Backstory is preferred over trait lists in prompts for more natural characterization.',
+      items:['name, avatar, color, spriteId','personalityTraits[] (e.g. stoic, gentle, curious)','coreDesires[] (e.g. seek truth, protect the weak)','backstory (narrative paragraph, preferred in prompts)','customVoiceId (for TTS voice cloning)']
+    }},
+];
+
+const MID_NODES = [
+  {id:'director', label:'Director Loop', color:'var(--accent-director)', glow:'glow-director',
+    angle:30, span:100, radius:290,
+    detail:{
+      tag:'LOOP \u00b7 ~5s', title:'Director Pipeline',
+      desc:'The Director is the narrative brain\u2014a background loop that pre-generates entire conversations before NPCs even meet. It scores every possible NPC pair by dramatic potential, picks the most interesting match, and orchestrates generation \u2192 TTS \u2192 playback.',
+      sections:[
+        {title:'Pair Scoring',items:['relationship velocity (warming/cooling): +3','pending promises: +2 each','time since last talk: up to +5','emotional intensity (peaks in anger/joy/fear/sadness): \u00d72','relationship extremes (|regard|): \u00d72','reactive impulses: up to +8 (highest priority)','information asymmetry (secrets): \u00d73','goal involves partner: +4','love triangles/jealousy: triangulation score','undiscovered betrayals: +4','active grudges: +3\u20135','broken promises: +2.5','isolation (no recent contact): +1\u20133']},
+        {title:'Pipeline Stages',items:['1. Scene direction (LLM): suggest type + creative hints','2. Generate full conversation (single LLM call, 4\u201312 turns)','3. TTS prefetch (serialized for GPU, per-turn)','4. Queue for playback (ready at 2+ buffered turns)','5. Trigger on proximity (\u22645 tiles apart)']},
+        {title:'Conversation Types',items:['casual (natural, proportional)','confrontation (direct, raw, cutting)','reconciliation (vulnerable, olive branches)','confession (build toward honesty)','alliance_forming (warm, conspiratorial)','gossip_session (trade information)']}
+      ]
+    }},
+  {id:'world', label:'World Loop', color:'var(--accent-world)', glow:'glow-world',
+    angle:160, span:100, radius:290,
+    detail:{
+      tag:'LOOP \u00b7 ~285ms', title:'World Simulation',
+      desc:'The spatial heartbeat of the system. Every tick, NPCs pathfind to chosen waypoints, perform activities, interact with nearby NPCs, eavesdrop on conversations, and act on internal drives.',
+      sections:[
+        {title:'Movement',items:['A* pathfinding with collision grid','waypoint selection: personality + emotions + time-of-day + relationships','recency penalty on just-visited waypoints','stuck detection: recompute after 8 blocked ticks','behavioral overrides (seek/avoid) from Director']},
+        {title:'Activities (14 types)',items:['reading, gardening, fishing, meditating, cooking, sketching...','emotion effects (e.g. gardening: anger -0.03, joy +0.03)','item yields (fishing 40%, foraging 60%, cooking 70%)','waypoint-specific availability','5-minute cooldown before repeating','soliloquy trigger: reflective waypoint + solo activity']},
+        {title:'Interactions (21 types)',items:['comfort (target fearful/sad): trust +0.06, fear -0.08','offer_food (requires item): regard +0.05/+0.08','confide (trusts target >0.3): importance 0.7','give_trinket: relationship +0.06/+0.10','taunt (aggressive, low regard): relationship -0.03/-0.06','apology (guilty): guilt -0.1, relationship +0.06/+0.08','debate, teach, celebrate, conspire...']},
+        {title:'Passive Systems',items:['eavesdropping (range 6, 3-min cooldown per pair)','item decay by category timer','drives: gift-seeking (30%), loneliness (90s+, 15%), restlessness']}
+      ]
+    }},
+  {id:'daycycle', label:'Day Cycle', color:'var(--accent-day)', glow:'glow-day',
+    angle:280, span:80, radius:290,
+    detail:{
+      tag:'LOOP \u00b7 ~2 min/phase', title:'Day Cycle',
+      desc:'Time advances through morning \u2192 afternoon \u2192 evening phases. The day cycle resolves promises (LLM-decided outcomes), decays emotions toward baselines, and creates the temporal rhythm of the simulation.',
+      sections:[
+        {title:'Time Structure',items:['3 phases: morning, afternoon, evening','~400 ticks per phase (~2 min at 285ms)','tracks: day number, phase, absolute phaseIndex']},
+        {title:'Promise Resolution',items:['promises set resolveAtPhase = current + 1\u20132','LLM generates outcome: kept or broken?','considers: personalities, emotions, relationship, third parties','kept: both +regard, +trust, +joy, -anger, -guilt','broken: both -regard, -trust, -joy, +anger, +sadness, +guilt','auto-resolve broken after 6+ overdue phases']},
+        {title:'Decay & Baselines',items:['emotions pull toward personality baselines each cycle','memory recency \u00d7= 0.85 per conversation cycle','moods recomputed from current emotional state']}
+      ]
+    }},
+];
+
+const OUTER_NODES = [
+  {id:'llm', label:'LLM', color:'var(--accent-llm)', glow:'glow-llm',
+    angle:10, radius:430,
+    detail:{
+      tag:'EXTERNAL', title:'LLM Providers',
+      desc:'The language model generates conversations, scene direction, promise outcomes, and inner thoughts. Supports multiple providers with automatic failover and rate limit handling.',
+      items:['Ollama (local): any model, no rate limits','Groq (cloud): fast inference, token quota tracking','Gemini: Google\'s models','rate limit detection: 429 \u2192 60s backoff','auto-downgrade to llama-3.1-8b-instant at <20% tokens','re-upgrade when quota recovers to >50%','JSON response format with repair for malformed output']
+    }},
+  {id:'tts', label:'TTS', color:'var(--accent-tts)', glow:'glow-tts',
+    angle:130, radius:430,
+    detail:{
+      tag:'EXTERNAL', title:'Text-to-Speech',
+      desc:'Dual-engine TTS with voice cloning support. Audio is pre-generated during the Director pipeline and played back during conversations. Serialized to avoid GPU contention.',
+      items:['Chatterbox Turbo: English speech (port 8788)','Kokoro: multilingual support','Flask proxy server (port 8787)','13-voice pool, round-robin assignment','custom voice cloning (upload audio or YouTube extract)','paralinguistic tags: [laugh], [sigh], [gasp], [cough]...','emotion-aware speed modulation','serialized generation (GPU is single-threaded)']
+    }},
+  {id:'tilemap', label:'Tilemap', color:'var(--accent-tilemap)', glow:'glow-tilemap',
+    angle:250, radius:430,
+    detail:{
+      tag:'EXTERNAL', title:'Spatial World',
+      desc:'The physical space where NPCs exist. A tilemap with collision detection, named waypoints that carry mood/activity metadata, and sprite rendering.',
+      items:['village.tmj: 30 narrative waypoints (default)','testmap.tmj: original with tileset art','collision grid for pathfinding','waypoints: name, position, mood tags, available activities','sprite system: animated idle cycles, 24-frame sheets','graceful handling of maps without tilesets']
+    }},
+];
+
+const PROMPT_BUILDER = {
+  id:'prompt', label:'Prompt Builder', color:'var(--accent-prompt)', glow:'glow-prompt',
+  angle:10, radius:370,
+  detail:{
+    tag:'BRIDGE', title:'Prompt Builder',
+    desc:'The translator between NPC state and LLM comprehension. Assembles a rich context window from all NPC data, relationship history, and narrative state into a structured prompt that guides conversation generation.',
+    sections:[
+      {title:'Prompt Structure',items:['1. Identity (backstory preferred over trait list)','2. Character arc (growth narrative)','3. Persistent mood (if active >1 min)','4. Emotional state (prose description of 8 axes)','5. Current goal','6. Secrets (hint to reveal at trust \u22650.7)','7. Inventory (items with emoji)','8. Betrayals discovered (active grudges)','9. Broken promises from others','10. Relationship context (regard label + dimensions)','11. Relationship trajectory (warming/deteriorating/stable)','12. Location (waypoint description)','13. Time of day','14. Pending plans (active promises)','15. Retrieved memories (direct + gossip + about-listener)','16. Known NPCs list','17. Conversation type preamble','18. Escalation directive (early/mid/late turn)']},
+      {title:'Response Format (JSON)',items:['inner_thought, speech','emotion_delta (8 axes, -0.4 to +0.4)','relationship_delta (-0.2 to +0.2) + extras','intent, conversation_end','secret_revealed, promise, action','forgive (for betrayals)','actions: give_gift, mock, embrace, threaten, storm_off, conspire, spread_rumor','justification required if delta >0.15 or relationship_delta >0.1']}
+    ]
+  }
+};
+
+// ─── Connections between elements ──────────────
+const CONNECTIONS = [
+  // Director reads NPC state, writes back after playback
+  // Director reads NPC state for pair scoring
+  {from:'emotions',to:'director',color:'var(--accent-director)',label:'reads emotions'},
+  {from:'relationships',to:'director',color:'var(--accent-director)',label:'scores pairs'},
+  {from:'memory',to:'director',color:'var(--accent-director)',label:'retrieves memories'},
+  {from:'secrets',to:'director',color:'var(--accent-director)',label:'info asymmetry'},
+  {from:'promises',to:'director',color:'var(--accent-director)',label:'pending promises'},
+  // Director → Prompt Builder → LLM (prompt builder is the intermediary)
+  {from:'director',to:'prompt',color:'var(--accent-director)',label:'requests conversation'},
+  {from:'director',to:'tts',color:'var(--accent-tts)',label:'prefetch audio'},
+  // NPC state feeds into Prompt Builder
+  {from:'identity',to:'prompt',color:'var(--accent-prompt)',label:'backstory & traits'},
+  {from:'emotions',to:'prompt',color:'var(--accent-prompt)',label:'emotional context'},
+  {from:'relationships',to:'prompt',color:'var(--accent-prompt)',label:'relationship context'},
+  {from:'memory',to:'prompt',color:'var(--accent-prompt)',label:'retrieved memories'},
+  {from:'secrets',to:'prompt',color:'var(--accent-prompt)',label:'secrets & known secrets'},
+  {from:'inventory',to:'prompt',color:'var(--accent-prompt)',label:'items for speech'},
+  {from:'goals',to:'prompt',color:'var(--accent-prompt)',label:'current goal'},
+  // Prompt Builder → LLM
+  {from:'prompt',to:'llm',color:'var(--accent-prompt)',label:'assembled prompt'},
+  // World loop reads state
+  {from:'emotions',to:'world',color:'var(--accent-world)',label:'waypoint selection'},
+  {from:'relationships',to:'world',color:'var(--accent-world)',label:'proximity drives'},
+  {from:'inventory',to:'world',color:'var(--accent-world)',label:'item interactions'},
+  // World to tilemap
+  {from:'world',to:'tilemap',color:'var(--accent-tilemap)',label:'A* pathfinding'},
+  // Day cycle
+  {from:'promises',to:'daycycle',color:'var(--accent-day)',label:'resolve promises'},
+  {from:'daycycle',to:'prompt',color:'var(--accent-day)',label:'time & promise outcomes'},
+  {from:'goals',to:'world',color:'var(--accent-world)',label:'goal-directed movement'},
+];
+
+// ─── Render inner ring nodes ───────────────────
+const innerNodeEls = {};
+INNER_NODES.forEach(node => {
+  const pos = polarToXY(0, 0, 130, node.angle);
+  const g = el('g',{class:'inner-node','data-id':node.id,
+    transform:`translate(${pos.x},${pos.y})`});
+
+  // Glow bg
+  const glow = el('circle',{r:28,fill:'rgba(255,74,141,.06)',stroke:'none',
+    filter:'url(#glow-npc)',opacity:'.3'});
+  g.appendChild(glow);
+
+  // Main circle
+  const circle = el('circle',{r:22,fill:'rgba(255,74,141,.08)',
+    stroke:'rgba(255,74,141,.3)','stroke-width':1});
+  g.appendChild(circle);
+
+  // Icon
+  const icon = el('text',{x:0,y:1,'text-anchor':'middle',
+    'dominant-baseline':'central','font-size':'14',fill:'var(--accent-npc)',
+    'font-family':'Outfit',opacity:'.9'});
+  icon.textContent = node.icon;
+  g.appendChild(icon);
+
+  // Label
+  const label = el('text',{x:0,y:36,'text-anchor':'middle',
+    'font-size':'9','font-family':'JetBrains Mono, monospace',
+    fill:'var(--text-dim)','letter-spacing':'.5'});
+  label.textContent = node.label;
+  g.appendChild(label);
+
+  g.style.cursor = 'pointer';
+  g.addEventListener('click', ()=>openPanel(node.detail, 'var(--accent-npc)'));
+  g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
+  g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+  layerNodes.appendChild(g);
+  innerNodeEls[node.id] = {g, pos, glow};
+});
+
+// ─── Render middle ring (loop arcs) ────────────
+const midNodeEls = {};
+MID_NODES.forEach(node => {
+  const startAngle = node.angle - node.span/2;
+  const endAngle = node.angle + node.span/2;
+  const g = el('g',{class:'mid-node','data-id':node.id});
+
+  // Arc track (dim)
+  const track = el('path',{d:arcPath(0,0,node.radius,startAngle,endAngle),
+    fill:'none',stroke:node.color,'stroke-width':6,'stroke-linecap':'round',
+    opacity:'.12'});
+  g.appendChild(track);
+
+  // Arc active
+  const active = el('path',{d:arcPath(0,0,node.radius,startAngle,endAngle),
+    fill:'none',stroke:node.color,'stroke-width':3,'stroke-linecap':'round',
+    opacity:'.6',filter:`url(#${node.glow})`});
+  g.appendChild(active);
+
+  // Animated dash
+  const dash = el('path',{d:arcPath(0,0,node.radius,startAngle,endAngle),
+    fill:'none',stroke:node.color,'stroke-width':2,'stroke-linecap':'round',
+    opacity:'.8','stroke-dasharray':'8 20','stroke-dashoffset':'0'});
+  g.appendChild(dash);
+
+  // Label on arc
+  const labelPos = polarToXY(0, 0, node.radius - 20, node.angle);
+  const label = el('text',{x:labelPos.x, y:labelPos.y,
+    'text-anchor':'middle','dominant-baseline':'central',
+    'font-size':'10','font-family':'JetBrains Mono, monospace',
+    'font-weight':'600',fill:node.color,'letter-spacing':'1',opacity:'.9'});
+  label.textContent = node.label.toUpperCase();
+  g.appendChild(label);
+
+  g.style.cursor = 'pointer';
+  g.addEventListener('click', ()=>openPanel(node.detail, node.color));
+  g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
+  g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+  layerNodes.appendChild(g);
+
+  const center = polarToXY(0, 0, node.radius, node.angle);
+  midNodeEls[node.id] = {g, pos:center, dash, startAngle, endAngle};
+});
+
+// ─── Render outer ring nodes ───────────────────
+const outerNodeEls = {};
+OUTER_NODES.forEach(node => {
+  const pos = polarToXY(0, 0, node.radius, node.angle);
+  const g = el('g',{class:'outer-node','data-id':node.id,
+    transform:`translate(${pos.x},${pos.y})`});
+
+  // Hex-ish shape
+  const hex = el('rect',{x:-30,y:-18,width:60,height:36,rx:8,
+    fill:'rgba(255,255,255,.03)',stroke:node.color,
+    'stroke-width':1,opacity:'.7'});
+  g.appendChild(hex);
+
+  const label = el('text',{x:0,y:1,'text-anchor':'middle',
+    'dominant-baseline':'central','font-size':'10',
+    'font-family':'JetBrains Mono, monospace','font-weight':'600',
+    fill:node.color,'letter-spacing':'1'});
+  label.textContent = node.label.toUpperCase();
+  g.appendChild(label);
+
+  g.style.cursor = 'pointer';
+  g.addEventListener('click', ()=>openPanel(node.detail, node.color));
+  g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
+  g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+  layerNodes.appendChild(g);
+  outerNodeEls[node.id] = {g, pos};
+});
+
+// ─── Render prompt builder (bridge) ────────────
+{
+  const pb = PROMPT_BUILDER;
+  const pos = polarToXY(0, 0, pb.radius, pb.angle);
+  const g = el('g',{class:'prompt-node','data-id':'prompt',
+    transform:`translate(${pos.x},${pos.y})`});
+
+  // Diamond shape
+  const diamond = el('polygon',{
+    points:'0,-20 24,0 0,20 -24,0',
+    fill:'rgba(167,139,250,.06)',stroke:'var(--accent-prompt)',
+    'stroke-width':1,opacity:'.8',filter:'url(#glow-prompt)'});
+  g.appendChild(diamond);
+
+  const label = el('text',{x:0,y:32,'text-anchor':'middle',
+    'font-size':'8','font-family':'JetBrains Mono, monospace',
+    fill:'var(--accent-prompt)','letter-spacing':'.5',opacity:'.8'});
+  label.textContent = 'PROMPT BUILDER';
+  g.appendChild(label);
+
+  g.style.cursor = 'pointer';
+  g.addEventListener('click', ()=>openPanel(pb.detail, pb.color));
+  g.addEventListener('mouseenter', (e)=>{ showTooltip(e, 'Prompt Builder'); highlightNode('prompt'); });
+  g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+  layerNodes.appendChild(g);
+  outerNodeEls['prompt'] = {g, pos};
+}
+
+// ─── Render connections ────────────────────────
+const connectionEls = [];
+CONNECTIONS.forEach(conn => {
+  const fromEl = innerNodeEls[conn.from] || midNodeEls[conn.from] || outerNodeEls[conn.from];
+  const toEl = innerNodeEls[conn.to] || midNodeEls[conn.to] || outerNodeEls[conn.to];
+  if(!fromEl || !toEl) return;
+
+  const line = el('line',{
+    x1:fromEl.pos.x, y1:fromEl.pos.y,
+    x2:toEl.pos.x, y2:toEl.pos.y,
+    stroke:conn.color,'stroke-width':1.5,opacity:'0',
+    'stroke-dasharray':'4 8'
+  });
+  line.style.transition = 'opacity .25s ease';
+  layerConnections.appendChild(line);
+  connectionEls.push({line, from:fromEl.pos, to:toEl.pos, color:conn.color, fromId:conn.from, toId:conn.to});
+});
+
+// ─── Adjacency map for hover highlighting ──────
+// Build a map: nodeId → Set of directly connected nodeIds
+const adjacency = {};
+CONNECTIONS.forEach(conn => {
+  if(!adjacency[conn.from]) adjacency[conn.from] = new Set();
+  if(!adjacency[conn.to]) adjacency[conn.to] = new Set();
+  adjacency[conn.from].add(conn.to);
+  adjacency[conn.to].add(conn.from);
+});
+
+// Get all nodes reachable within `depth` hops
+function getConnectedIds(startId, depth=2){
+  const visited = new Set([startId]);
+  let frontier = [startId];
+  for(let d=0; d<depth; d++){
+    const next = [];
+    for(const id of frontier){
+      for(const neighbor of (adjacency[id] || [])){
+        if(!visited.has(neighbor)){ visited.add(neighbor); next.push(neighbor); }
+      }
+    }
+    frontier = next;
+  }
+  return visited;
+}
+
+// All node data lookup for hover → panel
+const allNodeData = {};
+INNER_NODES.forEach(n => allNodeData[n.id] = {detail:n.detail, color:'var(--accent-npc)'});
+MID_NODES.forEach(n => allNodeData[n.id] = {detail:n.detail, color:n.color});
+OUTER_NODES.forEach(n => allNodeData[n.id] = {detail:n.detail, color:n.color});
+allNodeData['prompt'] = {detail:PROMPT_BUILDER.detail, color:PROMPT_BUILDER.color};
+
+let hoveredNodeId = null;
+
+function highlightNode(nodeId){
+  if(hoveredNodeId === nodeId) return;
+  hoveredNodeId = nodeId;
+  const connected = getConnectedIds(nodeId, 2);
+
+  // Highlight connections: bright if touching this node, medium if between connected nodes, dim otherwise
+  connectionEls.forEach(c => {
+    const touchesHovered = c.fromId === nodeId || c.toId === nodeId;
+    const betweenConnected = connected.has(c.fromId) && connected.has(c.toId);
+    if(touchesHovered){
+      c.line.setAttribute('opacity', '.55');
+      c.line.setAttribute('stroke-width', '2');
+    } else if(betweenConnected){
+      c.line.setAttribute('opacity', '.2');
+      c.line.setAttribute('stroke-width', '1.5');
+    } else {
+      c.line.setAttribute('opacity', '.03');
+      c.line.setAttribute('stroke-width', '1');
+    }
+  });
+
+  // Dim flow particles on non-connected lines
+  flowParticles.forEach(p => {
+    const touchesHovered = p.connData.fromId === nodeId || p.connData.toId === nodeId;
+    p.dimmed = !touchesHovered;
+  });
+}
+
+function unhighlightAll(){
+  hoveredNodeId = null;
+  connectionEls.forEach(c => {
+    c.line.setAttribute('opacity', '0');
+    c.line.setAttribute('stroke-width', '1.5');
+  });
+  flowParticles.forEach(p => { p.dimmed = false; });
+}
+
+// ─── Center label ──────────────────────────────
+{
+  const ct = el('text',{x:0,y:-4,'text-anchor':'middle',
+    'dominant-baseline':'central','font-size':'13',
+    'font-family':'Outfit','font-weight':'700',fill:'var(--accent-npc)',
+    opacity:'.8'});
+  ct.textContent = 'NPC';
+  layerLabels.appendChild(ct);
+
+  const ct2 = el('text',{x:0,y:14,'text-anchor':'middle',
+    'dominant-baseline':'central','font-size':'8',
+    'font-family':'JetBrains Mono, monospace',fill:'var(--text-dim)',
+    'letter-spacing':'2'});
+  ct2.textContent = 'STATE';
+  layerLabels.appendChild(ct2);
+}
+
+// ─── Ring labels ───────────────────────────────
+[
+  {r:205,label:'LOOPS',opacity:.25},
+  {r:380,label:'EXTERNAL',opacity:.2},
+].forEach(({r, label, opacity})=>{
+  const pos = polarToXY(0,0,r,90);
+  const t = el('text',{x:pos.x,y:pos.y,'text-anchor':'middle',
+    'font-size':'8','font-family':'JetBrains Mono, monospace',
+    fill:'var(--text-dim)','letter-spacing':'3',opacity});
+  t.textContent = label;
+  layerLabels.appendChild(t);
+});
+
+// ─── Flowing particles along connections ───────
+const flowParticles = [];
+function createFlowParticle(conn){
+  const c = el('circle',{r:1.5,fill:conn.color,opacity:'.6',filter:'url(#glow-soft)'});
+  layerParticles.appendChild(c);
+  return {el:c, conn, connData:conn, t:Math.random(), speed:.002 + Math.random()*.003, dimmed:false};
+}
+connectionEls.forEach(conn => {
+  for(let i=0;i<2;i++) flowParticles.push(createFlowParticle(conn));
+});
+
+// ─── Animation loop ────────────────────────────
+function animate(){
+  globalTime += 0.016;
+
+  // Animate arc dashes
+  for(const [id, data] of Object.entries(midNodeEls)){
+    if(data.dash){
+      const offset = -globalTime * 30;
+      data.dash.setAttribute('stroke-dashoffset', offset);
+    }
+  }
+
+  // Pulse inner nodes
+  for(const [id, data] of Object.entries(innerNodeEls)){
+    const pulse = .3 + Math.sin(globalTime * 1.5 + INNER_NODES.findIndex(n=>n.id===id) * .8) * .15;
+    data.glow.setAttribute('opacity', pulse);
+  }
+
+  // Flow particles
+  flowParticles.forEach(p => {
+    p.t += p.speed;
+    if(p.t > 1) p.t -= 1;
+    const x = p.conn.from.x + (p.conn.to.x - p.conn.from.x) * p.t;
+    const y = p.conn.from.y + (p.conn.to.y - p.conn.from.y) * p.t;
+    p.el.setAttribute('cx', x);
+    p.el.setAttribute('cy', y);
+    // Fade at edges, dim if not connected to hovered node
+    const edgeFade = Math.sin(p.t * Math.PI);
+    const dimFactor = p.dimmed ? .08 : .5;
+    p.el.setAttribute('opacity', edgeFade * dimFactor);
+  });
+
+  requestAnimationFrame(animate);
+}
+animate();
+
+// ─── Detail panel ──────────────────────────────
+function openPanel(detail, accentColor){
+  const panel = document.getElementById('detail-panel');
+  const header = document.getElementById('detail-header');
+  const body = document.getElementById('detail-body');
+
+  header.innerHTML = `
+    <div class="tag" style="color:${accentColor}">${detail.tag}</div>
+    <h2>${detail.title}</h2>
+  `;
+
+  let html = `<p>${detail.desc}</p>`;
+
+  if(detail.items){
+    html += `<ul class="detail-list">${detail.items.map(i=>`<li style="border-left-color:${accentColor}">${i}</li>`).join('')}</ul>`;
+  }
+
+  if(detail.sections){
+    detail.sections.forEach(s => {
+      html += `<h3 style="color:${accentColor}">${s.title}</h3>`;
+      html += `<ul class="detail-list">${s.items.map(i=>`<li style="border-left-color:${accentColor}">${i}</li>`).join('')}</ul>`;
+    });
+  }
+
+  body.innerHTML = html;
+  panel.classList.add('open');
+}
+
+function closePanel(){
+  document.getElementById('detail-panel').classList.remove('open');
+}
+
+// Close on click outside
+document.addEventListener('click', (e)=>{
+  const panel = document.getElementById('detail-panel');
+  if(!panel.classList.contains('open')) return;
+  if(panel.contains(e.target)) return;
+  // Check if click was on a node
+  if(e.target.closest('.inner-node,.mid-node,.outer-node,.prompt-node')) return;
+  closePanel();
+});
+
+// Close on Escape
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape') closePanel();
+});
+
+// ─── Tooltip ───────────────────────────────────
+const tooltipEl = document.getElementById('tooltip');
+function showTooltip(e, text){
+  tooltipEl.textContent = text;
+  tooltipEl.classList.add('visible');
+  positionTooltip(e);
+}
+function hideTooltip(){
+  tooltipEl.classList.remove('visible');
+}
+document.addEventListener('mousemove', (e)=>{
+  if(tooltipEl.classList.contains('visible')) positionTooltip(e);
+});
+function positionTooltip(e){
+  tooltipEl.style.left = (e.clientX + 12) + 'px';
+  tooltipEl.style.top = (e.clientY - 8) + 'px';
+}
+</script>
+</body>
+</html>
