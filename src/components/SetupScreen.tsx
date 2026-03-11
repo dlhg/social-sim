@@ -669,63 +669,55 @@ Guidelines:
   return (
     <div className="setup-screen">
       <a href="/architecture.html" className="arch-help-btn" title="How does this work?">?</a>
-      {/* ── Template Strip ─────────────────────────── */}
-      <div className="template-strip">
-        <div className="template-strip-label">Saved Characters</div>
-        <div className="template-strip-scroll">
-          {customPremades.map((template) => {
-            const added = rosterIds.has(template.id);
-            const isActive = activeTemplateId === template.id;
-            const isPreviewing = previewTemplateId === template.id;
-            return (
-              <div
-                key={template.id}
-                className={`template-card${isActive ? " template-card-active" : ""}${isPreviewing ? " template-card-preview" : ""}${added ? " template-card-added" : ""}`}
-                onMouseEnter={() => !added && handleTemplateHover(template)}
-                onMouseLeave={handleTemplateLeave}
-                onClick={() => !added && handleTemplateClick(template)}
-              >
-                <div className="template-card-manage">
+
+      {/* ── Three-zone layout: Saved | Builder | Roster ── */}
+      <div className="setup-zones">
+
+        {/* ── Left sidebar: Saved Characters ──────────── */}
+        <div className="template-sidebar">
+          <div className="template-strip-label">Saved</div>
+          <div className="template-sidebar-scroll">
+            {customPremades.map((template) => {
+              const added = rosterIds.has(template.id);
+              const isActive = activeTemplateId === template.id;
+              const isPreviewing = previewTemplateId === template.id;
+              return (
+                <div
+                  key={template.id}
+                  className={`template-row${isActive ? " template-card-active" : ""}${isPreviewing ? " template-card-preview" : ""}${added ? " template-card-added" : ""}`}
+                  onMouseEnter={() => !added && handleTemplateHover(template)}
+                  onMouseLeave={handleTemplateLeave}
+                  onClick={() => !added && handleTemplateClick(template)}
+                >
+                  <div className="template-row-sprite">
+                    <div className="sprite-frame-mini">
+                      <img src={SPRITE_URL(template.spriteId || "Adam")} alt="" draggable={false} />
+                    </div>
+                  </div>
+                  <span className="template-row-name" style={{ color: added ? undefined : template.color }}>
+                    {template.name}
+                  </span>
+                  {!added && !atCapacity && (
+                    <button
+                      className="template-row-add"
+                      onClick={(e) => { e.stopPropagation(); handleQuickAdd(template); }}
+                      title="Add directly to roster"
+                    >+</button>
+                  )}
+                  {added && <span className="template-row-badge">Added</span>}
                   <button
-                    className="premade-manage-btn premade-manage-delete"
+                    className="template-row-delete"
                     onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(template.id); }}
                     title="Delete"
                   >×</button>
                 </div>
-                <div className="template-card-sprite">
-                  <div className="sprite-frame-mini">
-                    <img
-                      src={SPRITE_URL(template.spriteId || "Adam")}
-                      alt=""
-                      draggable={false}
-                    />
-                  </div>
-                </div>
-                <span className="template-card-name" style={{ color: added ? undefined : template.color }}>
-                  {template.name}
-                </span>
-                <span className="template-card-traits">
-                  {template.personalityTraits.slice(0, 2).map((t) => (
-                    <span key={t} className="trait-chip">{t}</span>
-                  ))}
-                </span>
-                {!added && !atCapacity && (
-                  <button
-                    className="template-quick-add"
-                    onClick={(e) => { e.stopPropagation(); handleQuickAdd(template); }}
-                    title="Add directly to roster"
-                  >+</button>
-                )}
-                {added && <span className="premade-card-badge">Added</span>}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* ── Builder + Roster columns ───────────────── */}
-      <div className="setup-columns">
-        <div className="setup-left">
+        {/* ── Center: Character Builder ───────────────── */}
+        <div className="setup-center">
           <div className={`builder-section${isPreview ? " builder-preview" : ""}`}>
             <div className="builder-header">
               <span className="setup-section-title">
@@ -735,123 +727,96 @@ Guidelines:
                 <button className="btn btn-randomize-fields" onClick={handleRandomize}>Randomize</button>
                 {activeTemplateId && (
                   <>
-                    <button
-                      className="btn btn-save-template"
-                      onClick={handleSaveTemplate}
-                      disabled={!hasTemplateChanges || isSubmitting}
-                    >Save</button>
+                    <button className="btn btn-save-template" onClick={handleSaveTemplate} disabled={!hasTemplateChanges || isSubmitting}>Save</button>
                     <button className="btn btn-randomize-fields" onClick={clearForm}>Clear</button>
                   </>
                 )}
               </div>
             </div>
 
-            {/* Sprite Picker */}
-            <label className="builder-label">Sprite</label>
-            <div className="sprite-picker">
-              {SPRITE_NAMES.map((sname) => (
-                <button
-                  key={sname}
-                  className={`sprite-option${spriteId === sname ? " selected" : ""}`}
-                  onClick={() => setSpriteId(sname)}
-                >
-                  <div className="sprite-frame">
-                    <img src={SPRITE_URL(sname)} alt="" draggable={false} />
+            {/* Row 1: Identity — Sprite + Name + Color inline */}
+            <div className="builder-identity-row">
+              <div className="sprite-picker">
+                {SPRITE_NAMES.map((sname) => (
+                  <button key={sname} className={`sprite-option${spriteId === sname ? " selected" : ""}`} onClick={() => setSpriteId(sname)}>
+                    <div className="sprite-frame-mini">
+                      <img src={SPRITE_URL(sname)} alt="" draggable={false} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="builder-identity-fields">
+                <div className="builder-field">
+                  <label className="builder-label">Name</label>
+                  <input className="builder-input" type="text" value={name} onChange={(e) => { setName(e.target.value); setFormError(""); }} placeholder="e.g. Raven" />
+                  {isDuplicate && <div className="form-error">Name already taken</div>}
+                </div>
+                <div className="builder-field">
+                  <label className="builder-label">Color</label>
+                  <div className="swatch-grid">
+                    {COLOR_SWATCHES.map((c) => (
+                      <button key={c} className={`swatch ${color === c ? "selected" : ""}`} style={{ backgroundColor: c }} onClick={() => setColor(c)} />
+                    ))}
                   </div>
-                </button>
-              ))}
+                </div>
+              </div>
             </div>
 
-            {/* Name */}
-            <label className="builder-label">Name</label>
-            <input
-              className="builder-input"
-              type="text"
-              value={name}
-              onChange={(e) => { setName(e.target.value); setFormError(""); }}
-              placeholder="e.g. Raven"
-            />
-            {isDuplicate && <div className="form-error">Name already taken</div>}
-
-            {/* Color */}
-            <label className="builder-label">Color</label>
-            <div className="swatch-grid">
-              {COLOR_SWATCHES.map((c) => (
-                <button key={c} className={`swatch ${color === c ? "selected" : ""}`} style={{ backgroundColor: c }} onClick={() => setColor(c)} />
-              ))}
+            {/* Row 2: Traits + Desires side by side */}
+            <div className="builder-row-2col">
+              <div className="builder-field">
+                <label className="builder-label">Personality Traits</label>
+                <input className="builder-input" type="text" value={traits} onChange={(e) => { setTraits(e.target.value); setFormError(""); }} placeholder="sarcastic, paranoid, clever" />
+              </div>
+              <div className="builder-field">
+                <label className="builder-label">Core Desires</label>
+                <input className="builder-input" type="text" value={desires} onChange={(e) => { setDesires(e.target.value); setFormError(""); }} placeholder="uncover the truth, be left alone" />
+              </div>
             </div>
 
-            {/* Traits */}
-            <label className="builder-label">Personality Traits (comma-separated)</label>
-            <input
-              className="builder-input"
-              type="text"
-              value={traits}
-              onChange={(e) => { setTraits(e.target.value); setFormError(""); }}
-              placeholder="e.g. sarcastic, paranoid, clever"
-            />
-
-            {/* Desires */}
-            <label className="builder-label">Core Desires (comma-separated)</label>
-            <input
-              className="builder-input"
-              type="text"
-              value={desires}
-              onChange={(e) => { setDesires(e.target.value); setFormError(""); }}
-              placeholder="e.g. uncover the truth, be left alone"
-            />
-
-            {/* Backstory, Secrets, Voice, Inventory */}
+            {/* Row 3: Backstory + Secrets side by side */}
+            <div className="builder-row-2col">
+              <div className="builder-field">
                 <label className="builder-label">Backstory</label>
-                <textarea
-                  className="secrets-textarea"
-                  value={backstory}
-                  onChange={(e) => setBackstory(e.target.value)}
-                  placeholder="A narrative paragraph describing who this character is..."
-                  rows={4}
-                />
-
+                <textarea className="secrets-textarea" value={backstory} onChange={(e) => setBackstory(e.target.value)} placeholder="A narrative paragraph describing who this character is..." rows={3} />
+              </div>
+              <div className="builder-field">
                 <label className="builder-label">Secrets (one per line)</label>
-                <textarea
-                  className="secrets-textarea"
-                  value={secrets}
-                  onChange={(e) => setSecrets(e.target.value)}
-                  placeholder={"I once did something terrible...\nI secretly admire..."}
-                  rows={3}
-                />
+                <textarea className="secrets-textarea" value={secrets} onChange={(e) => setSecrets(e.target.value)} placeholder={"I once did something terrible...\nI secretly admire..."} rows={3} />
+              </div>
+            </div>
 
-                {/* Emotional Baselines */}
+            {/* Row 4: Emotional Baselines + Voice side by side */}
+            <div className="builder-row-2col builder-row-2col-top">
+              <div className="builder-field">
                 <label className="builder-label">Emotional Baselines</label>
                 <div className="voice-section">
                   <div className="voice-mode-tabs">
                     <button className={`voice-mode-tab ${baselinesMode === "default" ? "active" : ""}`} onClick={() => { setBaselinesMode("default"); setBaselines(undefined); }}>Default</button>
                     <button className={`voice-mode-tab ${baselinesMode === "derive" || (baselinesMode === "manual" && isDeriving) ? "active" : ""}`} onClick={() => handleDeriveBaselines()} disabled={isDeriving}>
-                      {isDeriving ? "Deriving..." : "Derive from Traits"}
+                      {isDeriving ? "Deriving..." : "Derive"}
                     </button>
                     <button className="voice-mode-tab" onClick={() => {
                       setBaselinesMode("manual");
-                      const rand = () => Math.round(Math.random() * 20) / 20; // 0.00–1.00, snapped to 0.05
+                      const rand = () => Math.round(Math.random() * 20) / 20;
                       setBaselines({ anger: rand(), trust: rand(), fear: rand(), joy: rand(), sadness: rand(), curiosity: rand(), guilt: rand() });
-                    }}>Randomize</button>
+                    }}>Rand</button>
                     <button className={`voice-mode-tab ${baselinesMode === "manual" && !isDeriving ? "active" : ""}`} onClick={() => { setBaselinesMode("manual"); if (!baselines) setBaselines({ ...NpcStore.DEFAULT_EMOTION_BASELINES } as EmotionalState); }}>Manual</button>
                   </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "6px 0" }}>
+                  <div className="baselines-grid">
                     {(["anger", "trust", "fear", "joy", "sadness", "curiosity", "guilt"] as const).map((key) => {
                       const effectiveValue = baselinesMode === "default"
                         ? NpcStore.DEFAULT_EMOTION_BASELINES[key] ?? 0.3
                         : (baselines?.[key] ?? NpcStore.DEFAULT_EMOTION_BASELINES[key] ?? 0.3);
                       return (
-                        <div key={key} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ width: "60px", fontSize: "0.75em", opacity: 0.7, textTransform: "capitalize" }}>{key}</span>
+                        <div key={key} className="baseline-slider-row">
+                          <span className="baseline-label">{key}</span>
                           <input
-                            type="range"
-                            min="0" max="1" step="0.05"
+                            type="range" min="0" max="1" step="0.05"
                             value={effectiveValue}
                             onChange={(e) => {
                               const v = parseFloat(e.target.value);
                               if (baselinesMode === "default") {
-                                // Promote to manual with current defaults as starting point
                                 const defaults = { ...NpcStore.DEFAULT_EMOTION_BASELINES } as EmotionalState;
                                 setBaselinesMode("manual");
                                 setBaselines({ ...defaults, [key]: v });
@@ -859,30 +824,26 @@ Guidelines:
                                 setBaselines({ ...baselines, [key]: v });
                               }
                             }}
-                            style={{ flex: 1, opacity: baselinesMode === "default" ? 0.5 : 1 }}
+                            className={`baseline-range ${baselinesMode === "default" ? "dimmed" : ""}`}
                           />
-                          <span style={{ width: "28px", fontSize: "0.7em", opacity: 0.6, textAlign: "right" }}>
-                            {effectiveValue.toFixed(2)}
-                          </span>
+                          <span className="baseline-value">{effectiveValue.toFixed(2)}</span>
                         </div>
                       );
                     })}
                   </div>
                 </div>
-
-                {/* Voice */}
+              </div>
+              <div className="builder-field">
                 <label className="builder-label">Voice</label>
                 <div className="voice-section">
                   <div className="voice-mode-tabs">
                     <button className={`voice-mode-tab ${voiceMode === "auto" ? "active" : ""}`} onClick={() => { setVoiceMode("auto"); setSelectedVoiceId(undefined); }}>Auto</button>
-                    <button className={`voice-mode-tab ${voiceMode === "select" ? "active" : ""}`} onClick={() => setVoiceMode("select")}>Choose Voice</button>
-                    <button className={`voice-mode-tab ${voiceMode === "custom" ? "active" : ""}`} onClick={() => setVoiceMode("custom")}>Clone Voice</button>
+                    <button className={`voice-mode-tab ${voiceMode === "select" ? "active" : ""}`} onClick={() => setVoiceMode("select")}>Choose</button>
+                    <button className={`voice-mode-tab ${voiceMode === "custom" ? "active" : ""}`} onClick={() => setVoiceMode("custom")}>Clone</button>
                   </div>
-
                   {voiceMode === "auto" && (
-                    <div className="voice-auto-hint">A voice will be assigned automatically when the simulation starts.</div>
+                    <div className="voice-auto-hint">Auto-assigned at simulation start.</div>
                   )}
-
                   {voiceMode === "select" && (
                     <div className="voice-picker">
                       {availableVoices.map((v) => (
@@ -901,10 +862,9 @@ Guidelines:
                           </span>
                         </div>
                       ))}
-                      {availableVoices.length === 0 && <div className="voice-auto-hint">No voices available — is the TTS server running?</div>}
+                      {availableVoices.length === 0 && <div className="voice-auto-hint">No voices available</div>}
                     </div>
                   )}
-
                   {voiceMode === "custom" && (
                     <>
                       {audioUrl || hasExistingVoice ? (
@@ -964,8 +924,12 @@ Guidelines:
                     </>
                   )}
                 </div>
+              </div>
+            </div>
 
-                {/* Inventory */}
+            {/* Row 5: Inventory + Add button */}
+            <div className="builder-row-2col builder-row-2col-top">
+              <div className="builder-field">
                 <label className="builder-label">
                   Starting Inventory
                   <span className="creator-inv-count">{inventory.length}/8</span>
@@ -980,123 +944,42 @@ Guidelines:
                     ))}
                   </div>
                 )}
-                <div className="creator-inv-picker">
+                <div className="creator-inv-picker creator-inv-picker-2col">
                   {itemsByCategory.map((group) => (
                     <div key={group.category} className="creator-inv-group">
                       <span className="creator-inv-cat-label" style={{ color: CATEGORY_COLORS[group.category] }}>{group.category}</span>
-                      {group.items.map((item) => (
-                        <button key={item.label} className="creator-inv-add-btn" disabled={inventory.length >= 8} onClick={() => addItem(item)} title={`Add ${item.label}`}>
-                          {item.emoji} {item.label}
-                        </button>
-                      ))}
+                      <div className="creator-inv-group-items">
+                        {group.items.map((item) => (
+                          <button key={item.label} className="creator-inv-add-btn" disabled={inventory.length >= 8} onClick={() => addItem(item)} title={`Add ${item.label}`}>
+                            {item.emoji} {item.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
-
-            {formError && <div className="form-error">{formError}</div>}
-
-            <button className="btn-spawn" onClick={handleSubmit} disabled={isSubmitting || atCapacity}>
-              {isSubmitting ? "Uploading voice..." : atCapacity ? "Roster Full" : "Add to Roster"}
-            </button>
-          </div>
-
-          {/* Settings Accordion */}
-          <div className="setup-section setup-settings-section">
-            <button className="setup-settings-toggle" onClick={() => setSettingsOpen((p) => !p)}>
-              <span className="setup-section-title">Settings</span>
-              <span className="setup-settings-summary">
-                {{ ollama: "Ollama", groq: "Groq", gemini: "Gemini" }[llmConfig.provider]} · {language} · {ttsEngine === "chatterbox" ? "Chatterbox" : "Kokoro"} · {MAPS.find(m => m.url === mapUrl)?.label ?? "Custom"}
-              </span>
-              <span className={`setup-settings-chevron ${settingsOpen ? "open" : ""}`}>›</span>
-            </button>
-
-            {settingsOpen && (
-              <div className="setup-settings-body">
-                <div className="setup-setting-row">
-                  <span className="setup-setting-label">Language</span>
-                  <select className="setup-language-select" value={language} onChange={(e) => onLanguageChange(e.target.value)}>
-                    {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
-                  </select>
-                </div>
-
-                <div className="setup-setting-group">
-                  <span className="setup-setting-label">Map</span>
-                  <div className="setup-tts-engine-options">
-                    {MAPS.map((m) => (
-                      <button key={m.url} className={`tts-engine-btn ${mapUrl === m.url ? "active" : ""}`} onClick={() => onMapChange(m.url)}>{m.label}</button>
-                    ))}
-                  </div>
-                  <span className="tts-engine-hint">{MAPS.find(m => m.url === mapUrl)?.description ?? ""}</span>
-                </div>
-
-                <div className="setup-setting-group">
-                  <span className="setup-setting-label">LLM Provider</span>
-                  <div className="setup-tts-engine-options">
-                    <button className={`tts-engine-btn ${llmConfig.provider === "ollama" ? "active" : ""}`} onClick={() => onLlmConfigChange({ provider: "ollama" as LlmProvider })}>Local (Ollama)</button>
-                    <button className={`tts-engine-btn ${llmConfig.provider === "groq" ? "active" : ""}`} onClick={() => onLlmConfigChange({ provider: "groq" as LlmProvider })}>Cloud (Groq)</button>
-                    <button className={`tts-engine-btn ${llmConfig.provider === "gemini" ? "active" : ""}`} onClick={() => onLlmConfigChange({ provider: "gemini" as LlmProvider })}>Cloud (Gemini)</button>
-                  </div>
-                  {llmConfig.provider === "ollama" && (
-                    <div className="llm-detail">
-                      <input className="llm-input" type="text" value={llmConfig.ollamaModel} onChange={(e) => onLlmConfigChange({ ollamaModel: e.target.value })} placeholder="Model name" />
-                    </div>
-                  )}
-                  {llmConfig.provider === "groq" && (
-                    <div className="llm-detail">
-                      <input className="llm-input" type="password" value={llmConfig.groqApiKey} onChange={(e) => onLlmConfigChange({ groqApiKey: e.target.value })} placeholder="Groq API key" />
-                      <select className="llm-select" value={llmConfig.groqModel} onChange={(e) => onLlmConfigChange({ groqModel: e.target.value })}>
-                        {GROQ_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                      </select>
-                    </div>
-                  )}
-                  {llmConfig.provider === "gemini" && (
-                    <div className="llm-detail">
-                      <input className="llm-input" type="password" value={llmConfig.geminiApiKey} onChange={(e) => onLlmConfigChange({ geminiApiKey: e.target.value })} placeholder="Gemini API key" />
-                      <select className="llm-select" value={llmConfig.geminiModel} onChange={(e) => onLlmConfigChange({ geminiModel: e.target.value })}>
-                        {GEMINI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                <div className="setup-setting-group">
-                  <span className="setup-setting-label">TTS Engine</span>
-                  <div className="setup-tts-engine-options">
-                    <button className={`tts-engine-btn ${ttsEngine === "chatterbox" ? "active" : ""} ${!isEnglish ? "disabled" : ""}`} onClick={() => isEnglish && onTtsEngineChange("chatterbox")} disabled={!isEnglish}>Chatterbox Turbo</button>
-                    <button className={`tts-engine-btn ${ttsEngine === "kokoro" ? "active" : ""}`} onClick={() => onTtsEngineChange("kokoro")}>Kokoro</button>
-                  </div>
-                  {!isEnglish && <span className="tts-engine-hint">Chatterbox Turbo only supports English</span>}
-                  <div className="tts-test-area">
-                    <input className="tts-test-input-inline" type="text" placeholder="Type a phrase to test..." value={testPhrase} onChange={(e) => setTestPhrase(e.target.value)} />
-                    <button
-                      className="btn tts-test-btn"
-                      disabled={!testPhrase.trim() || testPlaying}
-                      onClick={() => {
-                        setTestPlaying(true);
-                        onTestTts(testPhrase.trim(), ttsEngine);
-                        if (testTimeout.current) clearTimeout(testTimeout.current);
-                        testTimeout.current = window.setTimeout(() => setTestPlaying(false), 5000);
-                      }}
-                    >{testPlaying ? "Playing..." : "Test"}</button>
-                  </div>
-                </div>
               </div>
-            )}
+              <div className="builder-field builder-field-submit">
+                {formError && <div className="form-error">{formError}</div>}
+                <button className="btn-spawn" onClick={handleSubmit} disabled={isSubmitting || atCapacity}>
+                  {isSubmitting ? "Uploading voice..." : atCapacity ? "Roster Full" : "Add to Roster"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* ── Roster ─────────────────────────────────── */}
+        {/* ── Right sidebar: Roster ───────────────────── */}
         <div className="setup-right">
           <div className="roster-section">
             <div className="roster-header">
               <span className="roster-label">Roster</span>
               <span className="roster-count">{roster.length}/{MAX_ROSTER}</span>
             </div>
-
             {roster.length === 0 ? (
               <div className="roster-empty">
                 <span className="roster-empty-icon">?</span>
-                <span className="roster-empty-text">No characters yet — pick a template, randomize, or build your own</span>
+                <span className="roster-empty-text">No characters yet</span>
               </div>
             ) : (
               <div className="roster-grid">
@@ -1136,12 +1019,93 @@ Guidelines:
       {/* ── Start Bar ──────────────────────────────── */}
       <div className="setup-start-bar">
         <div className="setup-start-bar-inner">
+          <button className="btn btn-settings-gear" onClick={() => setSettingsOpen((p) => !p)} title="Settings">
+            <span className="settings-gear-icon">⚙</span>
+            <span className="setup-settings-summary">
+              {{ ollama: "Ollama", groq: "Groq", gemini: "Gemini" }[llmConfig.provider]} · {ttsEngine === "chatterbox" ? "Chatterbox" : "Kokoro"} · {MAPS.find(m => m.url === mapUrl)?.label ?? "Custom"}
+            </span>
+          </button>
           {onTestMap && <button className="btn btn-test-map" onClick={onTestMap}>Test Map</button>}
           <button className="btn btn-start-sim" disabled={roster.length < 2} onClick={onStartSimulation}>
             {roster.length < 2 ? `Add ${2 - roster.length} more character${2 - roster.length > 1 ? "s" : ""}` : "Start Simulation"}
           </button>
         </div>
       </div>
+
+      {/* ── Settings Popover ───────────────────────── */}
+      {settingsOpen && (
+        <div className="settings-popover-overlay" onClick={() => setSettingsOpen(false)}>
+          <div className="settings-popover" onClick={(e) => e.stopPropagation()}>
+            <div className="setup-settings-body">
+              <div className="setup-setting-row">
+                <span className="setup-setting-label">Language</span>
+                <select className="setup-language-select" value={language} onChange={(e) => onLanguageChange(e.target.value)}>
+                  {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+                </select>
+              </div>
+              <div className="setup-setting-group">
+                <span className="setup-setting-label">Map</span>
+                <div className="setup-tts-engine-options">
+                  {MAPS.map((m) => (
+                    <button key={m.url} className={`tts-engine-btn ${mapUrl === m.url ? "active" : ""}`} onClick={() => onMapChange(m.url)}>{m.label}</button>
+                  ))}
+                </div>
+                <span className="tts-engine-hint">{MAPS.find(m => m.url === mapUrl)?.description ?? ""}</span>
+              </div>
+              <div className="setup-setting-group">
+                <span className="setup-setting-label">LLM Provider</span>
+                <div className="setup-tts-engine-options">
+                  <button className={`tts-engine-btn ${llmConfig.provider === "ollama" ? "active" : ""}`} onClick={() => onLlmConfigChange({ provider: "ollama" as LlmProvider })}>Local (Ollama)</button>
+                  <button className={`tts-engine-btn ${llmConfig.provider === "groq" ? "active" : ""}`} onClick={() => onLlmConfigChange({ provider: "groq" as LlmProvider })}>Cloud (Groq)</button>
+                  <button className={`tts-engine-btn ${llmConfig.provider === "gemini" ? "active" : ""}`} onClick={() => onLlmConfigChange({ provider: "gemini" as LlmProvider })}>Cloud (Gemini)</button>
+                </div>
+                {llmConfig.provider === "ollama" && (
+                  <div className="llm-detail">
+                    <input className="llm-input" type="text" value={llmConfig.ollamaModel} onChange={(e) => onLlmConfigChange({ ollamaModel: e.target.value })} placeholder="Model name" />
+                  </div>
+                )}
+                {llmConfig.provider === "groq" && (
+                  <div className="llm-detail">
+                    <input className="llm-input" type="password" value={llmConfig.groqApiKey} onChange={(e) => onLlmConfigChange({ groqApiKey: e.target.value })} placeholder="Groq API key" />
+                    <select className="llm-select" value={llmConfig.groqModel} onChange={(e) => onLlmConfigChange({ groqModel: e.target.value })}>
+                      {GROQ_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                    </select>
+                  </div>
+                )}
+                {llmConfig.provider === "gemini" && (
+                  <div className="llm-detail">
+                    <input className="llm-input" type="password" value={llmConfig.geminiApiKey} onChange={(e) => onLlmConfigChange({ geminiApiKey: e.target.value })} placeholder="Gemini API key" />
+                    <select className="llm-select" value={llmConfig.geminiModel} onChange={(e) => onLlmConfigChange({ geminiModel: e.target.value })}>
+                      {GEMINI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+              <div className="setup-setting-group">
+                <span className="setup-setting-label">TTS Engine</span>
+                <div className="setup-tts-engine-options">
+                  <button className={`tts-engine-btn ${ttsEngine === "chatterbox" ? "active" : ""} ${!isEnglish ? "disabled" : ""}`} onClick={() => isEnglish && onTtsEngineChange("chatterbox")} disabled={!isEnglish}>Chatterbox Turbo</button>
+                  <button className={`tts-engine-btn ${ttsEngine === "kokoro" ? "active" : ""}`} onClick={() => onTtsEngineChange("kokoro")}>Kokoro</button>
+                </div>
+                {!isEnglish && <span className="tts-engine-hint">Chatterbox Turbo only supports English</span>}
+                <div className="tts-test-area">
+                  <input className="tts-test-input-inline" type="text" placeholder="Type a phrase to test..." value={testPhrase} onChange={(e) => setTestPhrase(e.target.value)} />
+                  <button
+                    className="btn tts-test-btn"
+                    disabled={!testPhrase.trim() || testPlaying}
+                    onClick={() => {
+                      setTestPlaying(true);
+                      onTestTts(testPhrase.trim(), ttsEngine);
+                      if (testTimeout.current) clearTimeout(testTimeout.current);
+                      testTimeout.current = window.setTimeout(() => setTestPlaying(false), 5000);
+                    }}
+                  >{testPlaying ? "Playing..." : "Test"}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Delete Confirmation Modal ──────────────── */}
       {confirmDeleteId && deletingPremade && (
