@@ -9,6 +9,7 @@ export interface PremadeTemplate {
   name: string;
   avatar: string;
   color: string;
+  spriteId?: string;
   personalityTraits: string[];
   coreDesires: string[];
   backstory?: string;
@@ -62,6 +63,7 @@ export function premadeTemplateToNpc(template: PremadeTemplate): NPC {
     name: template.name,
     avatar: template.avatar,
     color: template.color,
+    spriteId: template.spriteId,
     personalityTraits: [...template.personalityTraits],
     coreDesires: [...template.coreDesires],
     backstory: template.backstory,
@@ -78,6 +80,7 @@ export function npcToPremadeTemplate(npc: NPC): PremadeTemplate {
     name: npc.name,
     avatar: npc.avatar,
     color: npc.color,
+    spriteId: npc.spriteId,
     personalityTraits: [...npc.personalityTraits],
     coreDesires: [...npc.coreDesires],
     backstory: npc.backstory,

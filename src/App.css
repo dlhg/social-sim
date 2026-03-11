@@ -2098,6 +2098,324 @@
   letter-spacing: 2px;
 }
 
+/* ── Template Strip ──────────────────────────── */
+
+.template-strip {
+  width: 100%;
+  max-width: 1100px;
+}
+
+.template-strip-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.template-strip-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.template-strip-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.template-strip-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 2px;
+}
+
+.template-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+.template-card:hover {
+  border-color: var(--border-default);
+  background: var(--bg-hover);
+  transform: translateY(-2px);
+}
+
+.template-card-active {
+  border-color: var(--accent-info);
+  box-shadow: 0 0 12px rgba(77, 208, 225, 0.15);
+}
+
+.template-card-preview {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.template-card-added {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.template-card-added:hover {
+  transform: none;
+}
+
+.template-card-manage {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--duration-fast);
+  z-index: 1;
+}
+
+.template-card:hover .template-card-manage {
+  opacity: 1;
+}
+
+.template-card-sprite {
+  margin-bottom: 2px;
+}
+
+.template-card-avatar {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.template-card-name {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.template-card-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  justify-content: center;
+}
+
+.template-card-traits .trait-chip {
+  font-size: 9px;
+  padding: 1px 5px;
+}
+
+.template-quick-add {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--accent-life);
+  border-radius: 50%;
+  background: var(--accent-life-dim);
+  color: var(--accent-life);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--duration-fast), transform var(--duration-fast);
+  padding: 0;
+  line-height: 1;
+}
+
+.template-card:hover .template-quick-add {
+  opacity: 1;
+}
+
+.template-quick-add:hover {
+  transform: scale(1.15);
+  background: rgba(92, 184, 122, 0.25);
+}
+
+/* ── Sprite Picker ──────────────────────────── */
+
+.sprite-picker {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.sprite-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px 4px;
+  border: 2px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.sprite-option:hover {
+  border-color: var(--border-default);
+  background: var(--bg-hover);
+}
+
+.sprite-option.selected {
+  border-color: var(--accent-info);
+  background: rgba(77, 208, 225, 0.08);
+}
+
+.sprite-option-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.sprite-option.selected .sprite-option-label {
+  color: var(--accent-info);
+}
+
+.sprite-frame {
+  width: 32px;
+  height: 64px;
+  overflow: hidden;
+  image-rendering: pixelated;
+  position: relative;
+}
+
+.sprite-frame img {
+  /* Spritesheet: 24 frames × 16px wide, 32px tall. Scale 2x to show 32×64 first frame. */
+  width: calc(16px * 24 * 2); /* 768px */
+  height: calc(32px * 2);     /* 64px */
+  image-rendering: pixelated;
+  display: block;
+}
+
+.sprite-frame-mini {
+  width: 32px;
+  height: 48px;
+  overflow: hidden;
+  image-rendering: pixelated;
+  position: relative;
+}
+
+.sprite-frame-mini img {
+  /* Spritesheet: 24 frames × 16px wide, 32px tall. Scale 2x (actual: 1.5 to fit 32x48). */
+  width: calc(16px * 24 * 1.5); /* 576px */
+  height: calc(32px * 1.5);     /* 48px */
+  image-rendering: pixelated;
+  display: block;
+}
+
+/* ── Character Builder Section ──────────────── */
+
+.builder-section {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  padding: 20px;
+  transition: all var(--duration-fast);
+}
+
+.builder-section.builder-preview {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.03);
+}
+
+.builder-section.builder-preview .builder-input,
+.builder-section.builder-preview .secrets-textarea {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.builder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.builder-header-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.builder-label {
+  display: block;
+  margin: 12px 0 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.builder-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--bg-deepest);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  box-sizing: border-box;
+  transition: border-color var(--duration-fast) var(--ease-in-out);
+}
+
+.builder-input:focus {
+  outline: none;
+  border-color: var(--accent-info);
+}
+
+.builder-advanced-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 14px;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--duration-fast);
+}
+
+.builder-advanced-toggle:hover {
+  color: var(--text-primary);
+}
+
+.builder-advanced-hint {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.builder-advanced-body {
+  padding-top: 4px;
+  animation: settings-reveal var(--duration-normal) var(--ease-out-expo);
+}
+
+/* ── Roster Card Sprite ─────────────────────── */
+
+.roster-card-sprite {
+  margin-bottom: 2px;
+}
+
 /* ── Sections ────────────────────────────────── */
 
 .setup-section {
@@ -2317,6 +2635,11 @@
 .roster-card-avatar {
   font-size: 28px;
   line-height: 1;
+}
+
+.roster-card-sprite {
+  display: flex;
+  justify-content: center;
 }
 
 .roster-card-name {

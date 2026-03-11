@@ -126,6 +126,7 @@ export interface NPC {
   name: string;
   avatar: string;
   color: string;
+  spriteId?: string; // user-chosen sprite name (e.g. "Adam", "Alex", "Amelia", "Bob")
   personalityTraits: string[];
   coreDesires: string[];
   backstory?: string; // narrative paragraph — preferred over traits/desires for prompts

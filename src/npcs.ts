@@ -1,5 +1,6 @@
 import type { NPC, EmotionalState, InventoryItem, ItemCategory, NpcPromise, BetrayalRecord, ReactiveImpulse, MemoryType, MemoryCategory } from "./types";
 import { ITEM_LIFETIME_BY_CATEGORY } from "./types";
+import { SPRITE_NAMES } from "./sprite-system";
 
 export const COLOR_SWATCHES = [
   "#6ec6ff",
@@ -142,6 +143,7 @@ export interface RandomNpcFields {
   name: string;
   avatar: string;
   color: string;
+  spriteId: string;
   traits: string[];
   desires: string[];
   secrets: string[];
@@ -250,6 +252,7 @@ export function randomizeFields(existingIds: string[]): RandomNpcFields {
     name,
     avatar: pick(AVATAR_OPTIONS),
     color: pick(COLOR_SWATCHES),
+    spriteId: pick([...SPRITE_NAMES]),
     traits,
     desires,
     secrets,
@@ -302,7 +305,8 @@ export function randomizeNpc(existingIds: string[]): NPC {
   // Derive initial emotional state from personality traits
   const emotionalState = deriveEmotionsFromTraits(personalityTraits);
 
-  const npc = createNpc({ id, name, avatar, color, personalityTraits, coreDesires, backstory, secrets, inventory, emotionalState });
+  const spriteId = pick([...SPRITE_NAMES]);
+  const npc = createNpc({ id, name, avatar, color, spriteId, personalityTraits, coreDesires, backstory, secrets, inventory, emotionalState });
 
   // Give them a starting goal
   npc.currentGoal = pick(RANDOM_GOALS);
@@ -360,6 +364,7 @@ export function createNpc(partial: {
   name: string;
   avatar: string;
   color: string;
+  spriteId?: string;
   personalityTraits: string[];
   coreDesires: string[];
   backstory?: string;
@@ -430,6 +435,7 @@ export const initialNpcs: NPC[] = (() => {
     name: "Alice",
     avatar: "🧑‍🔬",
     color: "#6ec6ff",
+    spriteId: "Amelia",
     personalityTraits: ["curious", "optimistic", "enthusiastic", "tangential"],
     coreDesires: [
       "discover unexpected connections",
@@ -449,6 +455,7 @@ export const initialNpcs: NPC[] = (() => {
     name: "Bob",
     avatar: "📚",
     color: "#ffb74d",
+    spriteId: "Bob",
     personalityTraits: ["dry-humored", "philosophical", "sardonic", "kind"],
     coreDesires: [
       "find meaning in absurdity",
@@ -467,6 +474,7 @@ export const initialNpcs: NPC[] = (() => {
     name: "Victor",
     avatar: "🎭",
     color: "#e53935",
+    spriteId: "Adam",
     personalityTraits: [
       "competitive",
       "blunt",
@@ -492,6 +500,7 @@ export const initialNpcs: NPC[] = (() => {
     name: "Mara",
     avatar: "🪞",
     color: "#ab47bc",
+    spriteId: "Alex",
     personalityTraits: [
       "charming",
       "calculating",

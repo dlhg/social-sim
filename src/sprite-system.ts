@@ -20,8 +20,8 @@ const IDLE_FRAME_MS = 180;
 const RUN_FRAME_MS = 100;
 
 // Available character sprite names in the asset pack
-const SPRITE_NAMES = ["Adam", "Alex", "Amelia", "Bob"] as const;
-type SpriteName = (typeof SPRITE_NAMES)[number];
+export const SPRITE_NAMES = ["Adam", "Alex", "Amelia", "Bob"] as const;
+export type SpriteName = (typeof SPRITE_NAMES)[number];
 
 // Map known NPC IDs to specific sprites
 const NPC_SPRITE_MAP: Record<string, SpriteName> = {
@@ -73,7 +73,11 @@ export class SpriteSystem {
     this.ready = true;
   }
 
-  private resolve(npcId: string): SpriteName {
+  private resolve(npcId: string, spriteId?: string): SpriteName {
+    // User-chosen sprite takes priority
+    if (spriteId && (SPRITE_NAMES as readonly string[]).includes(spriteId)) {
+      return spriteId as SpriteName;
+    }
     const explicit = NPC_SPRITE_MAP[npcId];
     if (explicit) return explicit;
     let assigned = this.autoPool.get(npcId);
@@ -105,10 +109,11 @@ export class SpriteSystem {
     dy: number,
     moving: boolean,
     now: number,
+    spriteId?: string,
   ): boolean {
     if (!this.ready) return false;
 
-    const imgs = this.sprites.get(this.resolve(npcId));
+    const imgs = this.sprites.get(this.resolve(npcId, spriteId));
     if (!imgs) return false;
 
     // Get or create animation state

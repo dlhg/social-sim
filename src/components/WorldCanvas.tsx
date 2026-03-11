@@ -499,9 +499,10 @@ export function WorldCanvas({
         ctx.fill();
 
         // Try sprite, fall back to circle + emoji
+        const npcForSprite = getNpc(spatial.npcId);
         const drew = spritesRef.current.draw(
           ctx, spatial.npcId, px, feetY, sprW, sprH,
-          moveDx, moveDy, isMoving, now,
+          moveDx, moveDy, isMoving, now, npcForSprite?.spriteId,
         );
 
         if (!drew) {
