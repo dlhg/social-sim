@@ -389,15 +389,28 @@ Guidelines:
     inventory: InventoryItem[]; emotionalState?: Partial<EmotionalState>;
   } | null>(null);
 
+  // Keep refs in sync with current form state so the hover timer
+  // always reads the latest values (avoids stale closures in setTimeout)
+  const formStateRef = useRef({ name, color, spriteId, traits, desires, backstory, secrets, inventory, emotionalStateOverride });
+  formStateRef.current = { name, color, spriteId, traits, desires, backstory, secrets, inventory, emotionalStateOverride };
+
+  const leaveTimerRef = useRef<number | null>(null);
+
   function handleTemplateHover(template: PremadeTemplate) {
     if (activeTemplateId) return; // don't preview if a template is actively loaded
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    // Cancel any pending restore — we're hovering a new card
+    if (leaveTimerRef.current) { clearTimeout(leaveTimerRef.current); leaveTimerRef.current = null; }
+
     hoverTimerRef.current = window.setTimeout(() => {
-      // Save current form state before overwriting
+      // Save current form state before overwriting — read from ref, not closure
       if (!preHoverState.current) {
+        const s = formStateRef.current;
         preHoverState.current = {
-          name, color, spriteId, traits, desires, backstory, secrets,
-          inventory: [...inventory], emotionalState: emotionalStateOverride,
+          name: s.name, color: s.color, spriteId: s.spriteId,
+          traits: s.traits, desires: s.desires, backstory: s.backstory,
+          secrets: s.secrets, inventory: [...s.inventory],
+          emotionalState: s.emotionalStateOverride,
         };
       }
       setPreviewTemplateId(template.id);
@@ -407,21 +420,25 @@ Guidelines:
 
   function handleTemplateLeave() {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    if (previewTemplateId && preHoverState.current && !activeTemplateId) {
-      // Revert form to pre-hover state
-      const s = preHoverState.current;
-      setName(s.name);
-      setColor(s.color);
-      setSpriteId(s.spriteId);
-      setTraits(s.traits);
-      setDesires(s.desires);
-      setBackstory(s.backstory);
-      setSecrets(s.secrets);
-      setInventory(s.inventory);
-      setEmotionalStateOverride(s.emotionalState);
-      preHoverState.current = null;
-    }
-    setPreviewTemplateId(null);
+    // Defer the restore so moving between cards doesn't flash default values
+    if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+    leaveTimerRef.current = window.setTimeout(() => {
+      leaveTimerRef.current = null;
+      if (preHoverState.current && !activeTemplateId) {
+        const s = preHoverState.current;
+        setName(s.name);
+        setColor(s.color);
+        setSpriteId(s.spriteId);
+        setTraits(s.traits);
+        setDesires(s.desires);
+        setBackstory(s.backstory);
+        setSecrets(s.secrets);
+        setInventory(s.inventory);
+        setEmotionalStateOverride(s.emotionalState);
+        preHoverState.current = null;
+      }
+      setPreviewTemplateId(null);
+    }, 80);
   }
 
   function handleTemplateClick(template: PremadeTemplate) {
