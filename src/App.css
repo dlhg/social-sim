@@ -2097,6 +2097,35 @@
   padding: 24px 24px 96px;
   overflow-y: auto;
   gap: 28px;
+  position: relative;
+}
+
+.arch-help-btn {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 50;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.arch-help-btn:hover {
+  border-color: var(--accent-info);
+  color: var(--accent-info);
+  background: rgba(77, 208, 225, 0.08);
 }
 
 .setup-columns {

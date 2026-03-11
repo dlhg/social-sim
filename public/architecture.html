@@ -117,6 +117,73 @@ svg.rings{
   color:var(--text-dim);margin:20px 0 10px;
 }
 
+/* Connections panel (left) */
+.connections-panel{
+  position:fixed;left:-420px;top:0;bottom:0;width:400px;
+  background:rgba(10,11,16,.96);border-right:1px solid rgba(255,255,255,.06);
+  backdrop-filter:blur(20px);z-index:100;
+  transition:left .4s cubic-bezier(.16,1,.3,1);
+  display:flex;flex-direction:column;
+  overflow-y:auto;
+}
+.connections-panel.open{left:0}
+.connections-panel .close-btn{
+  position:absolute;top:16px;left:16px;width:32px;height:32px;
+  border:1px solid rgba(255,255,255,.1);border-radius:8px;
+  background:transparent;color:var(--text-dim);font-size:18px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all .2s;
+}
+.connections-panel .close-btn:hover{color:var(--text);border-color:rgba(255,255,255,.2)}
+
+.conn-header{
+  padding:40px 28px 16px;border-bottom:1px solid rgba(255,255,255,.05);
+}
+.conn-header .tag{
+  font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;
+  text-transform:uppercase;margin-bottom:8px;
+}
+.conn-header h2{
+  font-size:20px;font-weight:700;line-height:1.3;
+}
+
+.conn-body{
+  padding:16px 28px;flex:1;
+}
+.conn-section-title{
+  font-size:10px;font-family:'JetBrains Mono',monospace;
+  letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--text-dim);margin:16px 0 8px;
+  display:flex;align-items:center;gap:8px;
+}
+.conn-section-title .conn-arrow{
+  font-size:12px;
+}
+.conn-item{
+  margin-bottom:12px;padding:10px 14px;
+  background:rgba(255,255,255,.02);border-radius:8px;
+  border-left:2px solid var(--text-dim);
+  transition:all .15s;cursor:default;
+}
+.conn-item:hover{
+  background:rgba(255,255,255,.04);
+}
+.conn-item-header{
+  display:flex;align-items:center;gap:8px;margin-bottom:4px;
+}
+.conn-item-node{
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  font-weight:600;
+}
+.conn-item-label{
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  color:var(--text-dim);
+}
+.conn-item-desc{
+  font-size:12px;line-height:1.6;color:var(--text-mid);
+  margin-top:6px;
+}
+
 /* Tooltip */
 .tooltip{
   position:fixed;pointer-events:none;z-index:200;
@@ -149,9 +216,26 @@ svg.rings{
   animation:fade-hint 3s ease-in-out infinite alternate;
 }
 @keyframes fade-hint{0%{opacity:.3}100%{opacity:.7}}
+
+.back-btn{
+  position:fixed;top:16px;right:16px;z-index:200;
+  width:32px;height:32px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.04);
+  color:var(--text-dim);font-size:16px;
+  display:flex;align-items:center;justify-content:center;
+  text-decoration:none;cursor:pointer;
+  transition:all .2s;
+}
+.back-btn:hover{
+  border-color:rgba(74,232,255,.5);color:rgba(74,232,255,.9);
+  background:rgba(74,232,255,.08);
+}
 </style>
 </head>
 <body>
+<a href="/" class="back-btn" title="Back">&larr;</a>
+
 <div class="app">
   <header>
     <h1>NPC System Architecture</h1>
@@ -160,6 +244,12 @@ svg.rings{
   <div class="diagram-area">
     <svg class="rings" id="diagram" viewBox="-500 -500 1000 1000"></svg>
   </div>
+</div>
+
+<div class="connections-panel" id="connections-panel">
+  <button class="close-btn" onclick="closeConnectionsPanel()">&times;</button>
+  <div class="conn-header" id="conn-header"></div>
+  <div class="conn-body" id="conn-body"></div>
 </div>
 
 <div class="detail-panel" id="detail-panel">
@@ -398,51 +488,92 @@ const PROMPT_BUILDER = {
 // ─── Connections between elements ──────────────
 const CONNECTIONS = [
   // Director reads NPC state for pair scoring
-  {from:'emotions',to:'director',color:'var(--accent-director)',label:'reads emotions'},
-  {from:'relationships',to:'director',color:'var(--accent-director)',label:'scores pairs'},
-  {from:'memory',to:'director',color:'var(--accent-director)',label:'retrieves memories'},
-  {from:'secrets',to:'director',color:'var(--accent-director)',label:'info asymmetry'},
-  {from:'promises',to:'director',color:'var(--accent-director)',label:'pending promises'},
-  // Director → Prompt Builder → LLM (prompt builder is the intermediary)
-  {from:'director',to:'prompt',color:'var(--accent-director)',label:'requests conversation'},
-  {from:'director',to:'tts',color:'var(--accent-tts)',label:'prefetch audio'},
+  {from:'emotions',to:'director',color:'var(--accent-director)',label:'reads emotions',
+    desc:'Director checks emotional intensity (anger, joy, fear, sadness peaks) when scoring pairs. High emotional states increase pair priority by up to \u00d72.'},
+  {from:'relationships',to:'director',color:'var(--accent-director)',label:'scores pairs',
+    desc:'Pair scoring uses regard extremes (\u00d72), relationship velocity (warming/cooling: +3), and triangulation detection for love triangles and jealousy.'},
+  {from:'memory',to:'director',color:'var(--accent-director)',label:'retrieves memories',
+    desc:'Director checks for unresolved memories (unfinished business) and uses previous conversation context when re-queuing the same NPC pair.'},
+  {from:'secrets',to:'director',color:'var(--accent-director)',label:'info asymmetry',
+    desc:'Secrets one NPC knows about another add +3 to pair score. Unrevealed secrets add +1.5. This makes dramatic irony situations high-priority.'},
+  {from:'promises',to:'director',color:'var(--accent-director)',label:'pending promises',
+    desc:'Each pending promise between a pair adds +2 to their score. Broken promises add +2.5. Undiscovered betrayals add +4.'},
+  // Director → Prompt Builder → LLM
+  {from:'director',to:'prompt',color:'var(--accent-director)',label:'requests conversation',
+    desc:'Director picks the highest-scoring pair and conversation type, then asks the Prompt Builder to assemble the full context for an LLM call.'},
+  {from:'director',to:'tts',color:'var(--accent-tts)',label:'prefetch audio',
+    desc:'After LLM generates conversation turns, Director sends each turn to TTS for audio synthesis. Serialized to avoid GPU contention. Playback starts after 2+ turns are buffered.'},
   // Director writes back to NPC state after playback
-  {from:'director',to:'emotions',color:'var(--accent-director)',label:'applies emotion deltas'},
-  {from:'director',to:'relationships',color:'var(--accent-director)',label:'applies relationship deltas'},
-  {from:'director',to:'memory',color:'var(--accent-director)',label:'creates conversation memories'},
-  {from:'director',to:'secrets',color:'var(--accent-director)',label:'reveals secrets'},
-  {from:'director',to:'promises',color:'var(--accent-director)',label:'creates promises & betrayals'},
-  {from:'director',to:'goals',color:'var(--accent-director)',label:'updates arcs & triggers impulses'},
+  {from:'director',to:'emotions',color:'var(--accent-director)',label:'applies emotion deltas',
+    desc:'Each conversation turn includes an LLM-generated emotion_delta (8 axes, -0.4 to +0.4). Director applies these cumulatively during playback. Emotional contagion also spreads to nearby NPCs within 5 tiles.'},
+  {from:'director',to:'relationships',color:'var(--accent-director)',label:'applies relationship deltas',
+    desc:'LLM generates relationship_delta per turn (-0.2 to +0.2), plus extras (respect, trust, fear, debt). Capped per conversation type (0.30\u20130.50). Familiarity increments after each conversation.'},
+  {from:'director',to:'memory',color:'var(--accent-director)',label:'creates conversation memories',
+    desc:'After playback, a conversation summary memory is created for both NPCs. Individual turns may also create memories for secrets learned, promises made, gossip heard, etc.'},
+  {from:'director',to:'secrets',color:'var(--accent-director)',label:'reveals secrets',
+    desc:'When an NPC reveals a secret (trust \u22650.7), the listener\'s knownSecrets map is updated. Gossip about third parties can also propagate secret knowledge.'},
+  {from:'director',to:'promises',color:'var(--accent-director)',label:'creates promises & betrayals',
+    desc:'NPCs can make promises during conversation (resolveAtPhase = current + 1\u20132). If gossip reveals a betrayal, a BetrayalRecord is created and the victim may discover it.'},
+  {from:'director',to:'goals',color:'var(--accent-director)',label:'updates arcs & triggers impulses',
+    desc:'Character arc narrative is appended after conversations. Dramatic events (betrayals, confessions) create ReactiveImpulses with high urgency, fast-tracking follow-up conversations.'},
   // NPC state feeds into Prompt Builder
-  {from:'identity',to:'prompt',color:'var(--accent-prompt)',label:'backstory & traits'},
-  {from:'emotions',to:'prompt',color:'var(--accent-prompt)',label:'emotional context'},
-  {from:'relationships',to:'prompt',color:'var(--accent-prompt)',label:'relationship context'},
-  {from:'memory',to:'prompt',color:'var(--accent-prompt)',label:'retrieved memories'},
-  {from:'secrets',to:'prompt',color:'var(--accent-prompt)',label:'secrets & known secrets'},
-  {from:'inventory',to:'prompt',color:'var(--accent-prompt)',label:'items for speech'},
-  {from:'goals',to:'prompt',color:'var(--accent-prompt)',label:'current goal'},
+  {from:'identity',to:'prompt',color:'var(--accent-prompt)',label:'backstory & traits',
+    desc:'Prompt builder includes the NPC\'s backstory (preferred) or personality traits + core desires as the identity block. This shapes the LLM\'s voice for the character.'},
+  {from:'emotions',to:'prompt',color:'var(--accent-prompt)',label:'emotional context',
+    desc:'Current emotional state is rendered as prose ("You feel a deep sadness..."). All 7 axes are described so the LLM can generate emotionally authentic responses.'},
+  {from:'relationships',to:'prompt',color:'var(--accent-prompt)',label:'relationship context',
+    desc:'Regard is mapped to labels (stranger/acquaintance/friend/close friend/beloved/enemy). Affection, respect, trust, fear, debt shown if significant. Trajectory (warming/deteriorating/stable) included.'},
+  {from:'memory',to:'prompt',color:'var(--accent-prompt)',label:'retrieved memories',
+    desc:'Memories are retrieved sorted by recency\u00d7importance, split into: direct interactions with partner, gossip heard, and memories about the partner. Deduped and filtered.'},
+  {from:'secrets',to:'prompt',color:'var(--accent-prompt)',label:'secrets & known secrets',
+    desc:'Own secrets are listed with a hint to reveal if trust \u22650.7. Known secrets about the conversation partner are included so the NPC can reference or confront them.'},
+  {from:'inventory',to:'prompt',color:'var(--accent-prompt)',label:'items for speech',
+    desc:'Current inventory items (with emoji) are listed so NPCs can naturally reference, offer, or use items in conversation. Enables organic gift-giving moments.'},
+  {from:'goals',to:'prompt',color:'var(--accent-prompt)',label:'current goal',
+    desc:'The NPC\'s current goal string is included. Character arc (growth narrative) and persistent mood (if active >1 min) are also added for continuity.'},
   // Prompt Builder → LLM
-  {from:'prompt',to:'llm',color:'var(--accent-prompt)',label:'assembled prompt'},
+  {from:'prompt',to:'llm',color:'var(--accent-prompt)',label:'assembled prompt',
+    desc:'The complete prompt (18 sections: identity, emotions, relationships, memories, secrets, inventory, location, time, conversation preamble, etc.) is sent to the LLM. Response is JSON with speech, deltas, actions.'},
+  // LLM returns generated content
+  {from:'llm',to:'director',color:'var(--accent-llm)',label:'generated conversation JSON',
+    desc:'LLM returns a full conversation as JSON turns, each containing: inner_thought, speech, emotion_delta (7 axes), relationship_delta, intent, actions (give_gift, threaten, storm_off, etc.), secret_revealed, promise, and forgive. The Director parses and applies all of these during playback.'},
+  {from:'llm',to:'daycycle',color:'var(--accent-llm)',label:'promise resolution outcome',
+    desc:'When the Day Cycle asks the LLM to resolve a promise, it returns a kept/broken verdict with narrative reasoning. This determines whether the promise creates positive relationship effects or triggers a betrayal record.'},
   // World loop reads state
-  {from:'identity',to:'world',color:'var(--accent-world)',label:'trait-based waypoint selection'},
-  {from:'emotions',to:'world',color:'var(--accent-world)',label:'waypoint selection'},
-  {from:'relationships',to:'world',color:'var(--accent-world)',label:'proximity drives'},
-  {from:'inventory',to:'world',color:'var(--accent-world)',label:'item interactions'},
-  {from:'goals',to:'world',color:'var(--accent-world)',label:'goal-directed movement'},
+  {from:'identity',to:'world',color:'var(--accent-world)',label:'trait-based waypoint selection',
+    desc:'Personality traits influence where NPCs go: "curious" gets exploration bonuses, "anxious" prefers edges, "charming" seeks crowded waypoints. Trait affinity also affects activity selection.'},
+  {from:'emotions',to:'world',color:'var(--accent-world)',label:'waypoint selection',
+    desc:'Emotional state shapes movement: fearful NPCs avoid crowded areas (-2\u00d7 busyness penalty), joyful NPCs seek social spots (+1\u00d7 busyness bonus). Time-of-day preferences also apply.'},
+  {from:'relationships',to:'world',color:'var(--accent-world)',label:'proximity drives',
+    desc:'NPCs with high regard seek friends. Gift-seeking drive (30% chance) targets best friend when carrying items. Loneliness drive (15%) triggers after 90s without social contact.'},
+  {from:'inventory',to:'world',color:'var(--accent-world)',label:'item interactions',
+    desc:'Item-based interactions (offer_food, give_herb, give_trinket, etc.) require specific inventory items. These get a +2 scoring boost since they\'re rarer and more meaningful.'},
+  {from:'goals',to:'world',color:'var(--accent-world)',label:'goal-directed movement',
+    desc:'Current goal string influences waypoint selection, biasing the NPC toward relevant locations. Behavioral overrides (seek/avoid) from the Director can temporarily force movement patterns.'},
   // World writes back to NPC state
-  {from:'world',to:'emotions',color:'var(--accent-world)',label:'activity emotion effects'},
-  {from:'world',to:'relationships',color:'var(--accent-world)',label:'interaction deltas'},
-  {from:'world',to:'memory',color:'var(--accent-world)',label:'activity & interaction memories'},
-  {from:'world',to:'inventory',color:'var(--accent-world)',label:'item yields & decay'},
+  {from:'world',to:'emotions',color:'var(--accent-world)',label:'activity emotion effects',
+    desc:'Solo activities shift emotions: e.g. gardening (anger -0.03, joy +0.03), meditating (anger -0.04, fear -0.04), fishing (sadness -0.02, curiosity +0.02). 14 activity types with distinct effects.'},
+  {from:'world',to:'relationships',color:'var(--accent-world)',label:'interaction deltas',
+    desc:'Proximity interactions (22 types) change relationships: comfort gives trust +0.06, taunt gives regard -0.06, give_trinket gives regard +0.10. Both NPCs are affected asymmetrically.'},
+  {from:'world',to:'memory',color:'var(--accent-world)',label:'activity & interaction memories',
+    desc:'Activities and interactions create memories (importance 0.2\u20130.7). Eavesdropping (range 6 tiles, 3-min cooldown) creates gossip memories that can spread secrets.'},
+  {from:'world',to:'inventory',color:'var(--accent-world)',label:'item yields & decay',
+    desc:'Activities yield items: fishing (40% chance), foraging (60%), cooking (70%). Items decay by category (fish 2m, food 3m, herb 5m, craft 8m, trinket 10m, book 12m). Max 8 per NPC.'},
   // World to tilemap
-  {from:'world',to:'tilemap',color:'var(--accent-tilemap)',label:'A* pathfinding'},
+  {from:'world',to:'tilemap',color:'var(--accent-tilemap)',label:'A* pathfinding',
+    desc:'World simulation uses the tilemap\'s collision grid for A* pathfinding. NPCs pick waypoints (with mood/activity metadata), then pathfind to them. Stuck detection recomputes after 8 blocked ticks.'},
   // Day cycle reads promises, calls LLM directly
-  {from:'promises',to:'daycycle',color:'var(--accent-day)',label:'resolve promises'},
-  {from:'daycycle',to:'llm',color:'var(--accent-day)',label:'promise outcome generation'},
+  {from:'promises',to:'daycycle',color:'var(--accent-day)',label:'resolve promises',
+    desc:'At each phase transition, the Day Cycle checks for promises whose resolveAtPhase has arrived. Promises overdue by 6+ phases are auto-resolved as broken.'},
+  {from:'daycycle',to:'llm',color:'var(--accent-day)',label:'promise outcome generation',
+    desc:'Day Cycle calls the LLM directly with its own narrator prompt (not via Prompt Builder) to determine if each promise is kept or broken, considering personalities, emotions, and relationships.'},
   // Day cycle writes back to NPC state
-  {from:'daycycle',to:'emotions',color:'var(--accent-day)',label:'emotion decay + promise effects'},
-  {from:'daycycle',to:'relationships',color:'var(--accent-day)',label:'promise outcome deltas'},
-  {from:'daycycle',to:'memory',color:'var(--accent-day)',label:'promise outcome memories'},
+  {from:'daycycle',to:'emotions',color:'var(--accent-day)',label:'emotion decay + promise effects',
+    desc:'Emotions pull 15% toward fixed baselines each cycle. Promise outcomes also shift emotions: kept promises boost joy/trust, broken promises increase anger/sadness/guilt.'},
+  {from:'daycycle',to:'relationships',color:'var(--accent-day)',label:'promise outcome deltas',
+    desc:'Kept promises: both NPCs get +regard, +trust. Broken promises: both get -regard, -trust. These deltas apply to the promisor and promisee symmetrically.'},
+  {from:'daycycle',to:'memory',color:'var(--accent-day)',label:'promise outcome memories',
+    desc:'Promise resolution outcomes are stored as memories for both NPCs, with type promise_made or promise_broken. These surface in future prompts as unresolved business.'},
 ];
 
 // ─── Render inner ring nodes ───────────────────
@@ -477,7 +608,7 @@ INNER_NODES.forEach(node => {
   g.appendChild(label);
 
   g.style.cursor = 'pointer';
-  g.addEventListener('click', ()=>openPanel(node.detail, 'var(--accent-npc)'));
+  g.addEventListener('click', ()=>{ openPanel(node.detail, 'var(--accent-npc)'); openConnectionsPanel(node.id, 'var(--accent-npc)'); });
   g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
   g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
   layerNodes.appendChild(g);
@@ -519,7 +650,7 @@ MID_NODES.forEach(node => {
   g.appendChild(label);
 
   g.style.cursor = 'pointer';
-  g.addEventListener('click', ()=>openPanel(node.detail, node.color));
+  g.addEventListener('click', ()=>{ openPanel(node.detail, node.color); openConnectionsPanel(node.id, node.color); });
   g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
   g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
   layerNodes.appendChild(g);
@@ -549,7 +680,7 @@ OUTER_NODES.forEach(node => {
   g.appendChild(label);
 
   g.style.cursor = 'pointer';
-  g.addEventListener('click', ()=>openPanel(node.detail, node.color));
+  g.addEventListener('click', ()=>{ openPanel(node.detail, node.color); openConnectionsPanel(node.id, node.color); });
   g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
   g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
   layerNodes.appendChild(g);
@@ -577,7 +708,7 @@ OUTER_NODES.forEach(node => {
   g.appendChild(label);
 
   g.style.cursor = 'pointer';
-  g.addEventListener('click', ()=>openPanel(pb.detail, pb.color));
+  g.addEventListener('click', ()=>{ openPanel(pb.detail, pb.color); openConnectionsPanel('prompt', pb.color); });
   g.addEventListener('mouseenter', (e)=>{ showTooltip(e, 'Prompt Builder'); highlightNode('prompt'); });
   g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
   layerNodes.appendChild(g);
@@ -640,21 +771,16 @@ let hoveredNodeId = null;
 function highlightNode(nodeId){
   if(hoveredNodeId === nodeId) return;
   hoveredNodeId = nodeId;
-  const connected = getConnectedIds(nodeId, 2);
 
-  // Highlight connections: bright if touching this node, medium if between connected nodes, dim otherwise
+  // Show only direct connections, hide everything else
   connectionEls.forEach(c => {
     const touchesHovered = c.fromId === nodeId || c.toId === nodeId;
-    const betweenConnected = connected.has(c.fromId) && connected.has(c.toId);
     if(touchesHovered){
       c.line.setAttribute('opacity', '.55');
       c.line.setAttribute('stroke-width', '2');
-    } else if(betweenConnected){
-      c.line.setAttribute('opacity', '.2');
-      c.line.setAttribute('stroke-width', '1.5');
     } else {
-      c.line.setAttribute('opacity', '.03');
-      c.line.setAttribute('stroke-width', '1');
+      c.line.setAttribute('opacity', '0');
+      c.line.setAttribute('stroke-width', '1.5');
     }
   });
 
@@ -789,19 +915,85 @@ function closePanel(){
   document.getElementById('detail-panel').classList.remove('open');
 }
 
-// Close on click outside
+// ─── Connections panel (left) ──────────────────
+// Node name lookup
+const nodeNames = {};
+INNER_NODES.forEach(n => nodeNames[n.id] = n.label);
+MID_NODES.forEach(n => nodeNames[n.id] = n.label);
+OUTER_NODES.forEach(n => nodeNames[n.id] = n.label);
+nodeNames['prompt'] = 'Prompt Builder';
+
+function openConnectionsPanel(nodeId, accentColor){
+  const panel = document.getElementById('connections-panel');
+  const header = document.getElementById('conn-header');
+  const body = document.getElementById('conn-body');
+  const nodeName = nodeNames[nodeId] || nodeId;
+
+  // Find all connections involving this node
+  const outbound = CONNECTIONS.filter(c => c.fromId === nodeId || c.from === nodeId);
+  const inbound = CONNECTIONS.filter(c => c.toId === nodeId || c.to === nodeId);
+
+  header.innerHTML = `
+    <div class="tag" style="color:${accentColor}">CONNECTIONS</div>
+    <h2>${nodeName}</h2>
+  `;
+
+  let html = '';
+
+  if(outbound.length > 0){
+    html += `<div class="conn-section-title" style="color:${accentColor}"><span class="conn-arrow">\u2192</span> Sends data to</div>`;
+    outbound.forEach(c => {
+      const targetName = nodeNames[c.to] || c.to;
+      html += `
+        <div class="conn-item" style="border-left-color:${c.color}">
+          <div class="conn-item-header">
+            <span class="conn-item-node" style="color:${c.color}">${targetName}</span>
+            <span class="conn-item-label">${c.label}</span>
+          </div>
+          <div class="conn-item-desc">${c.desc || ''}</div>
+        </div>`;
+    });
+  }
+
+  if(inbound.length > 0){
+    html += `<div class="conn-section-title" style="color:${accentColor}"><span class="conn-arrow">\u2190</span> Receives data from</div>`;
+    inbound.forEach(c => {
+      const sourceName = nodeNames[c.from] || c.from;
+      html += `
+        <div class="conn-item" style="border-left-color:${c.color}">
+          <div class="conn-item-header">
+            <span class="conn-item-node" style="color:${c.color}">${sourceName}</span>
+            <span class="conn-item-label">${c.label}</span>
+          </div>
+          <div class="conn-item-desc">${c.desc || ''}</div>
+        </div>`;
+    });
+  }
+
+  if(outbound.length === 0 && inbound.length === 0){
+    html = '<p style="color:var(--text-dim);font-size:13px;">No direct connections.</p>';
+  }
+
+  body.innerHTML = html;
+  panel.classList.add('open');
+}
+
+function closeConnectionsPanel(){
+  document.getElementById('connections-panel').classList.remove('open');
+}
+
+// Close panels on click outside
 document.addEventListener('click', (e)=>{
-  const panel = document.getElementById('detail-panel');
-  if(!panel.classList.contains('open')) return;
-  if(panel.contains(e.target)) return;
-  // Check if click was on a node
-  if(e.target.closest('.inner-node,.mid-node,.outer-node,.prompt-node')) return;
-  closePanel();
+  const detailPanel = document.getElementById('detail-panel');
+  const connPanel = document.getElementById('connections-panel');
+  const isOnNode = e.target.closest('.inner-node,.mid-node,.outer-node,.prompt-node');
+  if(detailPanel.classList.contains('open') && !detailPanel.contains(e.target) && !isOnNode) closePanel();
+  if(connPanel.classList.contains('open') && !connPanel.contains(e.target) && !isOnNode) closeConnectionsPanel();
 });
 
 // Close on Escape
 document.addEventListener('keydown', (e)=>{
-  if(e.key === 'Escape') closePanel();
+  if(e.key === 'Escape'){ closePanel(); closeConnectionsPanel(); }
 });
 
 // ─── Tooltip ───────────────────────────────────
