@@ -10,7 +10,6 @@ import {
   saveCustomPremade,
   deleteCustomPremade,
   premadeTemplateToNpc,
-  npcToPremadeTemplate,
 } from "../premade-storage";
 import type { PremadeTemplate } from "../premade-storage";
 import type { LlmProvider, LlmConfig } from "../llm-config";
@@ -164,7 +163,6 @@ export function SetupScreen({
   // ── Derived ─────────────────────────────────────
   const rosterIds = new Set(roster.map((n) => n.id));
   const atCapacity = roster.length >= MAX_ROSTER;
-  const savedPremadeIds = new Set(customPremades.map((t) => t.id));
   const derivedId = name.trim().toLowerCase().replace(/\s+/g, "-");
   const isDuplicate = derivedId !== "" && roster.some((n) => n.id === derivedId);
 
@@ -215,11 +213,6 @@ export function SetupScreen({
   // ── Premade helpers ─────────────────────────────
   function refreshPremades() { setCustomPremades(loadCustomPremades()); }
 
-  function handleSaveAsPremade(npc: NPC) {
-    saveCustomPremade(npcToPremadeTemplate(npc));
-    refreshPremades();
-  }
-
   async function handleSaveTemplate() {
     if (!activeTemplate || !hasTemplateChanges) return;
     const trimmedName = name.trim();
@@ -267,6 +260,9 @@ export function SetupScreen({
 
   function handleConfirmDelete() {
     if (confirmDeleteId) {
+      if (confirmDeleteId === activeTemplateId) {
+        clearForm();
+      }
       deleteCustomPremade(confirmDeleteId);
       refreshPremades();
       setConfirmDeleteId(null);
@@ -746,8 +742,12 @@ Guidelines:
                   <>
                     <button className="btn btn-save-template" onClick={handleSaveTemplate} disabled={!hasTemplateChanges || isSubmitting}>Save</button>
                     <button className="btn btn-randomize-fields" onClick={clearForm}>Clear</button>
+                    <button className="btn btn-delete-template" onClick={() => setConfirmDeleteId(activeTemplateId)}>Delete</button>
                   </>
                 )}
+                <button className="btn-spawn" onClick={handleSubmit} disabled={isSubmitting || atCapacity}>
+                  {isSubmitting ? "Uploading voice..." : atCapacity ? "Roster Full" : "Add to Roster"}
+                </button>
               </div>
             </div>
 
@@ -976,12 +976,7 @@ Guidelines:
                   ))}
                 </div>
               </div>
-              <div className="builder-field builder-field-submit">
-                {formError && <div className="form-error">{formError}</div>}
-                <button className="btn-spawn" onClick={handleSubmit} disabled={isSubmitting || atCapacity}>
-                  {isSubmitting ? "Uploading voice..." : atCapacity ? "Roster Full" : "Add to Roster"}
-                </button>
-              </div>
+              {formError && <div className="form-error" style={{ textAlign: "right" }}>{formError}</div>}
             </div>
           </div>
         </div>
@@ -1001,7 +996,6 @@ Guidelines:
             ) : (
               <div className="roster-grid">
                 {roster.map((npc) => {
-                  const isSaved = savedPremadeIds.has(npc.id);
                   return (
                     <div key={npc.id} className="roster-card">
                       <div className="roster-card-sprite">
@@ -1019,9 +1013,6 @@ Guidelines:
                         </div>
                       </div>
                       <div className="roster-card-actions">
-                        <button className={`roster-card-save ${isSaved ? "saved" : ""}`} onClick={() => handleSaveAsPremade(npc)} title={isSaved ? "Saved as premade" : "Save as premade"}>
-                          {isSaved ? "★" : "☆"}
-                        </button>
                         <button className="roster-card-remove" onClick={() => onRemoveFromRoster(npc.id)} title="Remove">×</button>
                       </div>
                     </div>

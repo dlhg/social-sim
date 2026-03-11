@@ -1140,6 +1140,21 @@
   color: var(--text-muted);
 }
 
+.btn-delete-template {
+  padding: 4px 12px;
+  font-size: 11px;
+  border: 1px solid var(--accent-danger);
+  border-radius: 6px;
+  background: rgba(239, 83, 80, 0.1);
+  color: var(--accent-danger);
+  cursor: pointer;
+  font-family: var(--font-ui);
+}
+
+.btn-delete-template:hover {
+  background: rgba(239, 83, 80, 0.22);
+}
+
 .modal-content h3 {
   margin: 0 0 16px;
   font-size: 14px;
@@ -1347,22 +1362,28 @@
 }
 
 .btn-spawn {
-  width: 100%;
-  margin-top: 4px;
-  padding: 10px;
+  padding: 4px 12px;
   border: 1px solid var(--accent-life);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--accent-life-dim);
   color: var(--accent-life);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out-expo);
 }
 
-.btn-spawn:hover {
+.btn-spawn:hover:not(:disabled) {
   background: rgba(92, 184, 122, 0.22);
+}
+
+.btn-spawn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  border-color: var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
 }
 
 .secrets-textarea {
@@ -3186,36 +3207,6 @@
 }
 
 /* ── Roster Card Save Button ──────────────────── */
-
-.roster-card-save {
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 13px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: color var(--duration-fast), background var(--duration-fast);
-}
-
-.roster-card-save:hover {
-  color: var(--accent-caution);
-  background: rgba(255, 213, 79, 0.12);
-}
-
-.roster-card-save.saved {
-  color: var(--accent-caution);
-}
-
-.roster-card:hover .roster-card-save.saved,
-.roster-card-save.saved {
-  opacity: 1;
-}
 
 /* ── Delete Confirmation Modal ────────────────── */
 
