@@ -2238,8 +2238,6 @@
 
 .template-card-sprite {
   margin-bottom: 2px;
-  overflow: hidden;
-  max-width: 32px;
 }
 
 .template-card-avatar {
@@ -2355,17 +2353,16 @@
 }
 
 .sprite-frame-mini {
-  width: 32px;
+  width: 24px;
   height: 48px;
   overflow: hidden;
   image-rendering: pixelated;
   position: relative;
   flex-shrink: 0;
-  max-width: 32px;
 }
 
 .sprite-frame-mini img {
-  /* Spritesheet: 24 frames × 16px wide, 32px tall. Scale 2x (actual: 1.5 to fit 32x48). */
+  /* Spritesheet: 24 frames × 16px wide, 32px tall. Scale 1.5x → 24×48 per frame. */
   width: calc(16px * 24 * 1.5); /* 576px */
   height: calc(32px * 1.5);     /* 48px */
   image-rendering: pixelated;
