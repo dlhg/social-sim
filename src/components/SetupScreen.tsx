@@ -109,7 +109,7 @@ export function SetupScreen({
   const [backstory, setBackstory] = useState("");
   const [secrets, setSecrets] = useState("");
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emotionalStateOverride, setEmotionalStateOverride] = useState<Partial<EmotionalState> | undefined>();
@@ -614,11 +614,6 @@ export function SetupScreen({
 
   return (
     <div className="setup-screen">
-      <div className="setup-header">
-        <h1 className="setup-title">NPC Playground</h1>
-        <p className="setup-subtitle">Build your cast, then watch them come alive</p>
-      </div>
-
       {/* ── Template Strip ─────────────────────────── */}
       <div className="template-strip">
         <div className="template-strip-label">Saved Characters</div>
@@ -756,17 +751,7 @@ export function SetupScreen({
               placeholder="e.g. uncover the truth, be left alone"
             />
 
-            {/* Advanced Section (collapsible) */}
-            <button
-              className="builder-advanced-toggle"
-              onClick={() => setAdvancedOpen((p) => !p)}
-            >
-              <span>{advancedOpen ? "▾" : "▸"} Advanced</span>
-              <span className="builder-advanced-hint">backstory, secrets, voice, inventory</span>
-            </button>
-
-            {advancedOpen && (
-              <div className="builder-advanced-body">
+            {/* Backstory, Secrets, Voice, Inventory */}
                 <label className="builder-label">Backstory</label>
                 <textarea
                   className="secrets-textarea"
@@ -907,8 +892,6 @@ export function SetupScreen({
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
 
             {formError && <div className="form-error">{formError}</div>}
 
