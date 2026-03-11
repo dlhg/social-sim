@@ -131,8 +131,10 @@ export function SetupScreen({
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [ytUrl, setYtUrl] = useState("");
-  const [ytStart, setYtStart] = useState("0");
-  const [ytEnd, setYtEnd] = useState("30");
+  const [ytStartMin, setYtStartMin] = useState("0");
+  const [ytStartSec, setYtStartSec] = useState("0");
+  const [ytEndMin, setYtEndMin] = useState("0");
+  const [ytEndSec, setYtEndSec] = useState("30");
   const [ytLoading, setYtLoading] = useState(false);
 
   const hasExistingVoice = voiceMode === "custom" && !!customVoiceId && !audioBlob;
@@ -164,6 +166,44 @@ export function SetupScreen({
   const lang = language.toLowerCase().trim();
   const isEnglish = lang === "english" || lang === "british english";
 
+  // ── Derived: active template and change detection ──
+  const activeTemplate = activeTemplateId
+    ? customPremades.find((t) => t.id === activeTemplateId) ?? null
+    : null;
+
+  const hasTemplateChanges = (() => {
+    if (!activeTemplate) return false;
+    if (name !== activeTemplate.name) return true;
+    if (color !== activeTemplate.color) return true;
+    if (spriteId !== (activeTemplate.spriteId || SPRITE_NAMES[0])) return true;
+    if ((backstory || "") !== (activeTemplate.backstory ?? "")) return true;
+
+    const curTraits = traits.split(",").map((t) => t.trim()).filter(Boolean);
+    if (curTraits.length !== activeTemplate.personalityTraits.length ||
+        curTraits.some((t, i) => t !== activeTemplate.personalityTraits[i])) return true;
+
+    const curDesires = desires.split(",").map((d) => d.trim()).filter(Boolean);
+    if (curDesires.length !== activeTemplate.coreDesires.length ||
+        curDesires.some((d, i) => d !== activeTemplate.coreDesires[i])) return true;
+
+    const curSecrets = secrets.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (curSecrets.length !== activeTemplate.secrets.length ||
+        curSecrets.some((s, i) => s !== activeTemplate.secrets[i])) return true;
+
+    const curInvLabels = inventory.map((i) => i.label).sort();
+    const tmplInvLabels = activeTemplate.inventory.map((i) => i.label).sort();
+    if (curInvLabels.length !== tmplInvLabels.length ||
+        curInvLabels.some((l, i) => l !== tmplInvLabels[i])) return true;
+
+    const effectiveVoiceId = voiceMode === "select" ? selectedVoiceId
+      : voiceMode === "custom" ? customVoiceId
+      : undefined;
+    if ((effectiveVoiceId || undefined) !== (activeTemplate.customVoiceId || undefined)) return true;
+    if (audioBlob) return true;
+
+    return false;
+  })();
+
   // Which template data to show in the form (preview on hover, or actively loaded)
   const displayTemplateId = previewTemplateId || activeTemplateId;
 
@@ -173,6 +213,50 @@ export function SetupScreen({
   function handleSaveAsPremade(npc: NPC) {
     saveCustomPremade(npcToPremadeTemplate(npc));
     refreshPremades();
+  }
+
+  async function handleSaveTemplate() {
+    if (!activeTemplate || !hasTemplateChanges) return;
+    const trimmedName = name.trim();
+    if (!trimmedName) { setFormError("Name is required"); return; }
+
+    const parsedTraits = traits.split(",").map((t) => t.trim()).filter(Boolean);
+    const parsedDesires = desires.split(",").map((d) => d.trim()).filter(Boolean);
+    const parsedSecrets = secrets.split("\n").map((s) => s.trim()).filter(Boolean);
+
+    let finalVoiceId: string | undefined;
+    if (voiceMode === "select" && selectedVoiceId) {
+      finalVoiceId = selectedVoiceId;
+    } else if (voiceMode === "custom") {
+      finalVoiceId = customVoiceId;
+      if (audioBlob && !customVoiceId) {
+        setIsSubmitting(true);
+        const vid = `custom_${activeTemplate.id}`;
+        const result = await uploadVoiceClip(audioBlob, vid);
+        setIsSubmitting(false);
+        if (!result) { setFormError("Failed to upload voice clip."); return; }
+        finalVoiceId = result.voice_id;
+        setCustomVoiceId(finalVoiceId);
+      }
+    }
+
+    const updated: PremadeTemplate = {
+      ...activeTemplate,
+      name: trimmedName,
+      color,
+      spriteId,
+      personalityTraits: parsedTraits,
+      coreDesires: parsedDesires,
+      backstory: backstory.trim() || undefined,
+      secrets: parsedSecrets,
+      inventory: inventory.map((i) => ({ ...i })),
+      emotionalState: emotionalStateOverride,
+      customVoiceId: finalVoiceId,
+    };
+
+    saveCustomPremade(updated);
+    refreshPremades();
+    setAudioBlob(null);
   }
 
   function handleConfirmDelete() {
@@ -411,8 +495,8 @@ export function SetupScreen({
 
   async function handleYoutubeExtract() {
     if (!ytUrl.trim()) { setFormError("Enter a YouTube URL"); return; }
-    const start = parseFloat(ytStart) || 0;
-    const end = parseFloat(ytEnd) || 30;
+    const start = (parseFloat(ytStartMin) || 0) * 60 + (parseFloat(ytStartSec) || 0);
+    const end = (parseFloat(ytEndMin) || 0) * 60 + (parseFloat(ytEndSec) || 0);
     if (end <= start) { setFormError("End time must be after start time"); return; }
     setYtLoading(true); setFormError("");
     const currentId = name.trim().toLowerCase().replace(/\s+/g, "-");
@@ -537,7 +621,7 @@ export function SetupScreen({
 
       {/* ── Template Strip ─────────────────────────── */}
       <div className="template-strip">
-        <div className="template-strip-label">Templates</div>
+        <div className="template-strip-label">Saved Characters</div>
         <div className="template-strip-scroll">
           {customPremades.map((template) => {
             const added = rosterIds.has(template.id);
@@ -605,7 +689,14 @@ export function SetupScreen({
               <div className="builder-header-actions">
                 <button className="btn btn-randomize-fields" onClick={handleRandomize}>Randomize</button>
                 {activeTemplateId && (
-                  <button className="btn btn-randomize-fields" onClick={clearForm}>Clear</button>
+                  <>
+                    <button
+                      className="btn btn-save-template"
+                      onClick={handleSaveTemplate}
+                      disabled={!hasTemplateChanges || isSubmitting}
+                    >Save</button>
+                    <button className="btn btn-randomize-fields" onClick={clearForm}>Clear</button>
+                  </>
                 )}
               </div>
             </div>
@@ -618,12 +709,10 @@ export function SetupScreen({
                   key={sname}
                   className={`sprite-option${spriteId === sname ? " selected" : ""}`}
                   onClick={() => setSpriteId(sname)}
-                  title={sname}
                 >
                   <div className="sprite-frame">
-                    <img src={SPRITE_URL(sname)} alt={sname} draggable={false} />
+                    <img src={SPRITE_URL(sname)} alt="" draggable={false} />
                   </div>
-                  <span className="sprite-option-label">{sname}</span>
                 </button>
               ))}
             </div>
@@ -754,14 +843,32 @@ export function SetupScreen({
                           <div className="voice-yt-section">
                             <input type="text" className="voice-yt-url" value={ytUrl} onChange={(e) => setYtUrl(e.target.value)} placeholder="YouTube URL" />
                             <div className="voice-yt-times">
-                              <label className="voice-yt-time-label">
-                                Start (s)
-                                <input type="number" className="voice-yt-time" value={ytStart} onChange={(e) => setYtStart(e.target.value)} min="0" step="0.1" />
-                              </label>
-                              <label className="voice-yt-time-label">
-                                End (s)
-                                <input type="number" className="voice-yt-time" value={ytEnd} onChange={(e) => setYtEnd(e.target.value)} min="0" step="0.1" />
-                              </label>
+                              <div className="voice-yt-time-group">
+                                <span className="voice-yt-time-heading">Start</span>
+                                <div className="voice-yt-time-inputs">
+                                  <label className="voice-yt-time-label">
+                                    <input type="number" className="voice-yt-time" value={ytStartMin} onChange={(e) => setYtStartMin(e.target.value)} min="0" step="1" />
+                                    <span className="voice-yt-time-unit">m</span>
+                                  </label>
+                                  <label className="voice-yt-time-label">
+                                    <input type="number" className="voice-yt-time" value={ytStartSec} onChange={(e) => setYtStartSec(e.target.value)} min="0" max="59" step="1" />
+                                    <span className="voice-yt-time-unit">s</span>
+                                  </label>
+                                </div>
+                              </div>
+                              <div className="voice-yt-time-group">
+                                <span className="voice-yt-time-heading">End</span>
+                                <div className="voice-yt-time-inputs">
+                                  <label className="voice-yt-time-label">
+                                    <input type="number" className="voice-yt-time" value={ytEndMin} onChange={(e) => setYtEndMin(e.target.value)} min="0" step="1" />
+                                    <span className="voice-yt-time-unit">m</span>
+                                  </label>
+                                  <label className="voice-yt-time-label">
+                                    <input type="number" className="voice-yt-time" value={ytEndSec} onChange={(e) => setYtEndSec(e.target.value)} min="0" max="59" step="1" />
+                                    <span className="voice-yt-time-unit">s</span>
+                                  </label>
+                                </div>
+                              </div>
                               <button className="btn voice-yt-extract-btn" onClick={handleYoutubeExtract} disabled={ytLoading}>
                                 {ytLoading ? "Extracting..." : "Extract"}
                               </button>

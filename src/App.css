@@ -1114,6 +1114,32 @@
   color: var(--text-primary);
 }
 
+.btn-save-template {
+  padding: 4px 12px;
+  font-size: 11px;
+  border: 1px solid var(--accent-info);
+  border-radius: 6px;
+  background: rgba(77, 208, 225, 0.1);
+  color: var(--accent-info);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.btn-save-template:hover:not(:disabled) {
+  background: rgba(77, 208, 225, 0.2);
+}
+
+.btn-save-template:disabled {
+  opacity: 0.35;
+  cursor: default;
+  border-color: var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+}
+
 .modal-content h3 {
   margin: 0 0 16px;
   font-size: 14px;
@@ -1524,13 +1550,35 @@
   align-items: flex-end;
 }
 
-.voice-yt-time-label {
+.voice-yt-time-group {
   display: flex;
   flex-direction: column;
+  gap: 3px;
+}
+
+.voice-yt-time-heading {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.voice-yt-time-inputs {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.voice-yt-time-label {
+  display: flex;
+  align-items: center;
   gap: 2px;
   font-size: 10px;
   color: var(--text-secondary);
-  flex: 1;
+}
+
+.voice-yt-time-unit {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.7;
 }
 
 .voice-yt-time {
@@ -1540,7 +1588,7 @@
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
   font-size: 12px;
-  width: 100%;
+  width: 48px;
   box-sizing: border-box;
 }
 
@@ -2190,6 +2238,8 @@
 
 .template-card-sprite {
   margin-bottom: 2px;
+  overflow: hidden;
+  max-width: 32px;
 }
 
 .template-card-avatar {
@@ -2292,6 +2342,8 @@
   overflow: hidden;
   image-rendering: pixelated;
   position: relative;
+  flex-shrink: 0;
+  max-width: 32px;
 }
 
 .sprite-frame img {
@@ -2308,6 +2360,8 @@
   overflow: hidden;
   image-rendering: pixelated;
   position: relative;
+  flex-shrink: 0;
+  max-width: 32px;
 }
 
 .sprite-frame-mini img {
