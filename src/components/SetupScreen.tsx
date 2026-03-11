@@ -718,11 +718,6 @@ Guidelines:
                     >+</button>
                   )}
                   {added && <span className="template-row-badge">Added</span>}
-                  <button
-                    className="template-row-delete"
-                    onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(template.id); }}
-                    title="Delete"
-                  >×</button>
                 </div>
               );
             })}
