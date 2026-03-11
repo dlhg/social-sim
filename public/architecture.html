@@ -329,8 +329,8 @@ const layerBg = el('g',{id:'layer-bg'});
 const layerRings = el('g',{id:'layer-rings'});
 const layerConnections = el('g',{id:'layer-connections'});
 const layerNodes = el('g',{id:'layer-nodes'});
-const layerLabels = el('g',{id:'layer-labels'});
-const layerParticles = el('g',{id:'layer-particles'});
+const layerLabels = el('g',{id:'layer-labels','pointer-events':'none'});
+const layerParticles = el('g',{id:'layer-particles','pointer-events':'none'});
 svg.append(layerBg, layerRings, layerConnections, layerNodes, layerLabels, layerParticles);
 
 // ─── Ring backgrounds ──────────────────────────
@@ -1178,7 +1178,7 @@ function closeConnectionsPanel(){
 document.addEventListener('click', (e)=>{
   const detailPanel = document.getElementById('detail-panel');
   const connPanel = document.getElementById('connections-panel');
-  const isOnNode = e.target.closest('.inner-node,.mid-node,.outer-node,.prompt-node');
+  const isOnNode = e.target.closest('.inner-node,.mid-node,.outer-node,.prompt-node,.mech-node');
   if(detailPanel.classList.contains('open') && !detailPanel.contains(e.target) && !isOnNode) closePanel();
   if(connPanel.classList.contains('open') && !connPanel.contains(e.target) && !isOnNode) closeConnectionsPanel();
 });
