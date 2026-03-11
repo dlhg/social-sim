@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { createNpc, randomizeFields, randomizeNpc, AVATAR_OPTIONS, COLOR_SWATCHES, RANDOM_ITEMS } from "../npcs";
+import { createNpc, randomizeFields, randomizeNpc, COLOR_SWATCHES, RANDOM_ITEMS } from "../npcs";
 import type { NPC, InventoryItem, ItemCategory, EmotionalState } from "../types";
 import { ITEM_LIFETIME_BY_CATEGORY } from "../types";
 import { SPRITE_NAMES } from "../sprite-system";
@@ -102,7 +102,6 @@ export function SetupScreen({
 
   // ── Inline character builder state ──────────────
   const [name, setName] = useState("");
-  const [avatar, setAvatar] = useState("😀");
   const [color, setColor] = useState("#4dd0e1");
   const [spriteId, setSpriteId] = useState<string>(SPRITE_NAMES[0]);
   const [traits, setTraits] = useState("");
@@ -187,7 +186,6 @@ export function SetupScreen({
   // ── Form helpers ────────────────────────────────
   function fillFormFromTemplate(template: PremadeTemplate) {
     setName(template.name);
-    setAvatar(template.avatar);
     setColor(template.color);
     setSpriteId(template.spriteId || SPRITE_NAMES[0]);
     setTraits(template.personalityTraits.join(", "));
@@ -214,7 +212,6 @@ export function SetupScreen({
 
   function clearForm() {
     setName("");
-    setAvatar("😀");
     setColor("#4dd0e1");
     setSpriteId(SPRITE_NAMES[0]);
     setTraits("");
@@ -236,7 +233,6 @@ export function SetupScreen({
   function handleRandomize() {
     const r = randomizeFields(roster.map((n) => n.id));
     setName(r.name);
-    setAvatar(r.avatar);
     setColor(r.color);
     setSpriteId(r.spriteId);
     setTraits(r.traits.join(", "));
@@ -252,7 +248,7 @@ export function SetupScreen({
   // ── Template hover/click ────────────────────────
   // Store form state before preview so we can revert
   const preHoverState = useRef<{
-    name: string; avatar: string; color: string; spriteId: string;
+    name: string; color: string; spriteId: string;
     traits: string; desires: string; backstory: string; secrets: string;
     inventory: InventoryItem[]; emotionalState?: Partial<EmotionalState>;
   } | null>(null);
@@ -264,7 +260,7 @@ export function SetupScreen({
       // Save current form state before overwriting
       if (!preHoverState.current) {
         preHoverState.current = {
-          name, avatar, color, spriteId, traits, desires, backstory, secrets,
+          name, color, spriteId, traits, desires, backstory, secrets,
           inventory: [...inventory], emotionalState: emotionalStateOverride,
         };
       }
@@ -279,7 +275,6 @@ export function SetupScreen({
       // Revert form to pre-hover state
       const s = preHoverState.current;
       setName(s.name);
-      setAvatar(s.avatar);
       setColor(s.color);
       setSpriteId(s.spriteId);
       setTraits(s.traits);
@@ -516,7 +511,7 @@ export function SetupScreen({
     }
 
     const npc = createNpc({
-      id: derivedId, name: trimmed, avatar, color, spriteId,
+      id: derivedId, name: trimmed, color, spriteId,
       personalityTraits: parsedTraits, coreDesires: parsedDesires,
       backstory: backstory.trim() || undefined,
       secrets: parsedSecrets, inventory,
@@ -577,7 +572,6 @@ export function SetupScreen({
                     />
                   </div>
                 </div>
-                <span className="template-card-avatar">{template.avatar}</span>
                 <span className="template-card-name" style={{ color: added ? undefined : template.color }}>
                   {template.name}
                 </span>
@@ -644,16 +638,6 @@ export function SetupScreen({
               placeholder="e.g. Raven"
             />
             {isDuplicate && <div className="form-error">Name already taken</div>}
-
-            {/* Avatar */}
-            <label className="builder-label">Avatar</label>
-            <div className="avatar-grid">
-              {AVATAR_OPTIONS.map((emoji) => (
-                <button key={emoji} className={`avatar-option ${avatar === emoji ? "selected" : ""}`} onClick={() => setAvatar(emoji)}>
-                  {emoji}
-                </button>
-              ))}
-            </div>
 
             {/* Color */}
             <label className="builder-label">Color</label>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { createNpc, randomizeFields, AVATAR_OPTIONS, COLOR_SWATCHES, RANDOM_ITEMS } from "../npcs";
+import { createNpc, randomizeFields, COLOR_SWATCHES, RANDOM_ITEMS } from "../npcs";
 import type { NPC, InventoryItem, ItemCategory, EmotionalState } from "../types";
 import { ITEM_LIFETIME_BY_CATEGORY } from "../types";
 import { uploadVoiceClip, fetchVoices, getVoicePreviewUrl, deleteVoice, youtubeVoiceClip } from "../tts-service";
@@ -34,7 +34,6 @@ export function NpcCreator({
   submitLabel,
 }: NpcCreatorProps) {
   const [name, setName] = useState(initialNpc?.name ?? "");
-  const [avatar, setAvatar] = useState(initialNpc?.avatar ?? "😀");
   const [color, setColor] = useState(initialNpc?.color ?? "#4dd0e1");
   const [traits, setTraits] = useState(
     initialNpc?.personalityTraits.join(", ") ?? ""
@@ -124,7 +123,6 @@ export function NpcCreator({
   function handleRandomize() {
     const r = randomizeFields(existingIds);
     setName(r.name);
-    setAvatar(r.avatar);
     setColor(r.color);
     setTraits(r.traits.join(", "));
     setDesires(r.desires.join(", "));
@@ -469,7 +467,6 @@ export function NpcCreator({
     const npc = createNpc({
       id: derivedId,
       name: trimmed,
-      avatar,
       color,
       personalityTraits: parsedTraits,
       coreDesires: parsedDesires,
@@ -516,19 +513,6 @@ export function NpcCreator({
         {isDuplicate && (
           <div className="form-error">Name already taken</div>
         )}
-
-        <label>Avatar</label>
-        <div className="avatar-grid">
-          {AVATAR_OPTIONS.map((emoji) => (
-            <button
-              key={emoji}
-              className={`avatar-option ${avatar === emoji ? "selected" : ""}`}
-              onClick={() => setAvatar(emoji)}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
 
         <label>Color</label>
         <div className="swatch-grid">

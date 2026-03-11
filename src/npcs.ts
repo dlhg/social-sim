@@ -141,7 +141,6 @@ function pickN<T>(arr: T[], min: number, max: number): T[] {
 
 export interface RandomNpcFields {
   name: string;
-  avatar: string;
   color: string;
   spriteId: string;
   traits: string[];
@@ -250,7 +249,6 @@ export function randomizeFields(existingIds: string[]): RandomNpcFields {
 
   return {
     name,
-    avatar: pick(AVATAR_OPTIONS),
     color: pick(COLOR_SWATCHES),
     spriteId: pick([...SPRITE_NAMES]),
     traits,
@@ -294,7 +292,6 @@ export function randomizeNpc(existingIds: string[]): NPC {
   }
 
   const id = name.toLowerCase().replace(/\s+/g, "-");
-  const avatar = pick(AVATAR_OPTIONS);
   const color = pick(COLOR_SWATCHES);
   const personalityTraits = pickN(RANDOM_TRAITS, 2, 4);
   const coreDesires = pickN(RANDOM_DESIRES, 1, 3);
@@ -306,7 +303,7 @@ export function randomizeNpc(existingIds: string[]): NPC {
   const emotionalState = deriveEmotionsFromTraits(personalityTraits);
 
   const spriteId = pick([...SPRITE_NAMES]);
-  const npc = createNpc({ id, name, avatar, color, spriteId, personalityTraits, coreDesires, backstory, secrets, inventory, emotionalState });
+  const npc = createNpc({ id, name, color, spriteId, personalityTraits, coreDesires, backstory, secrets, inventory, emotionalState });
 
   // Give them a starting goal
   npc.currentGoal = pick(RANDOM_GOALS);
@@ -362,7 +359,7 @@ function defaultEmotionalState(): EmotionalState {
 export function createNpc(partial: {
   id: string;
   name: string;
-  avatar: string;
+  avatar?: string;
   color: string;
   spriteId?: string;
   personalityTraits: string[];
@@ -375,6 +372,7 @@ export function createNpc(partial: {
 }): NPC {
   return {
     ...partial,
+    avatar: partial.avatar ?? pick(AVATAR_OPTIONS),
     backstory: partial.backstory,
     emotionalState: {
       ...defaultEmotionalState(),

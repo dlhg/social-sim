@@ -72,7 +72,7 @@ export function DmTools({
               >
                 {npcs.map((n) => (
                   <option key={n.id} value={n.id}>
-                    {n.avatar} {n.name}
+                    {n.name}
                   </option>
                 ))}
               </select>
@@ -143,7 +143,7 @@ export function DmTools({
               >
                 {npcs.map((n) => (
                   <option key={n.id} value={n.id}>
-                    {n.avatar} {n.name}
+                    {n.name}
                   </option>
                 ))}
               </select>
@@ -156,7 +156,7 @@ export function DmTools({
                   .filter((n) => n.id !== encounterA)
                   .map((n) => (
                     <option key={n.id} value={n.id}>
-                      {n.avatar} {n.name}
+                      {n.name}
                     </option>
                   ))}
               </select>
@@ -182,7 +182,7 @@ export function DmTools({
               >
                 {npcs.map((n) => (
                   <option key={n.id} value={n.id}>
-                    {n.avatar} {n.name}
+                    {n.name}
                   </option>
                 ))}
               </select>
@@ -195,7 +195,7 @@ export function DmTools({
                   .filter((n) => n.id !== rumorRecipient)
                   .map((n) => (
                     <option key={n.id} value={n.id}>
-                      {n.avatar} {n.name}
+                      {n.name}
                     </option>
                   ))}
               </select>

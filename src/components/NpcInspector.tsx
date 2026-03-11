@@ -226,7 +226,6 @@ export function NpcInspector({
         {selected ? (
           <div className="npc-detail">
             <div className="npc-header">
-              <span className="npc-detail-avatar">{selected.avatar}</span>
               <div className="npc-header-info">
                 <h3 className="npc-detail-name" style={{ color: selected.color }}>
                   {selected.name}
@@ -342,7 +341,7 @@ export function NpcInspector({
                   return (
                     <div key={otherId} className="relationship-row">
                       <span className="rel-npc">
-                        {other.avatar} {other.name}
+                        {other.name}
                       </span>
                       <div className="rel-bar-track">
                         <div className="rel-bar-midline" />

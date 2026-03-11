@@ -144,7 +144,6 @@ export function CharacterViewer({
             style={{ borderColor: npc.color }}
             onClick={() => onSelectNpc(npc.id === selectedNpcId ? null : npc.id)}
           >
-            <span className="npc-chip-avatar">{npc.avatar}</span>
             <span className="npc-chip-name">{npc.name}</span>
             {npc.inventory.length > 0 && (
               <span className="npc-chip-inv-count">{npc.inventory.length}</span>
@@ -156,7 +155,6 @@ export function CharacterViewer({
       {selected ? (
         <div className="npc-detail">
           <div className="npc-header">
-            <span className="npc-detail-avatar">{selected.avatar}</span>
             <div className="npc-header-info">
               <h3 className="npc-detail-name" style={{ color: selected.color }}>
                 {selected.name}
@@ -233,7 +231,7 @@ export function CharacterViewer({
                 return (
                   <div key={otherId} className="relationship-row">
                     <span className="rel-npc">
-                      {other.avatar} {other.name}
+                      {other.name}
                     </span>
                     <div className="rel-bar-track">
                       <div className="rel-bar-midline" />
