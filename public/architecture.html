@@ -362,46 +362,52 @@ const INNER_NODES = [
       desc:'Every NPC has 7 continuous emotion axes (0-1) that shift in real-time during conversations, activities, and interactions. Emotions decay toward per-NPC baselines (15% pull per cycle, falls back to global defaults).',
       items:['anger (default baseline .3)','trust (default baseline .3)','fear (default baseline .3)','joy (default baseline .3)','sadness (default baseline .15)','curiosity (default baseline .4)','guilt (default baseline .1)']
     }},
-  {id:'relationships', label:'Relationships', icon:'', angle:45,
+  {id:'moods', label:'Moods', icon:'', angle:40,
+    detail:{
+      tag:'NPC STATE', title:'Persistent Moods',
+      desc:'Derived from emotional state via threshold checks. When an NPC sustains strong emotions, they enter a named mood that colors their speech, patience, and reactions. Moods persist until emotions shift below thresholds. Only included in prompts after 1+ minute of persistence.',
+      sections:[
+        {title:'Mood Derivation (priority order)',items:['paranoid: fear > 0.5 AND trust < 0.3','bitter: anger > 0.5 AND trust < 0.3','melancholy: sadness > 0.5','guilt-ridden: guilt > 0.5','volatile: anger > 0.6','restless: curiosity > 0.6 AND joy < 0.3','euphoric: joy > 0.7','clears to undefined if no threshold met']},
+        {title:'Storage',items:['mood: string | undefined','moodSince: timestamp (Date.now())','recomputed after every conversation (Director post-playback)','prompt builder checks moodSince > 60s before including']}
+      ]
+    }},
+  {id:'relationships', label:'Relationships', icon:'', angle:80,
     detail:{
       tag:'NPC STATE', title:'Per-Pair Relationships',
       desc:'Every NPC pair tracks an 8-axis relationship that evolves through conversations and interactions. Regard is the core axis ranging from -1 (enemy) to +1 (beloved). Velocity tracking detects warming/cooling trends.',
       items:['regard: -1 to 1 (stranger \u2192 enemy / beloved)','affection, respect, trust, fear, disgust: 0-1','debt: -1 to 1 (positive = I owe them)','familiarity: 0-1 (increments per conversation)','initial values: respect 0.3, trust 0.3, all others 0','velocity tracking (last 10 snapshots)','trajectory labels: warming / deteriorating / stable']
     }},
-  {id:'memory', label:'Memory', icon:'', angle:90,
+  {id:'memory', label:'Memory', icon:'', angle:120,
     detail:{
       tag:'NPC STATE', title:'Dual Memory System',
       desc:'Short-term memory holds recent events (40 entries). When evicted, high-importance memories promote to long-term storage (100 entries). Recency decays at 0.85x per conversation cycle, creating natural forgetting.',
       items:['short-term: 40 entries, evict lowest recency\u00d7importance','long-term: 100 entries, promote at importance \u2265 0.7','14 memory types (conversation, gossip, secret_learned, promise_made, eavesdrop, etc.)','retrieval: sorted by recency\u00d7importance, filtered by involvement','unresolved flag for unfinished business (promises, betrayals)','sentiment tracking per memory (-1 to 1)']
     }},
-  {id:'secrets', label:'Secrets', icon:'', angle:135,
+  {id:'secrets', label:'Secrets', icon:'', angle:160,
     detail:{
       tag:'NPC STATE', title:'Secrets & Known Secrets',
       desc:'Each NPC holds private secrets and tracks what they\'ve learned about others. Secrets drive dramatic tension\u2014the Director scores information asymmetry heavily when choosing conversation pairs.',
       items:['own secrets[] (private, revealable at trust \u2265 0.7)','knownSecrets map: NPC id \u2192 discovered secrets','secret_revealed in conversation triggers memory + gossip','information asymmetry = major Director scoring factor']
     }},
-  {id:'promises', label:'Promises', icon:'', angle:180,
+  {id:'promises', label:'Promises', icon:'', angle:200,
     detail:{
       tag:'NPC STATE', title:'Promises & Betrayals',
       desc:'NPCs make promises during conversations that resolve 1-2 day phases later. The LLM decides if each promise is kept or broken based on personalities and circumstances. Broken promises create betrayal records that fuel confrontations.',
       items:['promise: text, fromId, toId, resolveAtPhase','betrayal: betrayerId, victimId, discoveredByVictim, forgiven','broken promises auto-resolve after 6+ phases','kept: +regard, +trust, +joy, -anger, -guilt','broken: -regard, -trust, -joy, +anger, +sadness, +guilt','forgiveness possible during reconciliation conversations']
     }},
-  {id:'inventory', label:'Inventory', icon:'', angle:225,
+  {id:'inventory', label:'Inventory', icon:'', angle:240,
     detail:{
       tag:'NPC STATE', title:'Items & Inventory',
       desc:'NPCs carry up to 8 items acquired through activities (fishing, foraging, cooking, etc.). Items decay by category and can be gifted or referenced in conversations. Item-based interactions get priority scoring.',
       items:['max 8 items per NPC','6 categories: food, herb, fish, trinket, craft, book','decay timers: fish 2m, food 3m, herb 5m, craft 8m, trinket 10m, book 12m','items referenced in prompt builder for natural speech','gift-giving: relationship boost + memory creation']
     }},
-  {id:'goals', label:'Goals & Arcs', icon:'', angle:270,
+  {id:'goals', label:'Goals & Arcs', icon:'', angle:280,
     detail:{
-      tag:'NPC STATE', title:'Goals, Moods & Character Arcs',
-      desc:'Each NPC has a current goal (influences waypoint selection and conversation topics), a persistent mood derived from emotional state, and a growing character arc narrative updated after reflective moments.',
-      sections:[
-        {title:'State Fields',items:['currentGoal: string (influences waypoint picks + prompts)','characterArc: narrative of growth, appended post-conversation','behavioralOverride: seek/avoid specific NPC (time-limited)','reactiveImpulse: high-urgency follow-up desire (0-1 urgency)']},
-        {title:'Mood Derivation (priority order)',items:['paranoid: fear > 0.5 AND trust < 0.3','bitter: anger > 0.5 AND trust < 0.3','melancholy: sadness > 0.5','guilt-ridden: guilt > 0.5','volatile: anger > 0.6','restless: curiosity > 0.6 AND joy < 0.3','euphoric: joy > 0.7','moodSince: timestamp (mentioned in prompt after 1+ min)']}
-      ]
+      tag:'NPC STATE', title:'Goals & Character Arcs',
+      desc:'Each NPC has a current goal (influences waypoint selection and conversation topics) and a growing character arc narrative updated after reflective moments. Behavioral overrides and reactive impulses provide short-term urgency.',
+      items:['currentGoal: string (influences waypoint picks + prompts)','characterArc: narrative of growth, appended post-conversation','behavioralOverride: seek/avoid specific NPC (time-limited)','reactiveImpulse: high-urgency follow-up desire (0-1 urgency)']
     }},
-  {id:'identity', label:'Identity', icon:'', angle:315,
+  {id:'identity', label:'Identity', icon:'', angle:320,
     detail:{
       tag:'NPC STATE', title:'Core Identity',
       desc:'The foundation of each NPC: name, visual appearance, personality traits, core desires, and backstory. Backstory is preferred over trait lists in prompts for more natural characterization. Personality traits also influence waypoint selection and activity affinity.',
@@ -516,6 +522,13 @@ const CONNECTIONS = [
     desc:'NPCs can make promises during conversation (resolveAtPhase = current + 1\u20132). If gossip reveals a betrayal, a BetrayalRecord is created and the victim may discover it.'},
   {from:'director',to:'goals',color:'var(--accent-director)',label:'updates arcs & triggers impulses',
     desc:'Character arc narrative is appended after conversations. Dramatic events (betrayals, confessions) create ReactiveImpulses with high urgency, fast-tracking follow-up conversations.'},
+  {from:'director',to:'moods',color:'var(--accent-director)',label:'recomputes mood',
+    desc:'After every conversation completes and emotion deltas are applied, the Director calls computeAndSetMood() for both participants. This checks emotional thresholds to derive or clear the persistent mood.'},
+  // Mood derivation and usage
+  {from:'emotions',to:'moods',color:'var(--accent-npc)',label:'threshold derivation',
+    desc:'Moods are derived from emotional state via priority-ordered threshold checks. Negative moods take priority (paranoid, bitter, melancholy, guilt-ridden, volatile, restless) over positive (euphoric). Clears if no threshold met.'},
+  {from:'moods',to:'prompt',color:'var(--accent-prompt)',label:'persistent mood',
+    desc:'If the NPC has been in a mood for >1 minute (moodSince check), the prompt builder includes it as a PERSISTENT MOOD block: "You\'ve been feeling [mood] for a while now. This colors everything \u2014 your patience, your openness, your reactions."'},
   // NPC state feeds into Prompt Builder
   {from:'identity',to:'prompt',color:'var(--accent-prompt)',label:'backstory & traits',
     desc:'Prompt builder includes the NPC\'s backstory (preferred) or personality traits + core desires as the identity block. This shapes the LLM\'s voice for the character.'},
@@ -529,8 +542,8 @@ const CONNECTIONS = [
     desc:'Own secrets are listed with a hint to reveal if trust \u22650.7. Known secrets about the conversation partner are included so the NPC can reference or confront them.'},
   {from:'inventory',to:'prompt',color:'var(--accent-prompt)',label:'items for speech',
     desc:'Current inventory items (with emoji) are listed so NPCs can naturally reference, offer, or use items in conversation. Enables organic gift-giving moments.'},
-  {from:'goals',to:'prompt',color:'var(--accent-prompt)',label:'current goal',
-    desc:'The NPC\'s current goal string is included. Character arc (growth narrative) and persistent mood (if active >1 min) are also added for continuity.'},
+  {from:'goals',to:'prompt',color:'var(--accent-prompt)',label:'current goal & arc',
+    desc:'The NPC\'s current goal string and character arc (growth narrative) are included for continuity. Goals influence conversation topics and waypoint selection.'},
   // Prompt Builder → LLM
   {from:'prompt',to:'llm',color:'var(--accent-prompt)',label:'assembled prompt',
     desc:'The complete prompt (18 sections: identity, emotions, relationships, memories, secrets, inventory, location, time, conversation preamble, etc.) is sent to the LLM. Response is JSON with speech, deltas, actions.'},
