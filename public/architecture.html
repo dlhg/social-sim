@@ -76,19 +76,22 @@ svg.rings{
 }
 .detail-panel.open{right:0}
 .detail-panel .close-btn{
-  position:absolute;top:16px;right:16px;width:32px;height:32px;
-  border:1px solid rgba(255,255,255,.1);border-radius:8px;
-  background:transparent;color:var(--text-dim);font-size:18px;
+  flex-shrink:0;width:28px;height:28px;
+  border:1px solid rgba(255,255,255,.1);border-radius:6px;
+  background:transparent;color:var(--text-dim);font-size:16px;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
-  transition:all .2s;
+  transition:all .2s;margin-left:auto;
 }
 .detail-panel .close-btn:hover{color:var(--text);border-color:rgba(255,255,255,.2)}
 .detail-header{
-  padding:40px 28px 20px;border-bottom:1px solid rgba(255,255,255,.05);
+  padding:20px 28px 20px;border-bottom:1px solid rgba(255,255,255,.05);
+}
+.detail-header .tag-row{
+  display:flex;align-items:center;gap:8px;margin-bottom:8px;
 }
 .detail-header .tag{
   font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;
-  text-transform:uppercase;margin-bottom:8px;
+  text-transform:uppercase;
 }
 .detail-header h2{
   font-size:22px;font-weight:700;line-height:1.3;
@@ -129,20 +132,23 @@ svg.rings{
 }
 .connections-panel.open{left:0}
 .connections-panel .close-btn{
-  position:absolute;top:16px;left:16px;width:32px;height:32px;
-  border:1px solid rgba(255,255,255,.1);border-radius:8px;
-  background:transparent;color:var(--text-dim);font-size:18px;
+  flex-shrink:0;width:28px;height:28px;
+  border:1px solid rgba(255,255,255,.1);border-radius:6px;
+  background:transparent;color:var(--text-dim);font-size:16px;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
-  transition:all .2s;
+  transition:all .2s;margin-left:auto;
 }
 .connections-panel .close-btn:hover{color:var(--text);border-color:rgba(255,255,255,.2)}
 
 .conn-header{
-  padding:40px 28px 16px;border-bottom:1px solid rgba(255,255,255,.05);
+  padding:20px 28px 16px;border-bottom:1px solid rgba(255,255,255,.05);
+}
+.conn-header .tag-row{
+  display:flex;align-items:center;gap:8px;margin-bottom:8px;
 }
 .conn-header .tag{
   font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;
-  text-transform:uppercase;margin-bottom:8px;
+  text-transform:uppercase;
 }
 .conn-header h2{
   font-size:20px;font-weight:700;line-height:1.3;
@@ -219,7 +225,7 @@ svg.rings{
 @keyframes fade-hint{0%{opacity:.3}100%{opacity:.7}}
 
 .back-btn{
-  position:fixed;top:16px;right:16px;z-index:200;
+  position:fixed;top:16px;right:16px;z-index:50;
   width:32px;height:32px;border-radius:50%;
   border:1px solid rgba(255,255,255,.12);
   background:rgba(255,255,255,.04);
@@ -248,13 +254,11 @@ svg.rings{
 </div>
 
 <div class="connections-panel" id="connections-panel">
-  <button class="close-btn" onclick="closeConnectionsPanel()">&times;</button>
   <div class="conn-header" id="conn-header"></div>
   <div class="conn-body" id="conn-body"></div>
 </div>
 
 <div class="detail-panel" id="detail-panel">
-  <button class="close-btn" onclick="closePanel()">&times;</button>
   <div class="detail-header" id="detail-header"></div>
   <div class="detail-body" id="detail-body"></div>
 </div>
@@ -1081,7 +1085,10 @@ function openPanel(detail, accentColor){
   const body = document.getElementById('detail-body');
 
   header.innerHTML = `
-    <div class="tag" style="color:${accentColor}">${detail.tag}</div>
+    <div class="tag-row">
+      <div class="tag" style="color:${accentColor}">${detail.tag}</div>
+      <button class="close-btn" onclick="closePanel()">&times;</button>
+    </div>
     <h2>${detail.title}</h2>
   `;
 
@@ -1126,7 +1133,10 @@ function openConnectionsPanel(nodeId, accentColor){
   const inbound = CONNECTIONS.filter(c => c.toId === nodeId || c.to === nodeId);
 
   header.innerHTML = `
-    <div class="tag" style="color:${accentColor}">CONNECTIONS</div>
+    <div class="tag-row">
+      <div class="tag" style="color:${accentColor}">CONNECTIONS</div>
+      <button class="close-btn" onclick="closeConnectionsPanel()">&times;</button>
+    </div>
     <h2>${nodeName}</h2>
   `;
 
