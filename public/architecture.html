@@ -764,7 +764,7 @@ function renderArchitecture(){
     icon.textContent = node.icon;
     g.appendChild(icon);
     const label = el('text',{x:0,y:36,'text-anchor':'middle',
-      'font-size':'9','font-family':'JetBrains Mono, monospace',
+      'font-size':'11','font-family':'JetBrains Mono, monospace',
       fill:'var(--text-dim)','letter-spacing':'.5'});
     label.textContent = node.label;
     g.appendChild(label);
@@ -798,7 +798,7 @@ function renderArchitecture(){
     const labelPos = polarToXY(0, 0, node.radius - 20, node.angle);
     const label = el('text',{x:labelPos.x, y:labelPos.y,
       'text-anchor':'middle','dominant-baseline':'central',
-      'font-size':'10','font-family':'JetBrains Mono, monospace',
+      'font-size':'12','font-family':'JetBrains Mono, monospace',
       'font-weight':'600',fill:node.color,'letter-spacing':'1',opacity:'.9'});
     label.textContent = node.label.toUpperCase();
     g.appendChild(label);
@@ -823,7 +823,7 @@ function renderArchitecture(){
       'stroke-width':1,opacity:'.7'});
     g.appendChild(hex);
     const label = el('text',{x:0,y:1,'text-anchor':'middle',
-      'dominant-baseline':'central','font-size':'10',
+      'dominant-baseline':'central','font-size':'12',
       'font-family':'JetBrains Mono, monospace','font-weight':'600',
       fill:node.color,'letter-spacing':'1'});
     label.textContent = node.label.toUpperCase();
@@ -848,7 +848,7 @@ function renderArchitecture(){
       'stroke-width':1,opacity:'.8',filter:'url(#glow-prompt)'});
     g.appendChild(diamond);
     const label = el('text',{x:0,y:32,'text-anchor':'middle',
-      'font-size':'8','font-family':'JetBrains Mono, monospace',
+      'font-size':'10','font-family':'JetBrains Mono, monospace',
       fill:'var(--accent-prompt)','letter-spacing':'.5',opacity:'.8'});
     label.textContent = 'PROMPT BUILDER';
     g.appendChild(label);
@@ -867,18 +867,18 @@ function renderArchitecture(){
     const g = el('g',{class:'mech-node','data-id':node.id,
       transform:`translate(${pos.x},${pos.y})`});
     const labelText = node.label.toUpperCase();
-    const labelWidth = Math.max(48, labelText.length * 5.5 + 16);
+    const labelWidth = Math.max(56, labelText.length * 6.5 + 18);
     const halfW = labelWidth / 2;
-    const glow = el('rect',{x:-(halfW+4),y:-13,width:labelWidth+8,height:26,rx:6,
+    const glow = el('rect',{x:-(halfW+4),y:-14,width:labelWidth+8,height:28,rx:6,
       fill:'rgba(96,165,250,.06)',stroke:'none',
       filter:'url(#glow-mech)',opacity:'.3'});
     g.appendChild(glow);
-    const rect = el('rect',{x:-halfW,y:-11,width:labelWidth,height:22,rx:5,
+    const rect = el('rect',{x:-halfW,y:-12,width:labelWidth,height:24,rx:5,
       fill:'rgba(96,165,250,.08)',stroke:'var(--accent-mech)',
       'stroke-width':1,opacity:'.7','stroke-dasharray':'3 3'});
     g.appendChild(rect);
     const label = el('text',{x:0,y:1,'text-anchor':'middle',
-      'dominant-baseline':'central','font-size':'7',
+      'dominant-baseline':'central','font-size':'9',
       'font-family':'JetBrains Mono, monospace','font-weight':'500',
       fill:'var(--accent-mech)','letter-spacing':'.3',opacity:'.9'});
     label.textContent = labelText;
@@ -924,13 +924,13 @@ function renderArchitecture(){
 
   // ─── Center label ──────────────────────────────
   const ct = el('text',{x:0,y:-4,'text-anchor':'middle',
-    'dominant-baseline':'central','font-size':'13',
+    'dominant-baseline':'central','font-size':'15',
     'font-family':'Outfit','font-weight':'700',fill:'var(--accent-npc)',
     opacity:'.8'});
   ct.textContent = 'NPC';
   layerLabels.appendChild(ct);
-  const ct2 = el('text',{x:0,y:14,'text-anchor':'middle',
-    'dominant-baseline':'central','font-size':'8',
+  const ct2 = el('text',{x:0,y:16,'text-anchor':'middle',
+    'dominant-baseline':'central','font-size':'10',
     'font-family':'JetBrains Mono, monospace',fill:'var(--text-dim)',
     'letter-spacing':'2'});
   ct2.textContent = 'STATE';
@@ -940,7 +940,7 @@ function renderArchitecture(){
   [{r:175,label:'LOOPS',opacity:.25},{r:380,label:'EXTERNAL',opacity:.2}].forEach(({r, label, opacity})=>{
     const pos = polarToXY(0,0,r,90);
     const t = el('text',{x:pos.x,y:pos.y,'text-anchor':'middle',
-      'font-size':'8','font-family':'JetBrains Mono, monospace',
+      'font-size':'10','font-family':'JetBrains Mono, monospace',
       fill:'var(--text-dim)','letter-spacing':'3',opacity});
     t.textContent = label;
     layerLabels.appendChild(t);
@@ -1181,12 +1181,12 @@ function renderCodeGraph(){
     g.appendChild(glow);
     g.appendChild(el('circle',{r:26,fill:fillMap[color].fill,stroke:fillMap[color].stroke,'stroke-width':1}));
     const label = el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central',
-      'font-size':'7','font-family':'JetBrains Mono, monospace','font-weight':'600',
+      'font-size':'9','font-family':'JetBrains Mono, monospace','font-weight':'600',
       fill:color,'letter-spacing':'.3',opacity:'.9'});
     label.textContent = node.label.replace('.ts','');
     g.appendChild(label);
     const sub = el('text',{x:0,y:40,'text-anchor':'middle',
-      'font-size':'7','font-family':'JetBrains Mono, monospace',
+      'font-size':'9','font-family':'JetBrains Mono, monospace',
       fill:'var(--text-dim)','letter-spacing':'.5'});
     sub.textContent = node.label;
     g.appendChild(sub);
@@ -1207,15 +1207,15 @@ function renderCodeGraph(){
     const color = 'var(--accent-logic)';
     const g = el('g',{class:'mech-node','data-id':node.id,transform:`translate(${pos.x},${pos.y})`});
     const labelText = node.label.toUpperCase();
-    const labelWidth = Math.max(48, labelText.length * 5.2 + 16);
+    const labelWidth = Math.max(56, labelText.length * 6.2 + 18);
     const halfW = labelWidth / 2;
-    const glow = el('rect',{x:-(halfW+4),y:-13,width:labelWidth+8,height:26,rx:6,
+    const glow = el('rect',{x:-(halfW+4),y:-14,width:labelWidth+8,height:28,rx:6,
       fill:fillMap[color].glowFill,stroke:'none',filter:'url(#glow-logic)',opacity:'.3'});
     g.appendChild(glow);
-    g.appendChild(el('rect',{x:-halfW,y:-11,width:labelWidth,height:22,rx:5,
+    g.appendChild(el('rect',{x:-halfW,y:-12,width:labelWidth,height:24,rx:5,
       fill:fillMap[color].fill,stroke:color,'stroke-width':1,opacity:'.7'}));
     const label = el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central',
-      'font-size':'6.5','font-family':'JetBrains Mono, monospace','font-weight':'500',
+      'font-size':'8.5','font-family':'JetBrains Mono, monospace','font-weight':'500',
       fill:color,'letter-spacing':'.3',opacity:'.9'});
     label.textContent = labelText;
     g.appendChild(label);
@@ -1236,12 +1236,12 @@ function renderCodeGraph(){
     const color = 'var(--accent-ui)';
     const g = el('g',{class:'outer-node','data-id':node.id,transform:`translate(${pos.x},${pos.y})`});
     const labelText = node.label.toUpperCase();
-    const labelWidth = Math.max(48, labelText.length * 5.5 + 16);
+    const labelWidth = Math.max(56, labelText.length * 6.5 + 18);
     const halfW = labelWidth / 2;
-    g.appendChild(el('rect',{x:-halfW,y:-13,width:labelWidth,height:26,rx:6,
+    g.appendChild(el('rect',{x:-halfW,y:-14,width:labelWidth,height:28,rx:6,
       fill:fillMap[color].fill,stroke:color,'stroke-width':1,opacity:'.7'}));
     const label = el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central',
-      'font-size':'7','font-family':'JetBrains Mono, monospace','font-weight':'600',
+      'font-size':'9','font-family':'JetBrains Mono, monospace','font-weight':'600',
       fill:color,'letter-spacing':'.3',opacity:'.9'});
     label.textContent = labelText;
     g.appendChild(label);
@@ -1265,7 +1265,7 @@ function renderCodeGraph(){
       fill:fillMap[color].fill,stroke:color,'stroke-width':1,opacity:'.8',
       filter:'url(#glow-infra)'}));
     const label = el('text',{x:0,y:30,'text-anchor':'middle',
-      'font-size':'7','font-family':'JetBrains Mono, monospace',
+      'font-size':'9','font-family':'JetBrains Mono, monospace',
       fill:color,'letter-spacing':'.5',opacity:'.8'});
     label.textContent = node.label;
     g.appendChild(label);
@@ -1302,13 +1302,13 @@ function renderCodeGraph(){
 
   // ─── Center label ──────────────────────────────
   const ct = el('text',{x:0,y:-4,'text-anchor':'middle',
-    'dominant-baseline':'central','font-size':'13',
+    'dominant-baseline':'central','font-size':'15',
     'font-family':'Outfit','font-weight':'700',fill:'var(--accent-core)',
     opacity:'.8'});
   ct.textContent = 'CODE';
   layerLabels.appendChild(ct);
-  const ct2 = el('text',{x:0,y:14,'text-anchor':'middle',
-    'dominant-baseline':'central','font-size':'8',
+  const ct2 = el('text',{x:0,y:16,'text-anchor':'middle',
+    'dominant-baseline':'central','font-size':'10',
     'font-family':'JetBrains Mono, monospace',fill:'var(--text-dim)',
     'letter-spacing':'2'});
   ct2.textContent = 'GRAPH';
@@ -1318,7 +1318,7 @@ function renderCodeGraph(){
   [{r:210,label:'BUSINESS LOGIC',opacity:.25},{r:380,label:'UI LAYER',opacity:.2}].forEach(({r, label, opacity})=>{
     const pos = polarToXY(0,0,r,90);
     const t = el('text',{x:pos.x,y:pos.y,'text-anchor':'middle',
-      'font-size':'8','font-family':'JetBrains Mono, monospace',
+      'font-size':'10','font-family':'JetBrains Mono, monospace',
       fill:'var(--text-dim)','letter-spacing':'3',opacity});
     t.textContent = label;
     layerLabels.appendChild(t);
