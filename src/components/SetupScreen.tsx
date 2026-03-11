@@ -668,6 +668,7 @@ Guidelines:
 
   return (
     <div className="setup-screen">
+      <a href="/architecture.html" className="arch-help-btn" title="How does this work?">?</a>
       {/* ── Template Strip ─────────────────────────── */}
       <div className="template-strip">
         <div className="template-strip-label">Saved Characters</div>
@@ -685,11 +686,6 @@ Guidelines:
                 onClick={() => !added && handleTemplateClick(template)}
               >
                 <div className="template-card-manage">
-                  <button
-                    className="premade-manage-btn"
-                    onClick={(e) => { e.stopPropagation(); handleTemplateClick(template); }}
-                    title="Edit in builder"
-                  >✎</button>
                   <button
                     className="premade-manage-btn premade-manage-delete"
                     onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(template.id); }}
@@ -832,32 +828,46 @@ Guidelines:
                     <button className={`voice-mode-tab ${baselinesMode === "derive" || (baselinesMode === "manual" && isDeriving) ? "active" : ""}`} onClick={() => handleDeriveBaselines()} disabled={isDeriving}>
                       {isDeriving ? "Deriving..." : "Derive from Traits"}
                     </button>
+                    <button className="voice-mode-tab" onClick={() => {
+                      setBaselinesMode("manual");
+                      const rand = () => Math.round(Math.random() * 20) / 20; // 0.00–1.00, snapped to 0.05
+                      setBaselines({ anger: rand(), trust: rand(), fear: rand(), joy: rand(), sadness: rand(), curiosity: rand(), guilt: rand() });
+                    }}>Randomize</button>
                     <button className={`voice-mode-tab ${baselinesMode === "manual" && !isDeriving ? "active" : ""}`} onClick={() => { setBaselinesMode("manual"); if (!baselines) setBaselines({ ...NpcStore.DEFAULT_EMOTION_BASELINES } as EmotionalState); }}>Manual</button>
                   </div>
 
-                  {baselinesMode === "default" && (
-                    <div className="voice-auto-hint">Emotions will decay toward global defaults after conversations.</div>
-                  )}
-
-                  {baselinesMode === "manual" && baselines && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "6px 0" }}>
-                      {(["anger", "trust", "fear", "joy", "sadness", "curiosity", "guilt"] as const).map((key) => (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "6px 0" }}>
+                    {(["anger", "trust", "fear", "joy", "sadness", "curiosity", "guilt"] as const).map((key) => {
+                      const effectiveValue = baselinesMode === "default"
+                        ? NpcStore.DEFAULT_EMOTION_BASELINES[key] ?? 0.3
+                        : (baselines?.[key] ?? NpcStore.DEFAULT_EMOTION_BASELINES[key] ?? 0.3);
+                      return (
                         <div key={key} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <span style={{ width: "60px", fontSize: "0.75em", opacity: 0.7, textTransform: "capitalize" }}>{key}</span>
                           <input
                             type="range"
                             min="0" max="1" step="0.05"
-                            value={baselines[key] ?? NpcStore.DEFAULT_EMOTION_BASELINES[key] ?? 0.3}
-                            onChange={(e) => setBaselines({ ...baselines, [key]: parseFloat(e.target.value) })}
-                            style={{ flex: 1 }}
+                            value={effectiveValue}
+                            onChange={(e) => {
+                              const v = parseFloat(e.target.value);
+                              if (baselinesMode === "default") {
+                                // Promote to manual with current defaults as starting point
+                                const defaults = { ...NpcStore.DEFAULT_EMOTION_BASELINES } as EmotionalState;
+                                setBaselinesMode("manual");
+                                setBaselines({ ...defaults, [key]: v });
+                              } else {
+                                setBaselines({ ...baselines, [key]: v });
+                              }
+                            }}
+                            style={{ flex: 1, opacity: baselinesMode === "default" ? 0.5 : 1 }}
                           />
                           <span style={{ width: "28px", fontSize: "0.7em", opacity: 0.6, textAlign: "right" }}>
-                            {(baselines[key] ?? NpcStore.DEFAULT_EMOTION_BASELINES[key] ?? 0.3).toFixed(2)}
+                            {effectiveValue.toFixed(2)}
                           </span>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Voice */}
