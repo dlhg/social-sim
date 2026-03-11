@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NPC System Architecture</title>
+<title>NPC Playground</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
@@ -24,6 +24,10 @@
   --accent-npc:#f05888;
   --accent-prompt:#b878f0;
   --accent-mech:#60a5fa;
+  --accent-core:#f0a830;
+  --accent-logic:#22d3ee;
+  --accent-ui:#4ade80;
+  --accent-infra:#fb923c;
   --text:#e2e4ef;
   --text-dim:#6b6f8a;
   --text-mid:#9498b5;
@@ -55,6 +59,18 @@ header .dot{
   animation:pulse-dot 2s ease-in-out infinite;
 }
 @keyframes pulse-dot{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
+
+.tab-row{
+  display:flex;gap:24px;padding:10px 32px 0;flex-shrink:0;
+}
+.tab-btn{
+  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;
+  letter-spacing:1.5px;text-transform:uppercase;color:var(--text-dim);
+  background:none;border:none;cursor:pointer;padding:6px 0 8px;
+  border-bottom:2px solid transparent;transition:all .2s;
+}
+.tab-btn:hover{color:var(--text-mid)}
+.tab-btn.active{color:var(--accent-npc);border-bottom-color:var(--accent-npc)}
 
 .diagram-area{
   flex:1;position:relative;display:flex;align-items:center;justify-content:center;
@@ -245,9 +261,13 @@ svg.rings{
 
 <div class="app">
   <header>
-    <h1>NPC System Architecture</h1>
+    <h1>NPC Playground</h1>
     <div class="dot"></div>
   </header>
+  <div class="tab-row">
+    <button class="tab-btn active" id="tab-arch" onclick="switchTab('architecture')">Architecture</button>
+    <button class="tab-btn" id="tab-code" onclick="switchTab('codegraph')">Code Graph</button>
+  </div>
   <div class="diagram-area">
     <svg class="rings" id="diagram" viewBox="-500 -500 1000 1000"></svg>
   </div>
@@ -265,16 +285,7 @@ svg.rings{
 
 <div class="tooltip" id="tooltip"></div>
 
-<div class="legend">
-  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-director)"></div>Director</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-world)"></div>World</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-day)"></div>Day Cycle</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-npc)"></div>NPC State</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-llm)"></div>LLM</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-tts)"></div>TTS</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-tilemap)"></div>Tilemap</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-mech);border-radius:3px"></div>Mechanisms</div>
-</div>
+<div class="legend" id="legend"></div>
 
 <div class="hint">click any element to explore</div>
 
@@ -306,7 +317,6 @@ function arcPath(cx, cy, r, startAngle, endAngle){
 const defs = el('defs');
 svg.appendChild(defs);
 
-// Glow filter
 function makeGlow(id, color, stdDev=4){
   const f = el('filter',{id, x:'-50%', y:'-50%', width:'200%', height:'200%'});
   const gb = el('feGaussianBlur',{in:'SourceGraphic',stdDeviation:String(stdDev),result:'blur'});
@@ -327,6 +337,10 @@ makeGlow('glow-tilemap','#5898f0',6);
 makeGlow('glow-prompt','#b878f0',5);
 makeGlow('glow-mech','#60a5fa',4);
 makeGlow('glow-soft','#fff',2);
+makeGlow('glow-core','#f0a830',6);
+makeGlow('glow-logic','#22d3ee',5);
+makeGlow('glow-ui','#4ade80',5);
+makeGlow('glow-infra','#fb923c',5);
 
 // ─── Layer groups ──────────────────────────────
 const layerBg = el('g',{id:'layer-bg'});
@@ -337,646 +351,65 @@ const layerLabels = el('g',{id:'layer-labels','pointer-events':'none'});
 const layerParticles = el('g',{id:'layer-particles','pointer-events':'none'});
 svg.append(layerBg, layerRings, layerConnections, layerNodes, layerLabels, layerParticles);
 
-// ─── Ring backgrounds ──────────────────────────
-// Outer ring zone
-const outerRingBg = el('circle',{cx:0,cy:0,r:440,fill:'none',stroke:'rgba(255,255,255,.018)',
-  'stroke-width':120});
-layerBg.appendChild(outerRingBg);
-
-// Middle ring zone
-const midRingBg = el('circle',{cx:0,cy:0,r:290,fill:'none',stroke:'rgba(255,255,255,.025)',
-  'stroke-width':100});
-layerBg.appendChild(midRingBg);
-
-// Inner ring zone
-const innerRingBg = el('circle',{cx:0,cy:0,r:140,fill:'rgba(255,74,141,.02)',stroke:'rgba(255,74,141,.06)',
-  'stroke-width':1});
-layerBg.appendChild(innerRingBg);
-
-// Decorative concentric dashes
-[190, 340, 440].forEach((r,i)=>{
-  const c = el('circle',{cx:0,cy:0,r,fill:'none',
-    stroke:'rgba(255,255,255,.04)','stroke-width':.5,
-    'stroke-dasharray':'3 8'});
-  layerBg.appendChild(c);
-});
-
-// ─── DATA ──────────────────────────────────────
-const INNER_NODES = [
-  {id:'emotions', label:'Emotions', icon:'', angle:0,
-    detail:{
-      tag:'NPC STATE', title:'7-Dimensional Emotions',
-      desc:'Every NPC has 7 continuous emotion axes (0-1) that shift in real-time during conversations, activities, and interactions. Emotions decay toward per-NPC baselines (15% pull per cycle, falls back to global defaults).',
-      items:['anger (default baseline .3)','trust (default baseline .3)','fear (default baseline .3)','joy (default baseline .3)','sadness (default baseline .15)','curiosity (default baseline .4)','guilt (default baseline .1)']
-    }},
-  {id:'moods', label:'Moods', icon:'', angle:40,
-    detail:{
-      tag:'NPC STATE', title:'Persistent Moods',
-      desc:'Derived from emotional state via threshold checks. When an NPC sustains strong emotions, they enter a named mood that colors their speech, patience, and reactions. Moods persist until emotions shift below thresholds. Only included in prompts after 1+ minute of persistence.',
-      sections:[
-        {title:'Mood Derivation (priority order)',items:['paranoid: fear > 0.5 AND trust < 0.3','bitter: anger > 0.5 AND trust < 0.3','melancholy: sadness > 0.5','guilt-ridden: guilt > 0.5','volatile: anger > 0.6','restless: curiosity > 0.6 AND joy < 0.3','euphoric: joy > 0.7','clears to undefined if no threshold met']},
-        {title:'Storage',items:['mood: string | undefined','moodSince: timestamp (Date.now())','recomputed after every conversation (Director post-playback)','prompt builder checks moodSince > 60s before including']}
-      ]
-    }},
-  {id:'relationships', label:'Relationships', icon:'', angle:80,
-    detail:{
-      tag:'NPC STATE', title:'Per-Pair Relationships',
-      desc:'Every NPC pair tracks an 8-axis relationship that evolves through conversations and interactions. Regard is the core axis ranging from -1 (enemy) to +1 (beloved). Velocity tracking detects warming/cooling trends.',
-      items:['regard: -1 to 1 (stranger \u2192 enemy / beloved)','affection, respect, trust, fear, disgust: 0-1','debt: -1 to 1 (positive = I owe them)','familiarity: 0-1 (increments per conversation)','initial values: respect 0.3, trust 0.3, all others 0','velocity tracking (last 10 snapshots)','trajectory labels: warming / deteriorating / stable']
-    }},
-  {id:'memory', label:'Memory', icon:'', angle:120,
-    detail:{
-      tag:'NPC STATE', title:'Dual Memory System',
-      desc:'Short-term memory holds recent events (40 entries). When evicted, high-importance memories promote to long-term storage (100 entries). Recency decays at 0.85x per conversation cycle, creating natural forgetting.',
-      items:['short-term: 40 entries, evict lowest recency\u00d7importance','long-term: 100 entries, promote at importance \u2265 0.7','14 memory types (conversation, gossip, secret_learned, promise_made, eavesdrop, etc.)','retrieval: sorted by recency\u00d7importance, filtered by involvement','unresolved flag for unfinished business (promises, betrayals)','sentiment tracking per memory (-1 to 1)']
-    }},
-  {id:'secrets', label:'Secrets', icon:'', angle:160,
-    detail:{
-      tag:'NPC STATE', title:'Secrets & Known Secrets',
-      desc:'Each NPC holds private secrets and tracks what they\'ve learned about others. Secrets drive dramatic tension\u2014the Director scores information asymmetry heavily when choosing conversation pairs.',
-      items:['own secrets[] (private, revealable at trust \u2265 0.7)','knownSecrets map: NPC id \u2192 discovered secrets','secret_revealed in conversation triggers memory + gossip','information asymmetry = major Director scoring factor']
-    }},
-  {id:'promises', label:'Promises', icon:'', angle:200,
-    detail:{
-      tag:'NPC STATE', title:'Promises & Betrayals',
-      desc:'NPCs make promises during conversations that resolve 1-2 day phases later. The LLM decides if each promise is kept or broken based on personalities and circumstances. Broken promises create betrayal records that fuel confrontations.',
-      items:['promise: text, fromId, toId, resolveAtPhase','betrayal: betrayerId, victimId, discoveredByVictim, forgiven','broken promises auto-resolve after 6+ phases','kept: +regard, +trust, +joy, -anger, -guilt','broken: -regard, -trust, -joy, +anger, +sadness, +guilt','forgiveness possible during reconciliation conversations']
-    }},
-  {id:'inventory', label:'Inventory', icon:'', angle:240,
-    detail:{
-      tag:'NPC STATE', title:'Items & Inventory',
-      desc:'NPCs carry up to 8 items acquired through activities (fishing, foraging, cooking, etc.). Items decay by category and can be gifted or referenced in conversations. Item-based interactions get priority scoring.',
-      items:['max 8 items per NPC','6 categories: food, herb, fish, trinket, craft, book','decay timers: fish 2m, food 3m, herb 5m, craft 8m, trinket 10m, book 12m','items referenced in prompt builder for natural speech','gift-giving: relationship boost + memory creation']
-    }},
-  {id:'goals', label:'Goals & Arcs', icon:'', angle:280,
-    detail:{
-      tag:'NPC STATE', title:'Goals & Character Arcs',
-      desc:'Each NPC has a current goal (influences waypoint selection and conversation topics) and a growing character arc narrative updated after reflective moments. Behavioral overrides and reactive impulses provide short-term urgency.',
-      items:['currentGoal: string (influences waypoint picks + prompts)','characterArc: narrative of growth, appended post-conversation','behavioralOverride: seek/avoid specific NPC (time-limited)','reactiveImpulse: high-urgency follow-up desire (0-1 urgency)']
-    }},
-  {id:'identity', label:'Identity', icon:'', angle:320,
-    detail:{
-      tag:'NPC STATE', title:'Core Identity',
-      desc:'The foundation of each NPC: name, visual appearance, personality traits, core desires, and backstory. Backstory is preferred over trait lists in prompts for more natural characterization. Personality traits also influence waypoint selection and activity affinity.',
-      items:['name, avatar, color, spriteId','personalityTraits[] (e.g. stoic, gentle, curious)','coreDesires[] (e.g. seek truth, protect the weak)','backstory (narrative paragraph, preferred in prompts)','customVoiceId (for TTS voice cloning)','traits affect world behavior: curious \u2192 exploration, anxious \u2192 edges, charming \u2192 crowds']
-    }},
-];
-
-const MID_NODES = [
-  {id:'director', label:'Director Loop', color:'var(--accent-director)', glow:'glow-director',
-    angle:30, span:100, radius:290,
-    detail:{
-      tag:'LOOP \u00b7 ~5s', title:'Director Pipeline',
-      desc:'The Director is the narrative brain\u2014a background loop that pre-generates entire conversations before NPCs even meet. It scores every possible NPC pair by dramatic potential, picks the most interesting match, and orchestrates generation \u2192 TTS \u2192 playback.',
-      sections:[
-        {title:'Pair Scoring',items:['reactive impulses: urgency \u00d7 8 (highest priority)','relationship velocity (warming/cooling): +3','pending promises: +2 each','time since last talk: up to +5 (for 5+ min gap)','emotional intensity (anger/joy/fear/sadness peaks): sum \u00d7 2','relationship extremes (|regard|): \u00d7 2','information asymmetry (secrets known about other): +3','unrevealed secrets: +1.5','goal involves partner: +4','love triangles/jealousy: triangulation score','undiscovered betrayals: +4','active grudges: +5 (if >3 min old), else +3','broken promises: +2.5','isolation (no recent contact): up to +3 per NPC','random jitter: +0 to +1.5']},
-        {title:'Pipeline Stages',items:['1. Scene direction (LLM): suggest type + creative hints','2. Generate full conversation (single LLM call, 4\u201310 turns)','3. TTS prefetch (serialized for GPU, per-turn)','4. Queue for playback (ready at 2+ buffered turns)','5. Trigger on proximity (\u22645 tiles apart)','pipeline depth capped at 3, prepared conversations expire after 10 min']},
-        {title:'Conversation Types (with relationship-change caps)',items:['casual: natural, proportional (cap \u00b10.30)','confrontation: direct, raw, cutting (cap \u00b10.50)','reconciliation: vulnerable, olive branches (cap \u00b10.40)','confession: build toward honesty (cap \u00b10.45)','alliance_forming: warm, conspiratorial (cap \u00b10.40)','gossip_session: trade information (cap \u00b10.30)']},
-        {title:'Post-Conversation Write-Back',items:['applies emotion deltas + relationship deltas to both NPCs','creates conversation summary memory for both','increments familiarity between the pair','updates character arcs','records relationship snapshot (for velocity tracking)','triggers reactive impulses from dramatic events','emotional contagion: nearby NPCs (\u22645 tiles) absorb fear/joy','computes and sets persistent mood from new emotional state']}
-      ]
-    }},
-  {id:'world', label:'World Loop', color:'var(--accent-world)', glow:'glow-world',
-    angle:160, span:100, radius:290,
-    detail:{
-      tag:'LOOP \u00b7 ~285ms', title:'World Simulation',
-      desc:'The spatial heartbeat of the system. Every tick, NPCs pathfind to chosen waypoints, perform activities, interact with nearby NPCs, eavesdrop on conversations, and act on internal drives. All of these write back to NPC state.',
-      sections:[
-        {title:'Movement',items:['A* pathfinding with collision grid','waypoint selection: personality + emotions + time-of-day + relationships','trait bonuses: curious \u2192 exploration, anxious \u2192 edges, charming \u2192 crowds','recency penalty on just-visited waypoints','stuck detection: recompute after 8 blocked ticks','behavioral overrides (seek/avoid) from Director']},
-        {title:'Activities (14 types)',items:['reading, gardening, fishing, meditating, cooking, sketching, shopping, people_watching, wishing, stargazing, foraging, training, writing, napping','emotion effects (e.g. gardening: anger -0.03, joy +0.03)','item yields (fishing 40%, foraging 60%, cooking 70%)','waypoint-specific availability','5-minute cooldown before repeating','soliloquy trigger: reflective waypoint + solo activity']},
-        {title:'Interactions (22 types)',items:['offer_food, give_herb, give_trinket, share_sketch, offer_fish (item-based)','comfort, encourage, compliment, apologize (supportive)','taunt, cold_shoulder, challenge, show_off (antagonistic)','confide, share_story, reminisce, vent (personal)','joke, tease, debate, people_watch, ask_favor (social)','item-based interactions get +2 scoring boost']},
-        {title:'Passive Systems',items:['eavesdropping (range 6 tiles, 3-min cooldown per pair)','item decay by category timer','drives: gift-seeking (30%), loneliness (90s+, 15%), restlessness (10% at anger/fear >0.6)']},
-        {title:'Write-Back to NPC State',items:['activities create memories + shift emotions','interactions change relationships + create memories','eavesdropping creates gossip memories','drives set behavioral overrides']}
-      ]
-    }},
-  {id:'daycycle', label:'Day Cycle', color:'var(--accent-day)', glow:'glow-day',
-    angle:280, span:80, radius:290,
-    detail:{
-      tag:'LOOP \u00b7 ~2 min/phase', title:'Day Cycle',
-      desc:'Time advances through morning \u2192 afternoon \u2192 evening phases. The day cycle resolves promises (calling LLM directly with its own narrator prompt), decays emotions toward baselines, and creates the temporal rhythm of the simulation.',
-      sections:[
-        {title:'Time Structure',items:['3 phases: morning, afternoon, evening','~400 ticks per phase (~2 min at 285ms)','tracks: day number, phase, absolute phaseIndex']},
-        {title:'Promise Resolution',items:['promises set resolveAtPhase = current + 1\u20132','calls LLM directly (own narrator prompt, not via prompt builder)','considers: personalities, emotions, relationship, third parties','kept: both +regard, +trust, +joy, -anger, -guilt','broken: both -regard, -trust, -joy, +anger, +sadness, +guilt','auto-resolve broken after 6+ overdue phases']},
-        {title:'Write-Back to NPC State',items:['emotions pull toward fixed baselines (15% per cycle)','memory recency \u00d7= 0.85 per conversation cycle','moods recomputed from current emotional state','promise outcomes create memories for both NPCs']}
-      ]
-    }},
-];
-
-const OUTER_NODES = [
-  {id:'llm', label:'LLM', color:'var(--accent-llm)', glow:'glow-llm',
-    angle:10, radius:430,
-    detail:{
-      tag:'EXTERNAL', title:'LLM Providers',
-      desc:'The language model generates conversations, scene direction, promise outcomes, and inner thoughts. Supports multiple providers with automatic failover and rate limit handling.',
-      items:['Ollama (local): any model, no rate limits','Groq (cloud): fast inference, token quota tracking','Gemini: Google\'s models','rate limit detection: 429 \u2192 60s backoff','auto-downgrade to llama-3.1-8b-instant at <20% tokens','re-upgrade when quota recovers to >50%','JSON response format with repair for malformed output']
-    }},
-  {id:'tts', label:'TTS', color:'var(--accent-tts)', glow:'glow-tts',
-    angle:130, radius:430,
-    detail:{
-      tag:'EXTERNAL', title:'Text-to-Speech',
-      desc:'Dual-engine TTS with voice cloning support. Audio is pre-generated during the Director pipeline and played back during conversations. Serialized to avoid GPU contention.',
-      items:['Chatterbox Turbo: English speech (port 8788)','Kokoro: multilingual support','Flask proxy server (port 8787)','13-voice pool, round-robin assignment','custom voice cloning (upload audio or YouTube extract)','paralinguistic tags: [laugh], [sigh], [gasp], [cough]...','emotion-aware speed modulation','serialized generation (GPU is single-threaded)']
-    }},
-  {id:'tilemap', label:'Tilemap', color:'var(--accent-tilemap)', glow:'glow-tilemap',
-    angle:250, radius:430,
-    detail:{
-      tag:'EXTERNAL', title:'Spatial World',
-      desc:'The physical space where NPCs exist. A tilemap with collision detection, named waypoints that carry mood/activity metadata, and sprite rendering.',
-      items:['village.tmj: 30 narrative waypoints (default)','testmap.tmj: original with tileset art','collision grid for pathfinding','waypoints: name, position, mood tags, available activities','sprite system: animated idle cycles, 24-frame sheets','graceful handling of maps without tilesets']
-    }},
-];
-
-const PROMPT_BUILDER = {
-  id:'prompt', label:'Prompt Builder', color:'var(--accent-prompt)', glow:'glow-prompt',
-  angle:10, radius:370,
-  detail:{
-    tag:'BRIDGE', title:'Prompt Builder',
-    desc:'The translator between NPC state and LLM comprehension. Assembles a rich context window from all NPC data, relationship history, and narrative state into a structured prompt that guides conversation generation.',
-    sections:[
-      {title:'Prompt Structure',items:['1. Identity (backstory preferred over trait list)','2. Character arc (growth narrative)','3. Persistent mood (if active >1 min)','4. Emotional state (prose description of 8 axes)','5. Current goal','6. Secrets (hint to reveal at trust \u22650.7)','7. Inventory (items with emoji)','8. Betrayals discovered (active grudges)','9. Broken promises from others','10. Relationship context (regard label + dimensions)','11. Relationship trajectory (warming/deteriorating/stable)','12. Location (waypoint description)','13. Time of day','14. Pending plans (active promises)','15. Retrieved memories (direct + gossip + about-listener)','16. Known NPCs list','17. Conversation type preamble','18. Escalation directive (early/mid/late turn)']},
-      {title:'Response Format (JSON)',items:['inner_thought, speech','emotion_delta (8 axes, -0.4 to +0.4)','relationship_delta (-0.2 to +0.2) + extras','intent, conversation_end','secret_revealed, promise, action','forgive (for betrayals)','actions: give_gift, mock, embrace, threaten, storm_off, conspire, spread_rumor','justification required if delta >0.15 or relationship_delta >0.1']}
-    ]
-  }
-};
-
-// ─── Mechanism nodes (sub-systems between rings) ──
-const MECHANISM_NODES = [
-  {id:'reflection', label:'Reflection', angle:55, radius:215,
-    detail:{
-      tag:'MECHANISM \u00b7 Post-Conversation', title:'Post-Conversation Reflection',
-      desc:'After every conversation ends, a separate LLM call generates a private reflection for each participant. NPCs form subjective interpretations of what just happened, which become memories that influence future conversations. Runs asynchronously for both participants in parallel.',
-      sections:[
-        {title:'LLM Prompt Context',items:['full conversation transcript','NPC identity (backstory or traits + desires)','character arc (if present)','current emotional state','current goal','personality traits (for trait evolution)']},
-        {title:'JSON Output (5 fields)',items:['thought: 1-2 sentence private inner thought','interpretation: what the conversation meant, what shifted','goal_update: new goal or null','arc_update: how this experience changed them, or null','trait_evolution: a new personality trait developing, or null']},
-        {title:'Effects',items:['creates inner_thought memory (importance 0.6, emotionalWeight 0.4)','memory includes subjective interpretation field','updates goal if goal_update is non-null','appends arc_update to characterArc (keeps last 3 entries)','can add new personality traits (max 7 total)']}
-      ]
-    }},
-  {id:'reactive', label:'Reactive Chains', angle:90, radius:215,
-    detail:{
-      tag:'MECHANISM \u00b7 Post-Conversation', title:'Reactive Chain Generation',
-      desc:'After conversations, the system scans every message for dramatic events and generates reactive impulses\u2014high-urgency desires for follow-up interactions. These are the feedback loop that makes drama cascade into emergent story arcs. Impulses expire after 5 minutes.',
-      sections:[
-        {title:'Trigger \u2192 Impulse',items:['secret revealed to untrustworthy NPC \u2192 gossip impulse (urgency 0.8)','negative gossip about third party (if they know) \u2192 confrontation (0.7)','threat/mock + defiant target \u2192 confrontation (0.6)','threat/mock + timid target \u2192 seek comfort from best friend (0.5)','conspiracy against third NPC \u2192 both conspirators approach target (0.5)','spread rumor about ally \u2192 creates undiscovered betrayal record','eavesdropper heard negative mention of self \u2192 confrontation (0.75)']},
-        {title:'Pair Scoring Impact',items:['impulse urgency \u00d7 8 added to pair score','0.95 urgency = +7.6 points (strongest signal in the system)','impulse conversationType overrides LLM-determined type','impulse reason injected into narrative pattern detection','virtually guarantees the next Director conversation']}
-      ]
-    }},
-  {id:'witness', label:'Witness System', angle:95, radius:370,
-    detail:{
-      tag:'MECHANISM \u00b7 During Conversation', title:'Witness System',
-      desc:'When visible actions occur during conversations (give_gift, mock, storm_off, embrace, threaten), nearby NPCs within 5 tiles witness the event. Witnessing creates memories, shifts emotions, and changes relationships toward the actors. Conspire and spread_rumor are NOT witnessed (not visible).',
-      sections:[
-        {title:'Witnessed Actions \u2192 Effects',items:['give_gift: jealousy if witness likes speaker (anger +.03, joy -.02), else mild positive (joy +.02)','mock: regard for speaker drops -.05, disgust +.02, sympathy for victim +.03 if non-hostile','storm_off: nearby feel fear +.03, curiosity +.02','embrace: jealousy if witness close to either participant, else warmth (joy +.02)','threaten: regard for speaker -.08, fear +.08, trust -.05 (strongest witness reaction)']},
-        {title:'Memory Created',items:['type: action_witnessed (importance 0.6, emotionalWeight 0.5)','references both actor and target in involvedNpcIds','higher importance than eavesdrop memories (0.6 vs 0.4)']},
-        {title:'Witnessing vs Eavesdropping',items:['witnessing: physical actions, range 5, importance 0.6','eavesdropping: speech content, range 4, importance 0.4','eavesdropping limited to 1 per NPC per conversation','eavesdropping can trigger reactive chains (confrontation impulse)']}
-      ]
-    }},
-  {id:'narrative', label:'Narrative Arc', angle:345, radius:215,
-    detail:{
-      tag:'MECHANISM \u00b7 Story Tracking', title:'Narrative Arc Tracking',
-      desc:'The system maintains a running narrative summary of all conversations that have occurred. This compressed story history gives the LLM awareness of the overall community narrative, preventing repetitive scenarios and enabling long-term storyline evolution.',
-      sections:[
-        {title:'How It Works',items:['after every conversation: append 1-line summary','format: "{A} & {B} had a {tone} {type} ({turns} turns)"','suffixes for notable events: secret revealed, promise made, action occurred','tone derived from cumulative relationship_delta: warm (>0.1), tense (<-0.1), neutral']},
-        {title:'Compression',items:['threshold: 20 entries triggers LLM compression','compressed into 5-8 sentence narrative summary','captures: key relationships, important events, emerging storylines, unresolved tensions','fallback on LLM failure: keep last 10 entries']},
-        {title:'Where It\u2019s Used',items:['scene direction pre-pass: "STORY SO FAR: {summary}"','batch conversation generation: injected as cumulative narrative arc','shapes conversation type selection and creative direction','prevents the LLM from repeating resolved storylines']}
-      ]
-    }},
-  {id:'soliloquy', label:'Soliloquy', angle:200, radius:370,
-    detail:{
-      tag:'MECHANISM \u00b7 World-Triggered', title:'Soliloquy System',
-      desc:'When an NPC finishes a solo activity at a reflective waypoint and is alone, an LLM-generated inner monologue fires. This is a completely separate path to the LLM that bypasses the Director pipeline, giving NPCs private moments of introspection that can shift their goals.',
-      sections:[
-        {title:'Trigger Conditions',items:['NPC alone (no others within 5 tiles)','at reflective waypoint (moods: reflective, contemplative, intimate, mysterious, spiritual, melancholy)','completing a solo activity','emotional intensity \u2265 0.4 OR has important memories (importance \u2265 0.6) OR has active mood','rate limited: 1 per NPC per 3 minutes','skips if Director is using the LLM slot']},
-        {title:'LLM Prompt',items:['roleplays as NPC alone at waypoint, doing activity','requests private inner monologue: honest, unguarded','includes: identity, mood, emotions, goal, top 5 memories','JSON output: soliloquy (2-3 sentences) + goal_update (or null)','token limit: 512']},
-        {title:'Effects',items:['creates inner_thought memory (importance 0.5, emotionalWeight 0.3)','activity feed: "{Name} thinks to themselves"','updates goal if goal_update is non-null','no relationship or emotion changes (purely introspective)']}
-      ]
-    }},
-  {id:'contagion', label:'Contagion', angle:225, radius:215,
-    detail:{
-      tag:'MECHANISM \u00b7 Post-Conversation', title:'Emotional Contagion',
-      desc:'After a conversation ends, nearby NPCs (within 5 tiles) absorb leaked emotions from it. Angry conversations spread fear to bystanders; joyful conversations spread warmth. Only fear and joy propagate\u2014creating an ambient emotional atmosphere in the spatial world.',
-      sections:[
-        {title:'How It Spreads',items:['range: 5 tiles from conversation center (Manhattan distance)','proximity scaling: closer = stronger (1.0 at distance 0, 0.2 at distance 5)','intensity threshold: avg emotion delta must exceed 0.03 to trigger','only fear and joy spread (anger, trust, sadness, curiosity, guilt do NOT)']},
-        {title:'Contagion Rules',items:['angry conversation (avg anger delta > 0.05): nearby fear +0.03 \u00d7 proximity','joyful conversation (avg joy delta > 0.03): nearby joy +0.02 \u00d7 proximity','negative joy (avg joy delta < -0.03): nearby joy -0.01 \u00d7 proximity']},
-        {title:'Activity Feed',items:['fear contagion: "{Name} sensed tension nearby"','positive joy: "{Name} felt a warm atmosphere"','negative joy: "{Name} felt an uneasy vibe"']}
-      ]
-    }},
-  {id:'betrayal_discovery', label:'Betrayal Discovery', angle:145, radius:215,
-    detail:{
-      tag:'MECHANISM \u00b7 During Conversation', title:'Betrayal Discovery via Gossip',
-      desc:'When NPCs gossip about third parties, the system checks if the gossip content matches any undiscovered betrayal records. If so, the victim discovers the betrayal and receives the highest-urgency confrontation impulse in the system (0.95), virtually guaranteeing an immediate showdown.',
-      sections:[
-        {title:'Discovery Process',items:['triggered during conversation turn processing when mentioned_npcs present','checks listener\'s undiscovered betrayals where betrayer = mentioned NPC','fuzzy matching: betrayal description words (>4 chars) against gossip text','also triggers on keywords: "conspir", "rumor", "behind"','marks betrayal as discoveredByVictim = true']},
-        {title:'Effects',items:['confrontation impulse with urgency 0.95 (highest in system)','0.95 \u00d7 8 = 7.6 pair score points (guarantees next conversation)','source memory: "Learned from {speaker} that {betrayer} acted against me"','discovered betrayals injected into future conversation prompts']},
-        {title:'Forgiveness Path',items:['during reconciliation conversations, NPCs can forgive betrayals','forgiveness: trust +0.15, regard +0.1, disgust -0.1','forgiven betrayals stop generating pair scoring bonuses','creates a forgiveness memory for both NPCs']}
-      ]
-    }},
-];
-
-// ─── Connections between elements ──────────────
-const CONNECTIONS = [
-  // Director reads NPC state for pair scoring
-  {from:'emotions',to:'director',color:'var(--accent-director)',label:'reads emotions',
-    desc:'Director checks emotional intensity (anger, joy, fear, sadness peaks) when scoring pairs. High emotional states increase pair priority by up to \u00d72.'},
-  {from:'relationships',to:'director',color:'var(--accent-director)',label:'scores pairs',
-    desc:'Pair scoring uses regard extremes (\u00d72), relationship velocity (warming/cooling: +3), and triangulation detection for love triangles and jealousy.'},
-  {from:'memory',to:'director',color:'var(--accent-director)',label:'retrieves memories',
-    desc:'Director checks for unresolved memories (unfinished business) and uses previous conversation context when re-queuing the same NPC pair.'},
-  {from:'secrets',to:'director',color:'var(--accent-director)',label:'info asymmetry',
-    desc:'Secrets one NPC knows about another add +3 to pair score. Unrevealed secrets add +1.5. This makes dramatic irony situations high-priority.'},
-  {from:'promises',to:'director',color:'var(--accent-director)',label:'pending promises',
-    desc:'Each pending promise between a pair adds +2 to their score. Broken promises add +2.5. Undiscovered betrayals add +4.'},
-  // Director → Prompt Builder → LLM
-  {from:'director',to:'prompt',color:'var(--accent-director)',label:'requests conversation',
-    desc:'Director picks the highest-scoring pair and conversation type, then asks the Prompt Builder to assemble the full context for an LLM call.'},
-  {from:'director',to:'tts',color:'var(--accent-tts)',label:'prefetch audio',
-    desc:'After LLM generates conversation turns, Director sends each turn to TTS for audio synthesis. Serialized to avoid GPU contention. Playback starts after 2+ turns are buffered.'},
-  // Director writes back to NPC state after playback
-  {from:'director',to:'emotions',color:'var(--accent-director)',label:'applies emotion deltas',
-    desc:'Each conversation turn includes an LLM-generated emotion_delta (8 axes, -0.4 to +0.4). Director applies these cumulatively during playback. Emotional contagion also spreads to nearby NPCs within 5 tiles.'},
-  {from:'director',to:'relationships',color:'var(--accent-director)',label:'applies relationship deltas',
-    desc:'LLM generates relationship_delta per turn (-0.2 to +0.2), plus extras (respect, trust, fear, debt). Capped per conversation type (0.30\u20130.50). Familiarity increments after each conversation.'},
-  {from:'director',to:'memory',color:'var(--accent-director)',label:'creates conversation memories',
-    desc:'After playback, a conversation summary memory is created for both NPCs. Individual turns may also create memories for secrets learned, promises made, gossip heard, etc.'},
-  {from:'director',to:'secrets',color:'var(--accent-director)',label:'reveals secrets',
-    desc:'When an NPC reveals a secret (trust \u22650.7), the listener\'s knownSecrets map is updated. Gossip about third parties can also propagate secret knowledge.'},
-  {from:'director',to:'promises',color:'var(--accent-director)',label:'creates promises & betrayals',
-    desc:'NPCs can make promises during conversation (resolveAtPhase = current + 1\u20132). If gossip reveals a betrayal, a BetrayalRecord is created and the victim may discover it.'},
-  {from:'director',to:'goals',color:'var(--accent-director)',label:'updates arcs & triggers impulses',
-    desc:'Character arc narrative is appended after conversations. Dramatic events (betrayals, confessions) create ReactiveImpulses with high urgency, fast-tracking follow-up conversations.'},
-  {from:'director',to:'moods',color:'var(--accent-director)',label:'recomputes mood',
-    desc:'After every conversation completes and emotion deltas are applied, the Director calls computeAndSetMood() for both participants. This checks emotional thresholds to derive or clear the persistent mood.'},
-  // Mood derivation and usage
-  {from:'emotions',to:'moods',color:'var(--accent-npc)',label:'threshold derivation',
-    desc:'Moods are derived from emotional state via priority-ordered threshold checks. Negative moods take priority (paranoid, bitter, melancholy, guilt-ridden, volatile, restless) over positive (euphoric). Clears if no threshold met.'},
-  {from:'moods',to:'prompt',color:'var(--accent-prompt)',label:'persistent mood',
-    desc:'If the NPC has been in a mood for >1 minute (moodSince check), the prompt builder includes it as a PERSISTENT MOOD block: "You\'ve been feeling [mood] for a while now. This colors everything \u2014 your patience, your openness, your reactions."'},
-  // NPC state feeds into Prompt Builder
-  {from:'identity',to:'prompt',color:'var(--accent-prompt)',label:'backstory & traits',
-    desc:'Prompt builder includes the NPC\'s backstory (preferred) or personality traits + core desires as the identity block. This shapes the LLM\'s voice for the character.'},
-  {from:'emotions',to:'prompt',color:'var(--accent-prompt)',label:'emotional context',
-    desc:'Current emotional state is rendered as prose ("You feel a deep sadness..."). All 7 axes are described so the LLM can generate emotionally authentic responses.'},
-  {from:'relationships',to:'prompt',color:'var(--accent-prompt)',label:'relationship context',
-    desc:'Regard is mapped to labels (stranger/acquaintance/friend/close friend/beloved/enemy). Affection, respect, trust, fear, debt shown if significant. Trajectory (warming/deteriorating/stable) included.'},
-  {from:'memory',to:'prompt',color:'var(--accent-prompt)',label:'retrieved memories',
-    desc:'Memories are retrieved sorted by recency\u00d7importance, split into: direct interactions with partner, gossip heard, and memories about the partner. Deduped and filtered.'},
-  {from:'secrets',to:'prompt',color:'var(--accent-prompt)',label:'secrets & known secrets',
-    desc:'Own secrets are listed with a hint to reveal if trust \u22650.7. Known secrets about the conversation partner are included so the NPC can reference or confront them.'},
-  {from:'inventory',to:'prompt',color:'var(--accent-prompt)',label:'items for speech',
-    desc:'Current inventory items (with emoji) are listed so NPCs can naturally reference, offer, or use items in conversation. Enables organic gift-giving moments.'},
-  {from:'goals',to:'prompt',color:'var(--accent-prompt)',label:'current goal & arc',
-    desc:'The NPC\'s current goal string and character arc (growth narrative) are included for continuity. Goals influence conversation topics and waypoint selection.'},
-  // Prompt Builder → LLM
-  {from:'prompt',to:'llm',color:'var(--accent-prompt)',label:'assembled prompt',
-    desc:'The complete prompt (18 sections: identity, emotions, relationships, memories, secrets, inventory, location, time, conversation preamble, etc.) is sent to the LLM. Response is JSON with speech, deltas, actions.'},
-  // LLM returns generated content
-  {from:'llm',to:'director',color:'var(--accent-llm)',label:'generated conversation JSON',
-    desc:'LLM returns a full conversation as JSON turns, each containing: inner_thought, speech, emotion_delta (7 axes), relationship_delta, intent, actions (give_gift, threaten, storm_off, etc.), secret_revealed, promise, and forgive. The Director parses and applies all of these during playback.'},
-  {from:'llm',to:'daycycle',color:'var(--accent-llm)',label:'promise resolution outcome',
-    desc:'When the Day Cycle asks the LLM to resolve a promise, it returns a kept/broken verdict with narrative reasoning. This determines whether the promise creates positive relationship effects or triggers a betrayal record.'},
-  // World loop reads state
-  {from:'identity',to:'world',color:'var(--accent-world)',label:'trait-based waypoint selection',
-    desc:'Personality traits influence where NPCs go: "curious" gets exploration bonuses, "anxious" prefers edges, "charming" seeks crowded waypoints. Trait affinity also affects activity selection.'},
-  {from:'emotions',to:'world',color:'var(--accent-world)',label:'waypoint selection',
-    desc:'Emotional state shapes movement: fearful NPCs avoid crowded areas (-2\u00d7 busyness penalty), joyful NPCs seek social spots (+1\u00d7 busyness bonus). Time-of-day preferences also apply.'},
-  {from:'relationships',to:'world',color:'var(--accent-world)',label:'proximity drives',
-    desc:'NPCs with high regard seek friends. Gift-seeking drive (30% chance) targets best friend when carrying items. Loneliness drive (15%) triggers after 90s without social contact.'},
-  {from:'inventory',to:'world',color:'var(--accent-world)',label:'item interactions',
-    desc:'Item-based interactions (offer_food, give_herb, give_trinket, etc.) require specific inventory items. These get a +2 scoring boost since they\'re rarer and more meaningful.'},
-  {from:'goals',to:'world',color:'var(--accent-world)',label:'goal-directed movement',
-    desc:'Current goal string influences waypoint selection, biasing the NPC toward relevant locations. Behavioral overrides (seek/avoid) from the Director can temporarily force movement patterns.'},
-  // World writes back to NPC state
-  {from:'world',to:'emotions',color:'var(--accent-world)',label:'activity emotion effects',
-    desc:'Solo activities shift emotions: e.g. gardening (anger -0.03, joy +0.03), meditating (anger -0.04, fear -0.04), fishing (sadness -0.02, curiosity +0.02). 14 activity types with distinct effects.'},
-  {from:'world',to:'relationships',color:'var(--accent-world)',label:'interaction deltas',
-    desc:'Proximity interactions (22 types) change relationships: comfort gives trust +0.06, taunt gives regard -0.06, give_trinket gives regard +0.10. Both NPCs are affected asymmetrically.'},
-  {from:'world',to:'memory',color:'var(--accent-world)',label:'activity & interaction memories',
-    desc:'Activities and interactions create memories (importance 0.2\u20130.7). Eavesdropping (range 6 tiles, 3-min cooldown) creates gossip memories that can spread secrets.'},
-  {from:'world',to:'inventory',color:'var(--accent-world)',label:'item yields & decay',
-    desc:'Activities yield items: fishing (40% chance), foraging (60%), cooking (70%). Items decay by category (fish 2m, food 3m, herb 5m, craft 8m, trinket 10m, book 12m). Max 8 per NPC.'},
-  // World to tilemap
-  {from:'world',to:'tilemap',color:'var(--accent-tilemap)',label:'A* pathfinding',
-    desc:'World simulation uses the tilemap\'s collision grid for A* pathfinding. NPCs pick waypoints (with mood/activity metadata), then pathfind to them. Stuck detection recomputes after 8 blocked ticks.'},
-  // Day cycle reads promises, calls LLM directly
-  {from:'promises',to:'daycycle',color:'var(--accent-day)',label:'resolve promises',
-    desc:'At each phase transition, the Day Cycle checks for promises whose resolveAtPhase has arrived. Promises overdue by 6+ phases are auto-resolved as broken.'},
-  {from:'daycycle',to:'llm',color:'var(--accent-day)',label:'promise outcome generation',
-    desc:'Day Cycle calls the LLM directly with its own narrator prompt (not via Prompt Builder) to determine if each promise is kept or broken, considering personalities, emotions, and relationships.'},
-  // Day cycle writes back to NPC state
-  {from:'daycycle',to:'emotions',color:'var(--accent-day)',label:'emotion decay + promise effects',
-    desc:'Emotions pull 15% toward fixed baselines each cycle. Promise outcomes also shift emotions: kept promises boost joy/trust, broken promises increase anger/sadness/guilt.'},
-  {from:'daycycle',to:'relationships',color:'var(--accent-day)',label:'promise outcome deltas',
-    desc:'Kept promises: both NPCs get +regard, +trust. Broken promises: both get -regard, -trust. These deltas apply to the promisor and promisee symmetrically.'},
-  {from:'daycycle',to:'memory',color:'var(--accent-day)',label:'promise outcome memories',
-    desc:'Promise resolution outcomes are stored as memories for both NPCs, with type promise_made or promise_broken. These surface in future prompts as unresolved business.'},
-  // ── Mechanism connections ──────────────────────
-  // Reflection
-  {from:'director',to:'reflection',color:'var(--accent-mech)',label:'triggers reflection',
-    desc:'After every conversation ends and write-backs are applied, the Director fires off an async reflection LLM call for both participants in parallel.'},
-  {from:'reflection',to:'llm',color:'var(--accent-mech)',label:'reflection prompt',
-    desc:'Each participant gets a separate LLM call with the full conversation transcript, their identity, emotions, goal, and personality traits. Produces thought, interpretation, goal update, arc update, and trait evolution.'},
-  {from:'reflection',to:'memory',color:'var(--accent-mech)',label:'inner thought + interpretation',
-    desc:'Creates an inner_thought memory (importance 0.6) with a subjective interpretation field\u2014the NPC\'s personal spin on what happened. These memories influence future conversations.'},
-  {from:'reflection',to:'goals',color:'var(--accent-mech)',label:'goal & arc updates',
-    desc:'Can update the NPC\'s current goal, append to their character arc (keeps last 3 entries), and even add new personality traits (max 7 total). The main path for character growth.'},
-  // Reactive Chains
-  {from:'director',to:'reactive',color:'var(--accent-mech)',label:'scans for drama',
-    desc:'After playback, the system scans every conversation message for dramatic triggers: secrets revealed to untrustworthy NPCs, threats, mockery, conspiracies, rumors, and eavesdropper reactions.'},
-  {from:'reactive',to:'goals',color:'var(--accent-mech)',label:'creates impulses',
-    desc:'Generates ReactiveImpulses with urgency 0.5\u20130.95 that create seek/avoid behavioral overrides and preferred conversation types. Impulses expire after 5 minutes.'},
-  {from:'reactive',to:'promises',color:'var(--accent-mech)',label:'creates betrayal records',
-    desc:'Conspiracies and spread rumors against allies automatically create undiscovered betrayal records (discoveredByVictim: false), which later surface via gossip.'},
-  {from:'reactive',to:'director',color:'var(--accent-mech)',label:'urgency \u00d78 pair scoring',
-    desc:'Impulse urgency \u00d7 8 is added to pair score\u2014the strongest scoring signal in the system. A 0.95-urgency impulse adds 7.6 points, virtually guaranteeing the next conversation.'},
-  // Witness System
-  {from:'director',to:'witness',color:'var(--accent-mech)',label:'visible actions during playback',
-    desc:'During conversation playback, when actions occur (give_gift, mock, storm_off, embrace, threaten), the witness system checks for nearby NPCs within 5 tiles. Conspire and spread_rumor are NOT witnessed.'},
-  {from:'witness',to:'emotions',color:'var(--accent-mech)',label:'witness emotion shifts',
-    desc:'Witnessing affects emotions: threats cause fear +0.08 and trust -0.05, mockery causes anger and sadness, embraces can cause jealousy or warmth depending on relationships.'},
-  {from:'witness',to:'relationships',color:'var(--accent-mech)',label:'witness regard changes',
-    desc:'Witnesses form opinions: threaten drops regard for aggressor by -0.08, mock drops by -0.05, gift-giving creates mild jealousy or positive regard depending on existing relationships.'},
-  {from:'witness',to:'memory',color:'var(--accent-mech)',label:'action_witnessed memories',
-    desc:'All witnessed actions create memories with type action_witnessed (importance 0.6, emotionalWeight 0.5)\u2014higher importance than eavesdrop memories (0.4).'},
-  // Narrative Arc
-  {from:'director',to:'narrative',color:'var(--accent-mech)',label:'appends conversation summary',
-    desc:'After every conversation, a one-line summary is appended: "{A} & {B} had a {tone} {type} ({turns} turns)" with suffixes for secrets, promises, or notable actions.'},
-  {from:'narrative',to:'llm',color:'var(--accent-mech)',label:'compression (>20 entries)',
-    desc:'When summaries exceed 20 entries, the LLM compresses them into a 5\u20138 sentence narrative capturing key relationships, events, emerging storylines, and unresolved tensions.'},
-  {from:'narrative',to:'prompt',color:'var(--accent-mech)',label:'STORY SO FAR',
-    desc:'The narrative summary is injected into both scene direction and conversation generation prompts as "STORY SO FAR", giving the LLM awareness of the full community narrative.'},
-  // Soliloquy
-  {from:'world',to:'soliloquy',color:'var(--accent-mech)',label:'triggers at reflective waypoints',
-    desc:'When an NPC finishes a solo activity at a reflective waypoint (contemplative, mysterious, spiritual, etc.) and is alone within 5 tiles, the world simulation triggers a soliloquy. Rate limited to 1 per NPC per 3 min.'},
-  {from:'soliloquy',to:'llm',color:'var(--accent-mech)',label:'inner monologue prompt',
-    desc:'Sends a prompt with NPC identity, mood, emotions, goal, and top 5 memories. Requests an honest, unguarded inner monologue (2\u20133 sentences) and optional goal update. Token limit 512. Skips if Director is using LLM slot.'},
-  {from:'soliloquy',to:'memory',color:'var(--accent-mech)',label:'inner_thought memory',
-    desc:'Creates a short-term memory with type inner_thought (importance 0.5, emotionalWeight 0.3). No relationship or emotion changes\u2014purely introspective.'},
-  {from:'soliloquy',to:'goals',color:'var(--accent-mech)',label:'goal update',
-    desc:'If the LLM returns a goal_update, the NPC\'s current goal is changed. This is the non-social path for goal evolution\u2014NPCs can decide to change direction through private reflection.'},
-  // Emotional Contagion
-  {from:'director',to:'contagion',color:'var(--accent-mech)',label:'post-conversation emotion leak',
-    desc:'After conversation playback ends, the system checks for nearby NPCs (within 5 tiles) and calculates cumulative emotion deltas from the conversation to determine what leaks.'},
-  {from:'contagion',to:'emotions',color:'var(--accent-mech)',label:'fear & joy spread',
-    desc:'Only fear and joy propagate. Angry conversations spread fear (+0.03 \u00d7 proximity), joyful ones spread joy (+0.02 \u00d7 proximity). Proximity scales from 1.0 at distance 0 to 0.2 at distance 5.'},
-  // Betrayal Discovery
-  {from:'director',to:'betrayal_discovery',color:'var(--accent-mech)',label:'gossip mentions third party',
-    desc:'During conversation processing, when mentioned_npcs appear in gossip, the system checks if the gossip content fuzzy-matches any undiscovered betrayal records for the listener.'},
-  {from:'betrayal_discovery',to:'promises',color:'var(--accent-mech)',label:'marks betrayal discovered',
-    desc:'Sets discoveredByVictim = true on the matching betrayal record. Discovered betrayals are then injected into future conversation prompts via the prompt builder.'},
-  {from:'betrayal_discovery',to:'reactive',color:'var(--accent-mech)',label:'urgency 0.95 confrontation',
-    desc:'Creates the highest-urgency impulse in the system (0.95), translating to 7.6 pair score points. The victim and betrayer are virtually guaranteed to have the next conversation.'},
-];
-
-// ─── Render inner ring nodes ───────────────────
-const innerNodeEls = {};
-INNER_NODES.forEach(node => {
-  const pos = polarToXY(0, 0, 130, node.angle);
-  const g = el('g',{class:'inner-node','data-id':node.id,
-    transform:`translate(${pos.x},${pos.y})`});
-
-  // Glow bg
-  const glow = el('circle',{r:28,fill:'rgba(255,74,141,.06)',stroke:'none',
-    filter:'url(#glow-npc)',opacity:'.3'});
-  g.appendChild(glow);
-
-  // Main circle
-  const circle = el('circle',{r:22,fill:'rgba(255,74,141,.08)',
-    stroke:'rgba(255,74,141,.3)','stroke-width':1});
-  g.appendChild(circle);
-
-  // Icon
-  const icon = el('text',{x:0,y:1,'text-anchor':'middle',
-    'dominant-baseline':'central','font-size':'14',fill:'var(--accent-npc)',
-    'font-family':'Outfit',opacity:'.9'});
-  icon.textContent = node.icon;
-  g.appendChild(icon);
-
-  // Label
-  const label = el('text',{x:0,y:36,'text-anchor':'middle',
-    'font-size':'9','font-family':'JetBrains Mono, monospace',
-    fill:'var(--text-dim)','letter-spacing':'.5'});
-  label.textContent = node.label;
-  g.appendChild(label);
-
-  g.style.cursor = 'pointer';
-  g.addEventListener('click', ()=>{ openPanel(node.detail, 'var(--accent-npc)'); openConnectionsPanel(node.id, 'var(--accent-npc)'); });
-  g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
-  g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
-  layerNodes.appendChild(g);
-  innerNodeEls[node.id] = {g, pos, glow};
-});
-
-// ─── Render middle ring (loop arcs) ────────────
-const midNodeEls = {};
-MID_NODES.forEach(node => {
-  const startAngle = node.angle - node.span/2;
-  const endAngle = node.angle + node.span/2;
-  const g = el('g',{class:'mid-node','data-id':node.id});
-
-  // Arc track (dim)
-  const track = el('path',{d:arcPath(0,0,node.radius,startAngle,endAngle),
-    fill:'none',stroke:node.color,'stroke-width':6,'stroke-linecap':'round',
-    opacity:'.12'});
-  g.appendChild(track);
-
-  // Arc active
-  const active = el('path',{d:arcPath(0,0,node.radius,startAngle,endAngle),
-    fill:'none',stroke:node.color,'stroke-width':3,'stroke-linecap':'round',
-    opacity:'.6',filter:`url(#${node.glow})`});
-  g.appendChild(active);
-
-  // Animated dash
-  const dash = el('path',{d:arcPath(0,0,node.radius,startAngle,endAngle),
-    fill:'none',stroke:node.color,'stroke-width':2,'stroke-linecap':'round',
-    opacity:'.8','stroke-dasharray':'8 20','stroke-dashoffset':'0'});
-  g.appendChild(dash);
-
-  // Label on arc
-  const labelPos = polarToXY(0, 0, node.radius - 20, node.angle);
-  const label = el('text',{x:labelPos.x, y:labelPos.y,
-    'text-anchor':'middle','dominant-baseline':'central',
-    'font-size':'10','font-family':'JetBrains Mono, monospace',
-    'font-weight':'600',fill:node.color,'letter-spacing':'1',opacity:'.9'});
-  label.textContent = node.label.toUpperCase();
-  g.appendChild(label);
-
-  g.style.cursor = 'pointer';
-  g.addEventListener('click', ()=>{ openPanel(node.detail, node.color); openConnectionsPanel(node.id, node.color); });
-  g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
-  g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
-  layerNodes.appendChild(g);
-
-  const center = polarToXY(0, 0, node.radius, node.angle);
-  midNodeEls[node.id] = {g, pos:center, dash, startAngle, endAngle};
-});
-
-// ─── Render outer ring nodes ───────────────────
-const outerNodeEls = {};
-OUTER_NODES.forEach(node => {
-  const pos = polarToXY(0, 0, node.radius, node.angle);
-  const g = el('g',{class:'outer-node','data-id':node.id,
-    transform:`translate(${pos.x},${pos.y})`});
-
-  // Hex-ish shape
-  const hex = el('rect',{x:-30,y:-18,width:60,height:36,rx:8,
-    fill:'rgba(255,255,255,.03)',stroke:node.color,
-    'stroke-width':1,opacity:'.7'});
-  g.appendChild(hex);
-
-  const label = el('text',{x:0,y:1,'text-anchor':'middle',
-    'dominant-baseline':'central','font-size':'10',
-    'font-family':'JetBrains Mono, monospace','font-weight':'600',
-    fill:node.color,'letter-spacing':'1'});
-  label.textContent = node.label.toUpperCase();
-  g.appendChild(label);
-
-  g.style.cursor = 'pointer';
-  g.addEventListener('click', ()=>{ openPanel(node.detail, node.color); openConnectionsPanel(node.id, node.color); });
-  g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
-  g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
-  layerNodes.appendChild(g);
-  outerNodeEls[node.id] = {g, pos};
-});
-
-// ─── Render prompt builder (bridge) ────────────
-{
-  const pb = PROMPT_BUILDER;
-  const pos = polarToXY(0, 0, pb.radius, pb.angle);
-  const g = el('g',{class:'prompt-node','data-id':'prompt',
-    transform:`translate(${pos.x},${pos.y})`});
-
-  // Diamond shape
-  const diamond = el('polygon',{
-    points:'0,-20 24,0 0,20 -24,0',
-    fill:'rgba(167,139,250,.06)',stroke:'var(--accent-prompt)',
-    'stroke-width':1,opacity:'.8',filter:'url(#glow-prompt)'});
-  g.appendChild(diamond);
-
-  const label = el('text',{x:0,y:32,'text-anchor':'middle',
-    'font-size':'8','font-family':'JetBrains Mono, monospace',
-    fill:'var(--accent-prompt)','letter-spacing':'.5',opacity:'.8'});
-  label.textContent = 'PROMPT BUILDER';
-  g.appendChild(label);
-
-  g.style.cursor = 'pointer';
-  g.addEventListener('click', ()=>{ openPanel(pb.detail, pb.color); openConnectionsPanel('prompt', pb.color); });
-  g.addEventListener('mouseenter', (e)=>{ showTooltip(e, 'Prompt Builder'); highlightNode('prompt'); });
-  g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
-  layerNodes.appendChild(g);
-  outerNodeEls['prompt'] = {g, pos};
-}
-
-// ─── Render mechanism nodes (rounded rects between rings) ──
-const mechNodeEls = {};
-MECHANISM_NODES.forEach(node => {
-  const pos = polarToXY(0, 0, node.radius, node.angle);
-  const g = el('g',{class:'mech-node','data-id':node.id,
-    transform:`translate(${pos.x},${pos.y})`});
-
-  const labelText = node.label.toUpperCase();
-  const labelWidth = Math.max(48, labelText.length * 5.5 + 16);
-  const halfW = labelWidth / 2;
-
-  // Glow bg
-  const glow = el('rect',{x:-(halfW+4),y:-13,width:labelWidth+8,height:26,rx:6,
-    fill:'rgba(96,165,250,.06)',stroke:'none',
-    filter:'url(#glow-mech)',opacity:'.3'});
-  g.appendChild(glow);
-
-  // Rounded rect shape
-  const rect = el('rect',{x:-halfW,y:-11,width:labelWidth,height:22,rx:5,
-    fill:'rgba(96,165,250,.08)',stroke:'var(--accent-mech)',
-    'stroke-width':1,opacity:'.7','stroke-dasharray':'3 3'});
-  g.appendChild(rect);
-
-  // Label inside
-  const label = el('text',{x:0,y:1,'text-anchor':'middle',
-    'dominant-baseline':'central','font-size':'7',
-    'font-family':'JetBrains Mono, monospace','font-weight':'500',
-    fill:'var(--accent-mech)','letter-spacing':'.3',opacity:'.9'});
-  label.textContent = labelText;
-  g.appendChild(label);
-
-  g.style.cursor = 'pointer';
-  g.addEventListener('click', ()=>{ openPanel(node.detail, 'var(--accent-mech)'); openConnectionsPanel(node.id, 'var(--accent-mech)'); });
-  g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
-  g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
-  layerNodes.appendChild(g);
-  mechNodeEls[node.id] = {g, pos, glow};
-});
-
-// ─── Render connections ────────────────────────
-const connectionEls = [];
-CONNECTIONS.forEach(conn => {
-  const fromEl = innerNodeEls[conn.from] || midNodeEls[conn.from] || outerNodeEls[conn.from] || mechNodeEls[conn.from];
-  const toEl = innerNodeEls[conn.to] || midNodeEls[conn.to] || outerNodeEls[conn.to] || mechNodeEls[conn.to];
-  if(!fromEl || !toEl) return;
-
-  const line = el('line',{
-    x1:fromEl.pos.x, y1:fromEl.pos.y,
-    x2:toEl.pos.x, y2:toEl.pos.y,
-    stroke:conn.color,'stroke-width':1.5,opacity:'0',
-    'stroke-dasharray':'4 8'
-  });
-  line.style.transition = 'opacity .25s ease';
-  layerConnections.appendChild(line);
-  connectionEls.push({line, from:fromEl.pos, to:toEl.pos, color:conn.color, fromId:conn.from, toId:conn.to});
-});
-
-// ─── Adjacency map for hover highlighting ──────
-// Build a map: nodeId → Set of directly connected nodeIds
-const adjacency = {};
-CONNECTIONS.forEach(conn => {
-  if(!adjacency[conn.from]) adjacency[conn.from] = new Set();
-  if(!adjacency[conn.to]) adjacency[conn.to] = new Set();
-  adjacency[conn.from].add(conn.to);
-  adjacency[conn.to].add(conn.from);
-});
-
-// Get all nodes reachable within `depth` hops
-function getConnectedIds(startId, depth=2){
-  const visited = new Set([startId]);
-  let frontier = [startId];
-  for(let d=0; d<depth; d++){
-    const next = [];
-    for(const id of frontier){
-      for(const neighbor of (adjacency[id] || [])){
-        if(!visited.has(neighbor)){ visited.add(neighbor); next.push(neighbor); }
-      }
-    }
-    frontier = next;
-  }
-  return visited;
-}
-
-// All node data lookup for hover → panel
-const allNodeData = {};
-INNER_NODES.forEach(n => allNodeData[n.id] = {detail:n.detail, color:'var(--accent-npc)'});
-MID_NODES.forEach(n => allNodeData[n.id] = {detail:n.detail, color:n.color});
-OUTER_NODES.forEach(n => allNodeData[n.id] = {detail:n.detail, color:n.color});
-allNodeData['prompt'] = {detail:PROMPT_BUILDER.detail, color:PROMPT_BUILDER.color};
-MECHANISM_NODES.forEach(n => allNodeData[n.id] = {detail:n.detail, color:'var(--accent-mech)'});
-
+// ─── Module-level state ────────────────────────
+let connectionEls = [];
+let flowParticles = [];
+let allNodeData = {};
+let nodeNames = {};
+let currentConnections = [];
+let pulsingGlows = [];
+let dashEls = [];
+let currentView = 'architecture';
 let hoveredNodeId = null;
 
+// ─── Legend ─────────────────────────────────────
+const legendEl = document.getElementById('legend');
+const ARCH_LEGEND = [
+  {color:'var(--accent-director)',label:'Director'},
+  {color:'var(--accent-world)',label:'World'},
+  {color:'var(--accent-day)',label:'Day Cycle'},
+  {color:'var(--accent-npc)',label:'NPC State'},
+  {color:'var(--accent-llm)',label:'LLM'},
+  {color:'var(--accent-tts)',label:'TTS'},
+  {color:'var(--accent-tilemap)',label:'Tilemap'},
+  {color:'var(--accent-mech)',label:'Mechanisms'},
+];
+const CODE_LEGEND = [
+  {color:'var(--accent-core)',label:'Core Data'},
+  {color:'var(--accent-logic)',label:'Business Logic'},
+  {color:'var(--accent-ui)',label:'UI Components'},
+  {color:'var(--accent-infra)',label:'Infrastructure'},
+];
+function setLegend(items){
+  legendEl.innerHTML = items.map(i=>`<div class="legend-item"><div class="legend-swatch" style="background:${i.color}"></div>${i.label}</div>`).join('');
+}
+
+// ─── clearView ─────────────────────────────────
+function clearView(){
+  [layerBg, layerRings, layerConnections, layerNodes, layerLabels, layerParticles].forEach(l=>l.innerHTML='');
+  connectionEls = [];
+  flowParticles = [];
+  allNodeData = {};
+  nodeNames = {};
+  currentConnections = [];
+  pulsingGlows = [];
+  dashEls = [];
+  hoveredNodeId = null;
+  closePanel();
+  closeConnectionsPanel();
+}
+
+// ─── Shared hover / highlight ──────────────────
 function highlightNode(nodeId){
   if(hoveredNodeId === nodeId) return;
   hoveredNodeId = nodeId;
-
-  // Show only direct connections, hide everything else
   connectionEls.forEach(c => {
-    const touchesHovered = c.fromId === nodeId || c.toId === nodeId;
-    if(touchesHovered){
-      c.line.setAttribute('opacity', '.55');
-      c.line.setAttribute('stroke-width', '2');
-    } else {
-      c.line.setAttribute('opacity', '0');
-      c.line.setAttribute('stroke-width', '1.5');
-    }
+    const touches = c.fromId === nodeId || c.toId === nodeId;
+    c.line.setAttribute('opacity', touches ? '.55' : '0');
+    c.line.setAttribute('stroke-width', touches ? '2' : '1.5');
   });
-
-  // Activate animated arrows only on direct connections
   flowParticles.forEach(p => {
-    const touchesHovered = p.connData.fromId === nodeId || p.connData.toId === nodeId;
-    p.active = touchesHovered;
+    p.active = (p.connData.fromId === nodeId || p.connData.toId === nodeId);
   });
 }
 
@@ -989,38 +422,7 @@ function unhighlightAll(){
   flowParticles.forEach(p => { p.active = false; });
 }
 
-// ─── Center label ──────────────────────────────
-{
-  const ct = el('text',{x:0,y:-4,'text-anchor':'middle',
-    'dominant-baseline':'central','font-size':'13',
-    'font-family':'Outfit','font-weight':'700',fill:'var(--accent-npc)',
-    opacity:'.8'});
-  ct.textContent = 'NPC';
-  layerLabels.appendChild(ct);
-
-  const ct2 = el('text',{x:0,y:14,'text-anchor':'middle',
-    'dominant-baseline':'central','font-size':'8',
-    'font-family':'JetBrains Mono, monospace',fill:'var(--text-dim)',
-    'letter-spacing':'2'});
-  ct2.textContent = 'STATE';
-  layerLabels.appendChild(ct2);
-}
-
-// ─── Ring labels ───────────────────────────────
-[
-  {r:175,label:'LOOPS',opacity:.25},
-  {r:380,label:'EXTERNAL',opacity:.2},
-].forEach(({r, label, opacity})=>{
-  const pos = polarToXY(0,0,r,90);
-  const t = el('text',{x:pos.x,y:pos.y,'text-anchor':'middle',
-    'font-size':'8','font-family':'JetBrains Mono, monospace',
-    fill:'var(--text-dim)','letter-spacing':'3',opacity});
-  t.textContent = label;
-  layerLabels.appendChild(t);
-});
-
-// ─── Animated arrows (only shown on hover) ─────
-const flowParticles = [];
+// ─── Shared flow arrow creation ────────────────
 function createFlowArrow(conn){
   const g = el('g',{opacity:'0'});
   const arrow = el('polygon',{points:'-9,-6 9,0 -9,6', fill:conn.color});
@@ -1031,33 +433,933 @@ function createFlowArrow(conn){
   const angle = Math.atan2(dy, dx) * 180 / Math.PI;
   return {el:g, conn, connData:conn, t:Math.random(), speed:.0015 + Math.random()*.001, active:false, angle};
 }
-connectionEls.forEach(conn => {
-  flowParticles.push(createFlowArrow(conn));
-});
+
+// ═══════════════════════════════════════════════
+// ─── ARCHITECTURE VIEW ─────────────────────────
+// ═══════════════════════════════════════════════
+
+function renderArchitecture(){
+  // ─── Ring backgrounds ──────────────────────────
+  layerBg.appendChild(el('circle',{cx:0,cy:0,r:440,fill:'none',stroke:'rgba(255,255,255,.018)','stroke-width':120}));
+  layerBg.appendChild(el('circle',{cx:0,cy:0,r:290,fill:'none',stroke:'rgba(255,255,255,.025)','stroke-width':100}));
+  layerBg.appendChild(el('circle',{cx:0,cy:0,r:140,fill:'rgba(255,74,141,.02)',stroke:'rgba(255,74,141,.06)','stroke-width':1}));
+  [190, 340, 440].forEach(r=>{
+    layerBg.appendChild(el('circle',{cx:0,cy:0,r,fill:'none',stroke:'rgba(255,255,255,.04)','stroke-width':.5,'stroke-dasharray':'3 8'}));
+  });
+
+  // ─── DATA ──────────────────────────────────────
+  const INNER_NODES = [
+    {id:'emotions', label:'Emotions', icon:'', angle:0,
+      detail:{tag:'NPC STATE', title:'7-Dimensional Emotions',
+        desc:'Every NPC has 7 continuous emotion axes (0-1) that shift in real-time during conversations, activities, and interactions. Emotions decay toward per-NPC baselines (15% pull per cycle, falls back to global defaults).',
+        items:['anger (default baseline .3)','trust (default baseline .3)','fear (default baseline .3)','joy (default baseline .3)','sadness (default baseline .15)','curiosity (default baseline .4)','guilt (default baseline .1)']}},
+    {id:'moods', label:'Moods', icon:'', angle:40,
+      detail:{tag:'NPC STATE', title:'Persistent Moods',
+        desc:'Derived from emotional state via threshold checks. When an NPC sustains strong emotions, they enter a named mood that colors their speech, patience, and reactions. Moods persist until emotions shift below thresholds. Only included in prompts after 1+ minute of persistence.',
+        sections:[
+          {title:'Mood Derivation (priority order)',items:['paranoid: fear > 0.5 AND trust < 0.3','bitter: anger > 0.5 AND trust < 0.3','melancholy: sadness > 0.5','guilt-ridden: guilt > 0.5','volatile: anger > 0.6','restless: curiosity > 0.6 AND joy < 0.3','euphoric: joy > 0.7','clears to undefined if no threshold met']},
+          {title:'Storage',items:['mood: string | undefined','moodSince: timestamp (Date.now())','recomputed after every conversation (Director post-playback)','prompt builder checks moodSince > 60s before including']}
+        ]}},
+    {id:'relationships', label:'Relationships', icon:'', angle:80,
+      detail:{tag:'NPC STATE', title:'Per-Pair Relationships',
+        desc:'Every NPC pair tracks an 8-axis relationship that evolves through conversations and interactions. Regard is the core axis ranging from -1 (enemy) to +1 (beloved). Velocity tracking detects warming/cooling trends.',
+        items:['regard: -1 to 1 (stranger \u2192 enemy / beloved)','affection, respect, trust, fear, disgust: 0-1','debt: -1 to 1 (positive = I owe them)','familiarity: 0-1 (increments per conversation)','initial values: respect 0.3, trust 0.3, all others 0','velocity tracking (last 10 snapshots)','trajectory labels: warming / deteriorating / stable']}},
+    {id:'memory', label:'Memory', icon:'', angle:120,
+      detail:{tag:'NPC STATE', title:'Dual Memory System',
+        desc:'Short-term memory holds recent events (40 entries). When evicted, high-importance memories promote to long-term storage (100 entries). Recency decays at 0.85x per conversation cycle, creating natural forgetting.',
+        items:['short-term: 40 entries, evict lowest recency\u00d7importance','long-term: 100 entries, promote at importance \u2265 0.7','14 memory types (conversation, gossip, secret_learned, promise_made, eavesdrop, etc.)','retrieval: sorted by recency\u00d7importance, filtered by involvement','unresolved flag for unfinished business (promises, betrayals)','sentiment tracking per memory (-1 to 1)']}},
+    {id:'secrets', label:'Secrets', icon:'', angle:160,
+      detail:{tag:'NPC STATE', title:'Secrets & Known Secrets',
+        desc:'Each NPC holds private secrets and tracks what they\'ve learned about others. Secrets drive dramatic tension\u2014the Director scores information asymmetry heavily when choosing conversation pairs.',
+        items:['own secrets[] (private, revealable at trust \u2265 0.7)','knownSecrets map: NPC id \u2192 discovered secrets','secret_revealed in conversation triggers memory + gossip','information asymmetry = major Director scoring factor']}},
+    {id:'promises', label:'Promises', icon:'', angle:200,
+      detail:{tag:'NPC STATE', title:'Promises & Betrayals',
+        desc:'NPCs make promises during conversations that resolve 1-2 day phases later. The LLM decides if each promise is kept or broken based on personalities and circumstances. Broken promises create betrayal records that fuel confrontations.',
+        items:['promise: text, fromId, toId, resolveAtPhase','betrayal: betrayerId, victimId, discoveredByVictim, forgiven','broken promises auto-resolve after 6+ phases','kept: +regard, +trust, +joy, -anger, -guilt','broken: -regard, -trust, -joy, +anger, +sadness, +guilt','forgiveness possible during reconciliation conversations']}},
+    {id:'inventory', label:'Inventory', icon:'', angle:240,
+      detail:{tag:'NPC STATE', title:'Items & Inventory',
+        desc:'NPCs carry up to 8 items acquired through activities (fishing, foraging, cooking, etc.). Items decay by category and can be gifted or referenced in conversations. Item-based interactions get priority scoring.',
+        items:['max 8 items per NPC','6 categories: food, herb, fish, trinket, craft, book','decay timers: fish 2m, food 3m, herb 5m, craft 8m, trinket 10m, book 12m','items referenced in prompt builder for natural speech','gift-giving: relationship boost + memory creation']}},
+    {id:'goals', label:'Goals & Arcs', icon:'', angle:280,
+      detail:{tag:'NPC STATE', title:'Goals & Character Arcs',
+        desc:'Each NPC has a current goal (influences waypoint selection and conversation topics) and a growing character arc narrative updated after reflective moments. Behavioral overrides and reactive impulses provide short-term urgency.',
+        items:['currentGoal: string (influences waypoint picks + prompts)','characterArc: narrative of growth, appended post-conversation','behavioralOverride: seek/avoid specific NPC (time-limited)','reactiveImpulse: high-urgency follow-up desire (0-1 urgency)']}},
+    {id:'identity', label:'Identity', icon:'', angle:320,
+      detail:{tag:'NPC STATE', title:'Core Identity',
+        desc:'The foundation of each NPC: name, visual appearance, personality traits, core desires, and backstory. Backstory is preferred over trait lists in prompts for more natural characterization. Personality traits also influence waypoint selection and activity affinity.',
+        items:['name, avatar, color, spriteId','personalityTraits[] (e.g. stoic, gentle, curious)','coreDesires[] (e.g. seek truth, protect the weak)','backstory (narrative paragraph, preferred in prompts)','customVoiceId (for TTS voice cloning)','traits affect world behavior: curious \u2192 exploration, anxious \u2192 edges, charming \u2192 crowds']}},
+  ];
+
+  const MID_NODES = [
+    {id:'director', label:'Director Loop', color:'var(--accent-director)', glow:'glow-director',
+      angle:30, span:100, radius:290,
+      detail:{tag:'LOOP \u00b7 ~5s', title:'Director Pipeline',
+        desc:'The Director is the narrative brain\u2014a background loop that pre-generates entire conversations before NPCs even meet. It scores every possible NPC pair by dramatic potential, picks the most interesting match, and orchestrates generation \u2192 TTS \u2192 playback.',
+        sections:[
+          {title:'Pair Scoring',items:['reactive impulses: urgency \u00d7 8 (highest priority)','relationship velocity (warming/cooling): +3','pending promises: +2 each','time since last talk: up to +5 (for 5+ min gap)','emotional intensity (anger/joy/fear/sadness peaks): sum \u00d7 2','relationship extremes (|regard|): \u00d7 2','information asymmetry (secrets known about other): +3','unrevealed secrets: +1.5','goal involves partner: +4','love triangles/jealousy: triangulation score','undiscovered betrayals: +4','active grudges: +5 (if >3 min old), else +3','broken promises: +2.5','isolation (no recent contact): up to +3 per NPC','random jitter: +0 to +1.5']},
+          {title:'Pipeline Stages',items:['1. Scene direction (LLM): suggest type + creative hints','2. Generate full conversation (single LLM call, 4\u201310 turns)','3. TTS prefetch (serialized for GPU, per-turn)','4. Queue for playback (ready at 2+ buffered turns)','5. Trigger on proximity (\u22645 tiles apart)','pipeline depth capped at 3, prepared conversations expire after 10 min']},
+          {title:'Conversation Types (with relationship-change caps)',items:['casual: natural, proportional (cap \u00b10.30)','confrontation: direct, raw, cutting (cap \u00b10.50)','reconciliation: vulnerable, olive branches (cap \u00b10.40)','confession: build toward honesty (cap \u00b10.45)','alliance_forming: warm, conspiratorial (cap \u00b10.40)','gossip_session: trade information (cap \u00b10.30)']},
+          {title:'Post-Conversation Write-Back',items:['applies emotion deltas + relationship deltas to both NPCs','creates conversation summary memory for both','increments familiarity between the pair','updates character arcs','records relationship snapshot (for velocity tracking)','triggers reactive impulses from dramatic events','emotional contagion: nearby NPCs (\u22645 tiles) absorb fear/joy','computes and sets persistent mood from new emotional state']}
+        ]}},
+    {id:'world', label:'World Loop', color:'var(--accent-world)', glow:'glow-world',
+      angle:160, span:100, radius:290,
+      detail:{tag:'LOOP \u00b7 ~285ms', title:'World Simulation',
+        desc:'The spatial heartbeat of the system. Every tick, NPCs pathfind to chosen waypoints, perform activities, interact with nearby NPCs, eavesdrop on conversations, and act on internal drives. All of these write back to NPC state.',
+        sections:[
+          {title:'Movement',items:['A* pathfinding with collision grid','waypoint selection: personality + emotions + time-of-day + relationships','trait bonuses: curious \u2192 exploration, anxious \u2192 edges, charming \u2192 crowds','recency penalty on just-visited waypoints','stuck detection: recompute after 8 blocked ticks','behavioral overrides (seek/avoid) from Director']},
+          {title:'Activities (14 types)',items:['reading, gardening, fishing, meditating, cooking, sketching, shopping, people_watching, wishing, stargazing, foraging, training, writing, napping','emotion effects (e.g. gardening: anger -0.03, joy +0.03)','item yields (fishing 40%, foraging 60%, cooking 70%)','waypoint-specific availability','5-minute cooldown before repeating','soliloquy trigger: reflective waypoint + solo activity']},
+          {title:'Interactions (22 types)',items:['offer_food, give_herb, give_trinket, share_sketch, offer_fish (item-based)','comfort, encourage, compliment, apologize (supportive)','taunt, cold_shoulder, challenge, show_off (antagonistic)','confide, share_story, reminisce, vent (personal)','joke, tease, debate, people_watch, ask_favor (social)','item-based interactions get +2 scoring boost']},
+          {title:'Passive Systems',items:['eavesdropping (range 6 tiles, 3-min cooldown per pair)','item decay by category timer','drives: gift-seeking (30%), loneliness (90s+, 15%), restlessness (10% at anger/fear >0.6)']},
+          {title:'Write-Back to NPC State',items:['activities create memories + shift emotions','interactions change relationships + create memories','eavesdropping creates gossip memories','drives set behavioral overrides']}
+        ]}},
+    {id:'daycycle', label:'Day Cycle', color:'var(--accent-day)', glow:'glow-day',
+      angle:280, span:80, radius:290,
+      detail:{tag:'LOOP \u00b7 ~2 min/phase', title:'Day Cycle',
+        desc:'Time advances through morning \u2192 afternoon \u2192 evening phases. The day cycle resolves promises (calling LLM directly with its own narrator prompt), decays emotions toward baselines, and creates the temporal rhythm of the simulation.',
+        sections:[
+          {title:'Time Structure',items:['3 phases: morning, afternoon, evening','~400 ticks per phase (~2 min at 285ms)','tracks: day number, phase, absolute phaseIndex']},
+          {title:'Promise Resolution',items:['promises set resolveAtPhase = current + 1\u20132','calls LLM directly (own narrator prompt, not via prompt builder)','considers: personalities, emotions, relationship, third parties','kept: both +regard, +trust, +joy, -anger, -guilt','broken: both -regard, -trust, -joy, +anger, +sadness, +guilt','auto-resolve broken after 6+ overdue phases']},
+          {title:'Write-Back to NPC State',items:['emotions pull toward fixed baselines (15% per cycle)','memory recency \u00d7= 0.85 per conversation cycle','moods recomputed from current emotional state','promise outcomes create memories for both NPCs']}
+        ]}},
+  ];
+
+  const OUTER_NODES = [
+    {id:'llm', label:'LLM', color:'var(--accent-llm)', glow:'glow-llm',
+      angle:10, radius:430,
+      detail:{tag:'EXTERNAL', title:'LLM Providers',
+        desc:'The language model generates conversations, scene direction, promise outcomes, and inner thoughts. Supports multiple providers with automatic failover and rate limit handling.',
+        items:['Ollama (local): any model, no rate limits','Groq (cloud): fast inference, token quota tracking','Gemini: Google\'s models','rate limit detection: 429 \u2192 60s backoff','auto-downgrade to llama-3.1-8b-instant at <20% tokens','re-upgrade when quota recovers to >50%','JSON response format with repair for malformed output']}},
+    {id:'tts', label:'TTS', color:'var(--accent-tts)', glow:'glow-tts',
+      angle:130, radius:430,
+      detail:{tag:'EXTERNAL', title:'Text-to-Speech',
+        desc:'Dual-engine TTS with voice cloning support. Audio is pre-generated during the Director pipeline and played back during conversations. Serialized to avoid GPU contention.',
+        items:['Chatterbox Turbo: English speech (port 8788)','Kokoro: multilingual support','Flask proxy server (port 8787)','13-voice pool, round-robin assignment','custom voice cloning (upload audio or YouTube extract)','paralinguistic tags: [laugh], [sigh], [gasp], [cough]...','emotion-aware speed modulation','serialized generation (GPU is single-threaded)']}},
+    {id:'tilemap', label:'Tilemap', color:'var(--accent-tilemap)', glow:'glow-tilemap',
+      angle:250, radius:430,
+      detail:{tag:'EXTERNAL', title:'Spatial World',
+        desc:'The physical space where NPCs exist. A tilemap with collision detection, named waypoints that carry mood/activity metadata, and sprite rendering.',
+        items:['village.tmj: 30 narrative waypoints (default)','testmap.tmj: original with tileset art','collision grid for pathfinding','waypoints: name, position, mood tags, available activities','sprite system: animated idle cycles, 24-frame sheets','graceful handling of maps without tilesets']}},
+  ];
+
+  const PROMPT_BUILDER = {
+    id:'prompt', label:'Prompt Builder', color:'var(--accent-prompt)', glow:'glow-prompt',
+    angle:10, radius:370,
+    detail:{tag:'BRIDGE', title:'Prompt Builder',
+      desc:'The translator between NPC state and LLM comprehension. Assembles a rich context window from all NPC data, relationship history, and narrative state into a structured prompt that guides conversation generation.',
+      sections:[
+        {title:'Prompt Structure',items:['1. Identity (backstory preferred over trait list)','2. Character arc (growth narrative)','3. Persistent mood (if active >1 min)','4. Emotional state (prose description of 8 axes)','5. Current goal','6. Secrets (hint to reveal at trust \u22650.7)','7. Inventory (items with emoji)','8. Betrayals discovered (active grudges)','9. Broken promises from others','10. Relationship context (regard label + dimensions)','11. Relationship trajectory (warming/deteriorating/stable)','12. Location (waypoint description)','13. Time of day','14. Pending plans (active promises)','15. Retrieved memories (direct + gossip + about-listener)','16. Known NPCs list','17. Conversation type preamble','18. Escalation directive (early/mid/late turn)']},
+        {title:'Response Format (JSON)',items:['inner_thought, speech','emotion_delta (8 axes, -0.4 to +0.4)','relationship_delta (-0.2 to +0.2) + extras','intent, conversation_end','secret_revealed, promise, action','forgive (for betrayals)','actions: give_gift, mock, embrace, threaten, storm_off, conspire, spread_rumor','justification required if delta >0.15 or relationship_delta >0.1']}
+      ]}
+  };
+
+  const MECHANISM_NODES = [
+    {id:'reflection', label:'Reflection', angle:55, radius:215,
+      detail:{tag:'MECHANISM \u00b7 Post-Conversation', title:'Post-Conversation Reflection',
+        desc:'After every conversation ends, a separate LLM call generates a private reflection for each participant. NPCs form subjective interpretations of what just happened, which become memories that influence future conversations. Runs asynchronously for both participants in parallel.',
+        sections:[
+          {title:'LLM Prompt Context',items:['full conversation transcript','NPC identity (backstory or traits + desires)','character arc (if present)','current emotional state','current goal','personality traits (for trait evolution)']},
+          {title:'JSON Output (5 fields)',items:['thought: 1-2 sentence private inner thought','interpretation: what the conversation meant, what shifted','goal_update: new goal or null','arc_update: how this experience changed them, or null','trait_evolution: a new personality trait developing, or null']},
+          {title:'Effects',items:['creates inner_thought memory (importance 0.6, emotionalWeight 0.4)','memory includes subjective interpretation field','updates goal if goal_update is non-null','appends arc_update to characterArc (keeps last 3 entries)','can add new personality traits (max 7 total)']}
+        ]}},
+    {id:'reactive', label:'Reactive Chains', angle:90, radius:215,
+      detail:{tag:'MECHANISM \u00b7 Post-Conversation', title:'Reactive Chain Generation',
+        desc:'After conversations, the system scans every message for dramatic events and generates reactive impulses\u2014high-urgency desires for follow-up interactions. These are the feedback loop that makes drama cascade into emergent story arcs. Impulses expire after 5 minutes.',
+        sections:[
+          {title:'Trigger \u2192 Impulse',items:['secret revealed to untrustworthy NPC \u2192 gossip impulse (urgency 0.8)','negative gossip about third party (if they know) \u2192 confrontation (0.7)','threat/mock + defiant target \u2192 confrontation (0.6)','threat/mock + timid target \u2192 seek comfort from best friend (0.5)','conspiracy against third NPC \u2192 both conspirators approach target (0.5)','spread rumor about ally \u2192 creates undiscovered betrayal record','eavesdropper heard negative mention of self \u2192 confrontation (0.75)']},
+          {title:'Pair Scoring Impact',items:['impulse urgency \u00d7 8 added to pair score','0.95 urgency = +7.6 points (strongest signal in the system)','impulse conversationType overrides LLM-determined type','impulse reason injected into narrative pattern detection','virtually guarantees the next Director conversation']}
+        ]}},
+    {id:'witness', label:'Witness System', angle:95, radius:370,
+      detail:{tag:'MECHANISM \u00b7 During Conversation', title:'Witness System',
+        desc:'When visible actions occur during conversations (give_gift, mock, storm_off, embrace, threaten), nearby NPCs within 5 tiles witness the event. Witnessing creates memories, shifts emotions, and changes relationships toward the actors. Conspire and spread_rumor are NOT witnessed (not visible).',
+        sections:[
+          {title:'Witnessed Actions \u2192 Effects',items:['give_gift: jealousy if witness likes speaker (anger +.03, joy -.02), else mild positive (joy +.02)','mock: regard for speaker drops -.05, disgust +.02, sympathy for victim +.03 if non-hostile','storm_off: nearby feel fear +.03, curiosity +.02','embrace: jealousy if witness close to either participant, else warmth (joy +.02)','threaten: regard for speaker -.08, fear +.08, trust -.05 (strongest witness reaction)']},
+          {title:'Memory Created',items:['type: action_witnessed (importance 0.6, emotionalWeight 0.5)','references both actor and target in involvedNpcIds','higher importance than eavesdrop memories (0.6 vs 0.4)']},
+          {title:'Witnessing vs Eavesdropping',items:['witnessing: physical actions, range 5, importance 0.6','eavesdropping: speech content, range 4, importance 0.4','eavesdropping limited to 1 per NPC per conversation','eavesdropping can trigger reactive chains (confrontation impulse)']}
+        ]}},
+    {id:'narrative', label:'Narrative Arc', angle:345, radius:215,
+      detail:{tag:'MECHANISM \u00b7 Story Tracking', title:'Narrative Arc Tracking',
+        desc:'The system maintains a running narrative summary of all conversations that have occurred. This compressed story history gives the LLM awareness of the overall community narrative, preventing repetitive scenarios and enabling long-term storyline evolution.',
+        sections:[
+          {title:'How It Works',items:['after every conversation: append 1-line summary','format: "{A} & {B} had a {tone} {type} ({turns} turns)"','suffixes for notable events: secret revealed, promise made, action occurred','tone derived from cumulative relationship_delta: warm (>0.1), tense (<-0.1), neutral']},
+          {title:'Compression',items:['threshold: 20 entries triggers LLM compression','compressed into 5-8 sentence narrative summary','captures: key relationships, important events, emerging storylines, unresolved tensions','fallback on LLM failure: keep last 10 entries']},
+          {title:'Where It\u2019s Used',items:['scene direction pre-pass: "STORY SO FAR: {summary}"','batch conversation generation: injected as cumulative narrative arc','shapes conversation type selection and creative direction','prevents the LLM from repeating resolved storylines']}
+        ]}},
+    {id:'soliloquy', label:'Soliloquy', angle:200, radius:370,
+      detail:{tag:'MECHANISM \u00b7 World-Triggered', title:'Soliloquy System',
+        desc:'When an NPC finishes a solo activity at a reflective waypoint and is alone, an LLM-generated inner monologue fires. This is a completely separate path to the LLM that bypasses the Director pipeline, giving NPCs private moments of introspection that can shift their goals.',
+        sections:[
+          {title:'Trigger Conditions',items:['NPC alone (no others within 5 tiles)','at reflective waypoint (moods: reflective, contemplative, intimate, mysterious, spiritual, melancholy)','completing a solo activity','emotional intensity \u2265 0.4 OR has important memories (importance \u2265 0.6) OR has active mood','rate limited: 1 per NPC per 3 minutes','skips if Director is using the LLM slot']},
+          {title:'LLM Prompt',items:['roleplays as NPC alone at waypoint, doing activity','requests private inner monologue: honest, unguarded','includes: identity, mood, emotions, goal, top 5 memories','JSON output: soliloquy (2-3 sentences) + goal_update (or null)','token limit: 512']},
+          {title:'Effects',items:['creates inner_thought memory (importance 0.5, emotionalWeight 0.3)','activity feed: "{Name} thinks to themselves"','updates goal if goal_update is non-null','no relationship or emotion changes (purely introspective)']}
+        ]}},
+    {id:'contagion', label:'Contagion', angle:225, radius:215,
+      detail:{tag:'MECHANISM \u00b7 Post-Conversation', title:'Emotional Contagion',
+        desc:'After a conversation ends, nearby NPCs (within 5 tiles) absorb leaked emotions from it. Angry conversations spread fear to bystanders; joyful conversations spread warmth. Only fear and joy propagate\u2014creating an ambient emotional atmosphere in the spatial world.',
+        sections:[
+          {title:'How It Spreads',items:['range: 5 tiles from conversation center (Manhattan distance)','proximity scaling: closer = stronger (1.0 at distance 0, 0.2 at distance 5)','intensity threshold: avg emotion delta must exceed 0.03 to trigger','only fear and joy spread (anger, trust, sadness, curiosity, guilt do NOT)']},
+          {title:'Contagion Rules',items:['angry conversation (avg anger delta > 0.05): nearby fear +0.03 \u00d7 proximity','joyful conversation (avg joy delta > 0.03): nearby joy +0.02 \u00d7 proximity','negative joy (avg joy delta < -0.03): nearby joy -0.01 \u00d7 proximity']},
+          {title:'Activity Feed',items:['fear contagion: "{Name} sensed tension nearby"','positive joy: "{Name} felt a warm atmosphere"','negative joy: "{Name} felt an uneasy vibe"']}
+        ]}},
+    {id:'betrayal_discovery', label:'Betrayal Discovery', angle:145, radius:215,
+      detail:{tag:'MECHANISM \u00b7 During Conversation', title:'Betrayal Discovery via Gossip',
+        desc:'When NPCs gossip about third parties, the system checks if the gossip content matches any undiscovered betrayal records. If so, the victim discovers the betrayal and receives the highest-urgency confrontation impulse in the system (0.95), virtually guaranteeing an immediate showdown.',
+        sections:[
+          {title:'Discovery Process',items:['triggered during conversation turn processing when mentioned_npcs present','checks listener\'s undiscovered betrayals where betrayer = mentioned NPC','fuzzy matching: betrayal description words (>4 chars) against gossip text','also triggers on keywords: "conspir", "rumor", "behind"','marks betrayal as discoveredByVictim = true']},
+          {title:'Effects',items:['confrontation impulse with urgency 0.95 (highest in system)','0.95 \u00d7 8 = 7.6 pair score points (guarantees next conversation)','source memory: "Learned from {speaker} that {betrayer} acted against me"','discovered betrayals injected into future conversation prompts']},
+          {title:'Forgiveness Path',items:['during reconciliation conversations, NPCs can forgive betrayals','forgiveness: trust +0.15, regard +0.1, disgust -0.1','forgiven betrayals stop generating pair scoring bonuses','creates a forgiveness memory for both NPCs']}
+        ]}},
+  ];
+
+  const CONNECTIONS = [
+    {from:'emotions',to:'director',color:'var(--accent-director)',label:'reads emotions',
+      desc:'Director checks emotional intensity (anger, joy, fear, sadness peaks) when scoring pairs. High emotional states increase pair priority by up to \u00d72.'},
+    {from:'relationships',to:'director',color:'var(--accent-director)',label:'scores pairs',
+      desc:'Pair scoring uses regard extremes (\u00d72), relationship velocity (warming/cooling: +3), and triangulation detection for love triangles and jealousy.'},
+    {from:'memory',to:'director',color:'var(--accent-director)',label:'retrieves memories',
+      desc:'Director checks for unresolved memories (unfinished business) and uses previous conversation context when re-queuing the same NPC pair.'},
+    {from:'secrets',to:'director',color:'var(--accent-director)',label:'info asymmetry',
+      desc:'Secrets one NPC knows about another add +3 to pair score. Unrevealed secrets add +1.5. This makes dramatic irony situations high-priority.'},
+    {from:'promises',to:'director',color:'var(--accent-director)',label:'pending promises',
+      desc:'Each pending promise between a pair adds +2 to their score. Broken promises add +2.5. Undiscovered betrayals add +4.'},
+    {from:'director',to:'prompt',color:'var(--accent-director)',label:'requests conversation',
+      desc:'Director picks the highest-scoring pair and conversation type, then asks the Prompt Builder to assemble the full context for an LLM call.'},
+    {from:'director',to:'tts',color:'var(--accent-tts)',label:'prefetch audio',
+      desc:'After LLM generates conversation turns, Director sends each turn to TTS for audio synthesis. Serialized to avoid GPU contention. Playback starts after 2+ turns are buffered.'},
+    {from:'director',to:'emotions',color:'var(--accent-director)',label:'applies emotion deltas',
+      desc:'Each conversation turn includes an LLM-generated emotion_delta (8 axes, -0.4 to +0.4). Director applies these cumulatively during playback. Emotional contagion also spreads to nearby NPCs within 5 tiles.'},
+    {from:'director',to:'relationships',color:'var(--accent-director)',label:'applies relationship deltas',
+      desc:'LLM generates relationship_delta per turn (-0.2 to +0.2), plus extras (respect, trust, fear, debt). Capped per conversation type (0.30\u20130.50). Familiarity increments after each conversation.'},
+    {from:'director',to:'memory',color:'var(--accent-director)',label:'creates conversation memories',
+      desc:'After playback, a conversation summary memory is created for both NPCs. Individual turns may also create memories for secrets learned, promises made, gossip heard, etc.'},
+    {from:'director',to:'secrets',color:'var(--accent-director)',label:'reveals secrets',
+      desc:'When an NPC reveals a secret (trust \u22650.7), the listener\'s knownSecrets map is updated. Gossip about third parties can also propagate secret knowledge.'},
+    {from:'director',to:'promises',color:'var(--accent-director)',label:'creates promises & betrayals',
+      desc:'NPCs can make promises during conversation (resolveAtPhase = current + 1\u20132). If gossip reveals a betrayal, a BetrayalRecord is created and the victim may discover it.'},
+    {from:'director',to:'goals',color:'var(--accent-director)',label:'updates arcs & triggers impulses',
+      desc:'Character arc narrative is appended after conversations. Dramatic events (betrayals, confessions) create ReactiveImpulses with high urgency, fast-tracking follow-up conversations.'},
+    {from:'director',to:'moods',color:'var(--accent-director)',label:'recomputes mood',
+      desc:'After every conversation completes and emotion deltas are applied, the Director calls computeAndSetMood() for both participants. This checks emotional thresholds to derive or clear the persistent mood.'},
+    {from:'emotions',to:'moods',color:'var(--accent-npc)',label:'threshold derivation',
+      desc:'Moods are derived from emotional state via priority-ordered threshold checks. Negative moods take priority (paranoid, bitter, melancholy, guilt-ridden, volatile, restless) over positive (euphoric). Clears if no threshold met.'},
+    {from:'moods',to:'prompt',color:'var(--accent-prompt)',label:'persistent mood',
+      desc:'If the NPC has been in a mood for >1 minute (moodSince check), the prompt builder includes it as a PERSISTENT MOOD block: "You\'ve been feeling [mood] for a while now. This colors everything \u2014 your patience, your openness, your reactions."'},
+    {from:'identity',to:'prompt',color:'var(--accent-prompt)',label:'backstory & traits',
+      desc:'Prompt builder includes the NPC\'s backstory (preferred) or personality traits + core desires as the identity block. This shapes the LLM\'s voice for the character.'},
+    {from:'emotions',to:'prompt',color:'var(--accent-prompt)',label:'emotional context',
+      desc:'Current emotional state is rendered as prose ("You feel a deep sadness..."). All 7 axes are described so the LLM can generate emotionally authentic responses.'},
+    {from:'relationships',to:'prompt',color:'var(--accent-prompt)',label:'relationship context',
+      desc:'Regard is mapped to labels (stranger/acquaintance/friend/close friend/beloved/enemy). Affection, respect, trust, fear, debt shown if significant. Trajectory (warming/deteriorating/stable) included.'},
+    {from:'memory',to:'prompt',color:'var(--accent-prompt)',label:'retrieved memories',
+      desc:'Memories are retrieved sorted by recency\u00d7importance, split into: direct interactions with partner, gossip heard, and memories about the partner. Deduped and filtered.'},
+    {from:'secrets',to:'prompt',color:'var(--accent-prompt)',label:'secrets & known secrets',
+      desc:'Own secrets are listed with a hint to reveal if trust \u22650.7. Known secrets about the conversation partner are included so the NPC can reference or confront them.'},
+    {from:'inventory',to:'prompt',color:'var(--accent-prompt)',label:'items for speech',
+      desc:'Current inventory items (with emoji) are listed so NPCs can naturally reference, offer, or use items in conversation. Enables organic gift-giving moments.'},
+    {from:'goals',to:'prompt',color:'var(--accent-prompt)',label:'current goal & arc',
+      desc:'The NPC\'s current goal string and character arc (growth narrative) are included for continuity. Goals influence conversation topics and waypoint selection.'},
+    {from:'prompt',to:'llm',color:'var(--accent-prompt)',label:'assembled prompt',
+      desc:'The complete prompt (18 sections: identity, emotions, relationships, memories, secrets, inventory, location, time, conversation preamble, etc.) is sent to the LLM. Response is JSON with speech, deltas, actions.'},
+    {from:'llm',to:'director',color:'var(--accent-llm)',label:'generated conversation JSON',
+      desc:'LLM returns a full conversation as JSON turns, each containing: inner_thought, speech, emotion_delta (7 axes), relationship_delta, intent, actions (give_gift, threaten, storm_off, etc.), secret_revealed, promise, and forgive. The Director parses and applies all of these during playback.'},
+    {from:'llm',to:'daycycle',color:'var(--accent-llm)',label:'promise resolution outcome',
+      desc:'When the Day Cycle asks the LLM to resolve a promise, it returns a kept/broken verdict with narrative reasoning. This determines whether the promise creates positive relationship effects or triggers a betrayal record.'},
+    {from:'identity',to:'world',color:'var(--accent-world)',label:'trait-based waypoint selection',
+      desc:'Personality traits influence where NPCs go: "curious" gets exploration bonuses, "anxious" prefers edges, "charming" seeks crowded waypoints. Trait affinity also affects activity selection.'},
+    {from:'emotions',to:'world',color:'var(--accent-world)',label:'waypoint selection',
+      desc:'Emotional state shapes movement: fearful NPCs avoid crowded areas (-2\u00d7 busyness penalty), joyful NPCs seek social spots (+1\u00d7 busyness bonus). Time-of-day preferences also apply.'},
+    {from:'relationships',to:'world',color:'var(--accent-world)',label:'proximity drives',
+      desc:'NPCs with high regard seek friends. Gift-seeking drive (30% chance) targets best friend when carrying items. Loneliness drive (15%) triggers after 90s without social contact.'},
+    {from:'inventory',to:'world',color:'var(--accent-world)',label:'item interactions',
+      desc:'Item-based interactions (offer_food, give_herb, give_trinket, etc.) require specific inventory items. These get a +2 scoring boost since they\'re rarer and more meaningful.'},
+    {from:'goals',to:'world',color:'var(--accent-world)',label:'goal-directed movement',
+      desc:'Current goal string influences waypoint selection, biasing the NPC toward relevant locations. Behavioral overrides (seek/avoid) from the Director can temporarily force movement patterns.'},
+    {from:'world',to:'emotions',color:'var(--accent-world)',label:'activity emotion effects',
+      desc:'Solo activities shift emotions: e.g. gardening (anger -0.03, joy +0.03), meditating (anger -0.04, fear -0.04), fishing (sadness -0.02, curiosity +0.02). 14 activity types with distinct effects.'},
+    {from:'world',to:'relationships',color:'var(--accent-world)',label:'interaction deltas',
+      desc:'Proximity interactions (22 types) change relationships: comfort gives trust +0.06, taunt gives regard -0.06, give_trinket gives regard +0.10. Both NPCs are affected asymmetrically.'},
+    {from:'world',to:'memory',color:'var(--accent-world)',label:'activity & interaction memories',
+      desc:'Activities and interactions create memories (importance 0.2\u20130.7). Eavesdropping (range 6 tiles, 3-min cooldown) creates gossip memories that can spread secrets.'},
+    {from:'world',to:'inventory',color:'var(--accent-world)',label:'item yields & decay',
+      desc:'Activities yield items: fishing (40% chance), foraging (60%), cooking (70%). Items decay by category (fish 2m, food 3m, herb 5m, craft 8m, trinket 10m, book 12m). Max 8 per NPC.'},
+    {from:'world',to:'tilemap',color:'var(--accent-tilemap)',label:'A* pathfinding',
+      desc:'World simulation uses the tilemap\'s collision grid for A* pathfinding. NPCs pick waypoints (with mood/activity metadata), then pathfind to them. Stuck detection recomputes after 8 blocked ticks.'},
+    {from:'promises',to:'daycycle',color:'var(--accent-day)',label:'resolve promises',
+      desc:'At each phase transition, the Day Cycle checks for promises whose resolveAtPhase has arrived. Promises overdue by 6+ phases are auto-resolved as broken.'},
+    {from:'daycycle',to:'llm',color:'var(--accent-day)',label:'promise outcome generation',
+      desc:'Day Cycle calls the LLM directly with its own narrator prompt (not via Prompt Builder) to determine if each promise is kept or broken, considering personalities, emotions, and relationships.'},
+    {from:'daycycle',to:'emotions',color:'var(--accent-day)',label:'emotion decay + promise effects',
+      desc:'Emotions pull 15% toward fixed baselines each cycle. Promise outcomes also shift emotions: kept promises boost joy/trust, broken promises increase anger/sadness/guilt.'},
+    {from:'daycycle',to:'relationships',color:'var(--accent-day)',label:'promise outcome deltas',
+      desc:'Kept promises: both NPCs get +regard, +trust. Broken promises: both get -regard, -trust. These deltas apply to the promisor and promisee symmetrically.'},
+    {from:'daycycle',to:'memory',color:'var(--accent-day)',label:'promise outcome memories',
+      desc:'Promise resolution outcomes are stored as memories for both NPCs, with type promise_made or promise_broken. These surface in future prompts as unresolved business.'},
+    {from:'director',to:'reflection',color:'var(--accent-mech)',label:'triggers reflection',
+      desc:'After every conversation ends and write-backs are applied, the Director fires off an async reflection LLM call for both participants in parallel.'},
+    {from:'reflection',to:'llm',color:'var(--accent-mech)',label:'reflection prompt',
+      desc:'Each participant gets a separate LLM call with the full conversation transcript, their identity, emotions, goal, and personality traits. Produces thought, interpretation, goal update, arc update, and trait evolution.'},
+    {from:'reflection',to:'memory',color:'var(--accent-mech)',label:'inner thought + interpretation',
+      desc:'Creates an inner_thought memory (importance 0.6) with a subjective interpretation field\u2014the NPC\'s personal spin on what happened. These memories influence future conversations.'},
+    {from:'reflection',to:'goals',color:'var(--accent-mech)',label:'goal & arc updates',
+      desc:'Can update the NPC\'s current goal, append to their character arc (keeps last 3 entries), and even add new personality traits (max 7 total). The main path for character growth.'},
+    {from:'director',to:'reactive',color:'var(--accent-mech)',label:'scans for drama',
+      desc:'After playback, the system scans every conversation message for dramatic triggers: secrets revealed to untrustworthy NPCs, threats, mockery, conspiracies, rumors, and eavesdropper reactions.'},
+    {from:'reactive',to:'goals',color:'var(--accent-mech)',label:'creates impulses',
+      desc:'Generates ReactiveImpulses with urgency 0.5\u20130.95 that create seek/avoid behavioral overrides and preferred conversation types. Impulses expire after 5 minutes.'},
+    {from:'reactive',to:'promises',color:'var(--accent-mech)',label:'creates betrayal records',
+      desc:'Conspiracies and spread rumors against allies automatically create undiscovered betrayal records (discoveredByVictim: false), which later surface via gossip.'},
+    {from:'reactive',to:'director',color:'var(--accent-mech)',label:'urgency \u00d78 pair scoring',
+      desc:'Impulse urgency \u00d7 8 is added to pair score\u2014the strongest scoring signal in the system. A 0.95-urgency impulse adds 7.6 points, virtually guaranteeing the next conversation.'},
+    {from:'director',to:'witness',color:'var(--accent-mech)',label:'visible actions during playback',
+      desc:'During conversation playback, when actions occur (give_gift, mock, storm_off, embrace, threaten), the witness system checks for nearby NPCs within 5 tiles. Conspire and spread_rumor are NOT witnessed.'},
+    {from:'witness',to:'emotions',color:'var(--accent-mech)',label:'witness emotion shifts',
+      desc:'Witnessing affects emotions: threats cause fear +0.08 and trust -0.05, mockery causes anger and sadness, embraces can cause jealousy or warmth depending on relationships.'},
+    {from:'witness',to:'relationships',color:'var(--accent-mech)',label:'witness regard changes',
+      desc:'Witnesses form opinions: threaten drops regard for aggressor by -0.08, mock drops by -0.05, gift-giving creates mild jealousy or positive regard depending on existing relationships.'},
+    {from:'witness',to:'memory',color:'var(--accent-mech)',label:'action_witnessed memories',
+      desc:'All witnessed actions create memories with type action_witnessed (importance 0.6, emotionalWeight 0.5)\u2014higher importance than eavesdrop memories (0.4).'},
+    {from:'director',to:'narrative',color:'var(--accent-mech)',label:'appends conversation summary',
+      desc:'After every conversation, a one-line summary is appended: "{A} & {B} had a {tone} {type} ({turns} turns)" with suffixes for secrets, promises, or notable actions.'},
+    {from:'narrative',to:'llm',color:'var(--accent-mech)',label:'compression (>20 entries)',
+      desc:'When summaries exceed 20 entries, the LLM compresses them into a 5\u20138 sentence narrative capturing key relationships, events, emerging storylines, and unresolved tensions.'},
+    {from:'narrative',to:'prompt',color:'var(--accent-mech)',label:'STORY SO FAR',
+      desc:'The narrative summary is injected into both scene direction and conversation generation prompts as "STORY SO FAR", giving the LLM awareness of the full community narrative.'},
+    {from:'world',to:'soliloquy',color:'var(--accent-mech)',label:'triggers at reflective waypoints',
+      desc:'When an NPC finishes a solo activity at a reflective waypoint (contemplative, mysterious, spiritual, etc.) and is alone within 5 tiles, the world simulation triggers a soliloquy. Rate limited to 1 per NPC per 3 min.'},
+    {from:'soliloquy',to:'llm',color:'var(--accent-mech)',label:'inner monologue prompt',
+      desc:'Sends a prompt with NPC identity, mood, emotions, goal, and top 5 memories. Requests an honest, unguarded inner monologue (2\u20133 sentences) and optional goal update. Token limit 512. Skips if Director is using LLM slot.'},
+    {from:'soliloquy',to:'memory',color:'var(--accent-mech)',label:'inner_thought memory',
+      desc:'Creates a short-term memory with type inner_thought (importance 0.5, emotionalWeight 0.3). No relationship or emotion changes\u2014purely introspective.'},
+    {from:'soliloquy',to:'goals',color:'var(--accent-mech)',label:'goal update',
+      desc:'If the LLM returns a goal_update, the NPC\'s current goal is changed. This is the non-social path for goal evolution\u2014NPCs can decide to change direction through private reflection.'},
+    {from:'director',to:'contagion',color:'var(--accent-mech)',label:'post-conversation emotion leak',
+      desc:'After conversation playback ends, the system checks for nearby NPCs (within 5 tiles) and calculates cumulative emotion deltas from the conversation to determine what leaks.'},
+    {from:'contagion',to:'emotions',color:'var(--accent-mech)',label:'fear & joy spread',
+      desc:'Only fear and joy propagate. Angry conversations spread fear (+0.03 \u00d7 proximity), joyful ones spread joy (+0.02 \u00d7 proximity). Proximity scales from 1.0 at distance 0 to 0.2 at distance 5.'},
+    {from:'director',to:'betrayal_discovery',color:'var(--accent-mech)',label:'gossip mentions third party',
+      desc:'During conversation processing, when mentioned_npcs appear in gossip, the system checks if the gossip content fuzzy-matches any undiscovered betrayal records for the listener.'},
+    {from:'betrayal_discovery',to:'promises',color:'var(--accent-mech)',label:'marks betrayal discovered',
+      desc:'Sets discoveredByVictim = true on the matching betrayal record. Discovered betrayals are then injected into future conversation prompts via the prompt builder.'},
+    {from:'betrayal_discovery',to:'reactive',color:'var(--accent-mech)',label:'urgency 0.95 confrontation',
+      desc:'Creates the highest-urgency impulse in the system (0.95), translating to 7.6 pair score points. The victim and betrayer are virtually guaranteed to have the next conversation.'},
+  ];
+
+  // Store connections for panel use
+  currentConnections = CONNECTIONS;
+
+  // ─── Render inner ring nodes ───────────────────
+  const innerNodeEls = {};
+  INNER_NODES.forEach(node => {
+    const pos = polarToXY(0, 0, 130, node.angle);
+    const g = el('g',{class:'inner-node','data-id':node.id,
+      transform:`translate(${pos.x},${pos.y})`});
+    const glow = el('circle',{r:28,fill:'rgba(255,74,141,.06)',stroke:'none',
+      filter:'url(#glow-npc)',opacity:'.3'});
+    g.appendChild(glow);
+    const circle = el('circle',{r:22,fill:'rgba(255,74,141,.08)',
+      stroke:'rgba(255,74,141,.3)','stroke-width':1});
+    g.appendChild(circle);
+    const icon = el('text',{x:0,y:1,'text-anchor':'middle',
+      'dominant-baseline':'central','font-size':'14',fill:'var(--accent-npc)',
+      'font-family':'Outfit',opacity:'.9'});
+    icon.textContent = node.icon;
+    g.appendChild(icon);
+    const label = el('text',{x:0,y:36,'text-anchor':'middle',
+      'font-size':'9','font-family':'JetBrains Mono, monospace',
+      fill:'var(--text-dim)','letter-spacing':'.5'});
+    label.textContent = node.label;
+    g.appendChild(label);
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', ()=>{ openPanel(node.detail, 'var(--accent-npc)'); openConnectionsPanel(node.id, 'var(--accent-npc)'); });
+    g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
+    g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+    layerNodes.appendChild(g);
+    innerNodeEls[node.id] = {g, pos, glow};
+    pulsingGlows.push({el:glow, offset:INNER_NODES.indexOf(node)*.8, type:'inner'});
+  });
+
+  // ─── Render middle ring (loop arcs) ────────────
+  const midNodeEls = {};
+  MID_NODES.forEach(node => {
+    const startAngle = node.angle - node.span/2;
+    const endAngle = node.angle + node.span/2;
+    const g = el('g',{class:'mid-node','data-id':node.id});
+    const track = el('path',{d:arcPath(0,0,node.radius,startAngle,endAngle),
+      fill:'none',stroke:node.color,'stroke-width':6,'stroke-linecap':'round',
+      opacity:'.12'});
+    g.appendChild(track);
+    const active = el('path',{d:arcPath(0,0,node.radius,startAngle,endAngle),
+      fill:'none',stroke:node.color,'stroke-width':3,'stroke-linecap':'round',
+      opacity:'.6',filter:`url(#${node.glow})`});
+    g.appendChild(active);
+    const dash = el('path',{d:arcPath(0,0,node.radius,startAngle,endAngle),
+      fill:'none',stroke:node.color,'stroke-width':2,'stroke-linecap':'round',
+      opacity:'.8','stroke-dasharray':'8 20','stroke-dashoffset':'0'});
+    g.appendChild(dash);
+    const labelPos = polarToXY(0, 0, node.radius - 20, node.angle);
+    const label = el('text',{x:labelPos.x, y:labelPos.y,
+      'text-anchor':'middle','dominant-baseline':'central',
+      'font-size':'10','font-family':'JetBrains Mono, monospace',
+      'font-weight':'600',fill:node.color,'letter-spacing':'1',opacity:'.9'});
+    label.textContent = node.label.toUpperCase();
+    g.appendChild(label);
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', ()=>{ openPanel(node.detail, node.color); openConnectionsPanel(node.id, node.color); });
+    g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
+    g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+    layerNodes.appendChild(g);
+    const center = polarToXY(0, 0, node.radius, node.angle);
+    midNodeEls[node.id] = {g, pos:center, dash, startAngle, endAngle};
+    dashEls.push({el:dash});
+  });
+
+  // ─── Render outer ring nodes ───────────────────
+  const outerNodeEls = {};
+  OUTER_NODES.forEach(node => {
+    const pos = polarToXY(0, 0, node.radius, node.angle);
+    const g = el('g',{class:'outer-node','data-id':node.id,
+      transform:`translate(${pos.x},${pos.y})`});
+    const hex = el('rect',{x:-30,y:-18,width:60,height:36,rx:8,
+      fill:'rgba(255,255,255,.03)',stroke:node.color,
+      'stroke-width':1,opacity:'.7'});
+    g.appendChild(hex);
+    const label = el('text',{x:0,y:1,'text-anchor':'middle',
+      'dominant-baseline':'central','font-size':'10',
+      'font-family':'JetBrains Mono, monospace','font-weight':'600',
+      fill:node.color,'letter-spacing':'1'});
+    label.textContent = node.label.toUpperCase();
+    g.appendChild(label);
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', ()=>{ openPanel(node.detail, node.color); openConnectionsPanel(node.id, node.color); });
+    g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
+    g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+    layerNodes.appendChild(g);
+    outerNodeEls[node.id] = {g, pos};
+  });
+
+  // ─── Render prompt builder (bridge) ────────────
+  {
+    const pb = PROMPT_BUILDER;
+    const pos = polarToXY(0, 0, pb.radius, pb.angle);
+    const g = el('g',{class:'prompt-node','data-id':'prompt',
+      transform:`translate(${pos.x},${pos.y})`});
+    const diamond = el('polygon',{
+      points:'0,-20 24,0 0,20 -24,0',
+      fill:'rgba(167,139,250,.06)',stroke:'var(--accent-prompt)',
+      'stroke-width':1,opacity:'.8',filter:'url(#glow-prompt)'});
+    g.appendChild(diamond);
+    const label = el('text',{x:0,y:32,'text-anchor':'middle',
+      'font-size':'8','font-family':'JetBrains Mono, monospace',
+      fill:'var(--accent-prompt)','letter-spacing':'.5',opacity:'.8'});
+    label.textContent = 'PROMPT BUILDER';
+    g.appendChild(label);
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', ()=>{ openPanel(pb.detail, pb.color); openConnectionsPanel('prompt', pb.color); });
+    g.addEventListener('mouseenter', (e)=>{ showTooltip(e, 'Prompt Builder'); highlightNode('prompt'); });
+    g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+    layerNodes.appendChild(g);
+    outerNodeEls['prompt'] = {g, pos};
+  }
+
+  // ─── Render mechanism nodes ────────────────────
+  const mechNodeEls = {};
+  MECHANISM_NODES.forEach(node => {
+    const pos = polarToXY(0, 0, node.radius, node.angle);
+    const g = el('g',{class:'mech-node','data-id':node.id,
+      transform:`translate(${pos.x},${pos.y})`});
+    const labelText = node.label.toUpperCase();
+    const labelWidth = Math.max(48, labelText.length * 5.5 + 16);
+    const halfW = labelWidth / 2;
+    const glow = el('rect',{x:-(halfW+4),y:-13,width:labelWidth+8,height:26,rx:6,
+      fill:'rgba(96,165,250,.06)',stroke:'none',
+      filter:'url(#glow-mech)',opacity:'.3'});
+    g.appendChild(glow);
+    const rect = el('rect',{x:-halfW,y:-11,width:labelWidth,height:22,rx:5,
+      fill:'rgba(96,165,250,.08)',stroke:'var(--accent-mech)',
+      'stroke-width':1,opacity:'.7','stroke-dasharray':'3 3'});
+    g.appendChild(rect);
+    const label = el('text',{x:0,y:1,'text-anchor':'middle',
+      'dominant-baseline':'central','font-size':'7',
+      'font-family':'JetBrains Mono, monospace','font-weight':'500',
+      fill:'var(--accent-mech)','letter-spacing':'.3',opacity:'.9'});
+    label.textContent = labelText;
+    g.appendChild(label);
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', ()=>{ openPanel(node.detail, 'var(--accent-mech)'); openConnectionsPanel(node.id, 'var(--accent-mech)'); });
+    g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
+    g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+    layerNodes.appendChild(g);
+    mechNodeEls[node.id] = {g, pos, glow};
+    pulsingGlows.push({el:glow, offset:MECHANISM_NODES.indexOf(node)*1.1, type:'mech'});
+  });
+
+  // ─── Render connections ────────────────────────
+  const allPosEls = {...innerNodeEls, ...midNodeEls, ...outerNodeEls, ...mechNodeEls};
+  CONNECTIONS.forEach(conn => {
+    const fromEl = allPosEls[conn.from];
+    const toEl = allPosEls[conn.to];
+    if(!fromEl || !toEl) return;
+    const line = el('line',{
+      x1:fromEl.pos.x, y1:fromEl.pos.y,
+      x2:toEl.pos.x, y2:toEl.pos.y,
+      stroke:conn.color,'stroke-width':1.5,opacity:'0',
+      'stroke-dasharray':'4 8'
+    });
+    line.style.transition = 'opacity .25s ease';
+    layerConnections.appendChild(line);
+    connectionEls.push({line, from:fromEl.pos, to:toEl.pos, color:conn.color, fromId:conn.from, toId:conn.to});
+  });
+
+  // ─── Flow arrows ───────────────────────────────
+  connectionEls.forEach(conn => {
+    flowParticles.push(createFlowArrow(conn));
+  });
+
+  // ─── Build allNodeData + nodeNames ─────────────
+  INNER_NODES.forEach(n => { allNodeData[n.id] = {detail:n.detail, color:'var(--accent-npc)'}; nodeNames[n.id] = n.label; });
+  MID_NODES.forEach(n => { allNodeData[n.id] = {detail:n.detail, color:n.color}; nodeNames[n.id] = n.label; });
+  OUTER_NODES.forEach(n => { allNodeData[n.id] = {detail:n.detail, color:n.color}; nodeNames[n.id] = n.label; });
+  allNodeData['prompt'] = {detail:PROMPT_BUILDER.detail, color:PROMPT_BUILDER.color};
+  nodeNames['prompt'] = 'Prompt Builder';
+  MECHANISM_NODES.forEach(n => { allNodeData[n.id] = {detail:n.detail, color:'var(--accent-mech)'}; nodeNames[n.id] = n.label; });
+
+  // ─── Center label ──────────────────────────────
+  const ct = el('text',{x:0,y:-4,'text-anchor':'middle',
+    'dominant-baseline':'central','font-size':'13',
+    'font-family':'Outfit','font-weight':'700',fill:'var(--accent-npc)',
+    opacity:'.8'});
+  ct.textContent = 'NPC';
+  layerLabels.appendChild(ct);
+  const ct2 = el('text',{x:0,y:14,'text-anchor':'middle',
+    'dominant-baseline':'central','font-size':'8',
+    'font-family':'JetBrains Mono, monospace',fill:'var(--text-dim)',
+    'letter-spacing':'2'});
+  ct2.textContent = 'STATE';
+  layerLabels.appendChild(ct2);
+
+  // ─── Ring labels ───────────────────────────────
+  [{r:175,label:'LOOPS',opacity:.25},{r:380,label:'EXTERNAL',opacity:.2}].forEach(({r, label, opacity})=>{
+    const pos = polarToXY(0,0,r,90);
+    const t = el('text',{x:pos.x,y:pos.y,'text-anchor':'middle',
+      'font-size':'8','font-family':'JetBrains Mono, monospace',
+      fill:'var(--text-dim)','letter-spacing':'3',opacity});
+    t.textContent = label;
+    layerLabels.appendChild(t);
+  });
+
+  setLegend(ARCH_LEGEND);
+}
+
+// ═══════════════════════════════════════════════
+// ─── CODE GRAPH VIEW ───────────────────────────
+// ═══════════════════════════════════════════════
+
+function renderCodeGraph(){
+  // ─── Ring backgrounds ──────────────────────────
+  layerBg.appendChild(el('circle',{cx:0,cy:0,r:440,fill:'none',stroke:'rgba(255,255,255,.018)','stroke-width':100}));
+  layerBg.appendChild(el('circle',{cx:0,cy:0,r:290,fill:'none',stroke:'rgba(255,255,255,.025)','stroke-width':100}));
+  layerBg.appendChild(el('circle',{cx:0,cy:0,r:130,fill:'rgba(240,168,48,.02)',stroke:'rgba(240,168,48,.06)','stroke-width':1}));
+  [210, 370, 460].forEach(r=>{
+    layerBg.appendChild(el('circle',{cx:0,cy:0,r,fill:'none',stroke:'rgba(255,255,255,.04)','stroke-width':.5,'stroke-dasharray':'3 8'}));
+  });
+
+  // ─── DATA ──────────────────────────────────────
+  const INNER = [
+    {id:'types',label:'types.ts',angle:0},
+    {id:'npc-store',label:'npc-store.ts',angle:90},
+    {id:'memory-service',label:'memory-service.ts',angle:180},
+    {id:'random',label:'random.ts',angle:270},
+  ];
+
+  const MIDDLE = [
+    {id:'conversation-manager',label:'conversation-manager',angle:0},
+    {id:'world-simulation',label:'world-simulation',angle:30},
+    {id:'day-cycle',label:'day-cycle',angle:60},
+    {id:'prompt-builder',label:'prompt-builder',angle:90},
+    {id:'response-parser',label:'response-parser',angle:120},
+    {id:'ollama',label:'ollama',angle:150},
+    {id:'llm-config',label:'llm-config',angle:180},
+    {id:'activities',label:'activities',angle:210},
+    {id:'interactions',label:'interactions',angle:240},
+    {id:'npcs',label:'npcs',angle:270},
+    {id:'tts-service',label:'tts-service',angle:300},
+    {id:'premade-storage',label:'premade-storage',angle:330},
+  ];
+
+  const OUTER = [
+    {id:'app',label:'App.tsx',angle:0},
+    {id:'world-canvas',label:'WorldCanvas',angle:36},
+    {id:'setup-screen',label:'SetupScreen',angle:72},
+    {id:'side-panel',label:'SidePanel',angle:108},
+    {id:'npc-inspector',label:'NpcInspector',angle:144},
+    {id:'npc-creator',label:'NpcCreator',angle:180},
+    {id:'director-dashboard',label:'DirectorDashboard',angle:216},
+    {id:'dm-tools',label:'DmTools',angle:252},
+    {id:'character-viewer',label:'CharacterViewer',angle:288},
+    {id:'map-test-mode',label:'MapTestMode',angle:324},
+  ];
+
+  const FLOATING = [
+    {id:'sprite-system',label:'sprite-system',angle:15},
+    {id:'tilemap-renderer',label:'tilemap-renderer',angle:345},
+    {id:'server-py',label:'server.py',angle:165},
+    {id:'chatterbox-py',label:'chatterbox_server.py',angle:195},
+  ];
+
+  const CG_CONNECTIONS = [
+    {from:'npc-store',to:'types',label:'imports'},
+    {from:'memory-service',to:'types',label:'imports'},
+    {from:'memory-service',to:'npc-store',label:'imports'},
+    {from:'world-simulation',to:'types',label:'imports'},
+    {from:'world-simulation',to:'npc-store',label:'imports'},
+    {from:'world-simulation',to:'memory-service',label:'imports'},
+    {from:'world-simulation',to:'activities',label:'imports'},
+    {from:'world-simulation',to:'random',label:'imports'},
+    {from:'day-cycle',to:'types',label:'imports'},
+    {from:'day-cycle',to:'npc-store',label:'imports'},
+    {from:'day-cycle',to:'memory-service',label:'imports'},
+    {from:'day-cycle',to:'ollama',label:'imports'},
+    {from:'day-cycle',to:'activities',label:'imports'},
+    {from:'conversation-manager',to:'types',label:'imports'},
+    {from:'conversation-manager',to:'npc-store',label:'imports'},
+    {from:'conversation-manager',to:'memory-service',label:'imports'},
+    {from:'conversation-manager',to:'world-simulation',label:'imports'},
+    {from:'conversation-manager',to:'day-cycle',label:'imports'},
+    {from:'conversation-manager',to:'prompt-builder',label:'imports'},
+    {from:'conversation-manager',to:'response-parser',label:'imports'},
+    {from:'conversation-manager',to:'ollama',label:'imports'},
+    {from:'conversation-manager',to:'tts-service',label:'imports'},
+    {from:'conversation-manager',to:'llm-config',label:'imports'},
+    {from:'prompt-builder',to:'types',label:'imports'},
+    {from:'prompt-builder',to:'memory-service',label:'imports'},
+    {from:'prompt-builder',to:'ollama',label:'imports'},
+    {from:'response-parser',to:'types',label:'imports'},
+    {from:'activities',to:'types',label:'imports'},
+    {from:'activities',to:'random',label:'imports'},
+    {from:'interactions',to:'types',label:'imports'},
+    {from:'interactions',to:'npc-store',label:'imports'},
+    {from:'interactions',to:'memory-service',label:'imports'},
+    {from:'interactions',to:'random',label:'imports'},
+    {from:'tts-service',to:'types',label:'imports'},
+    {from:'npcs',to:'types',label:'imports'},
+    {from:'npcs',to:'sprite-system',label:'imports'},
+    {from:'tilemap-renderer',to:'types',label:'imports'},
+    {from:'premade-storage',to:'types',label:'imports'},
+    {from:'premade-storage',to:'npcs',label:'imports'},
+    {from:'app',to:'types',label:'imports'},
+    {from:'app',to:'npc-store',label:'imports'},
+    {from:'app',to:'memory-service',label:'imports'},
+    {from:'app',to:'world-simulation',label:'imports'},
+    {from:'app',to:'day-cycle',label:'imports'},
+    {from:'app',to:'conversation-manager',label:'imports'},
+    {from:'app',to:'activities',label:'imports'},
+    {from:'app',to:'interactions',label:'imports'},
+    {from:'app',to:'tts-service',label:'imports'},
+    {from:'app',to:'npcs',label:'imports'},
+    {from:'app',to:'sprite-system',label:'imports'},
+    {from:'app',to:'tilemap-renderer',label:'imports'},
+    {from:'app',to:'premade-storage',label:'imports'},
+    {from:'app',to:'llm-config',label:'imports'},
+    {from:'world-canvas',to:'types',label:'imports'},
+    {from:'world-canvas',to:'sprite-system',label:'imports'},
+    {from:'world-canvas',to:'tilemap-renderer',label:'imports'},
+    {from:'setup-screen',to:'types',label:'imports'},
+    {from:'setup-screen',to:'npc-store',label:'imports'},
+    {from:'setup-screen',to:'response-parser',label:'imports'},
+    {from:'setup-screen',to:'tts-service',label:'imports'},
+    {from:'setup-screen',to:'npcs',label:'imports'},
+    {from:'setup-screen',to:'sprite-system',label:'imports'},
+    {from:'setup-screen',to:'premade-storage',label:'imports'},
+    {from:'setup-screen',to:'llm-config',label:'imports'},
+    {from:'side-panel',to:'types',label:'imports'},
+    {from:'director-dashboard',to:'conversation-manager',label:'imports'},
+    {from:'director-dashboard',to:'llm-config',label:'imports'},
+    {from:'npc-inspector',to:'types',label:'imports'},
+    {from:'npc-inspector',to:'side-panel',label:'imports'},
+    {from:'npc-creator',to:'types',label:'imports'},
+    {from:'npc-creator',to:'tts-service',label:'imports'},
+    {from:'npc-creator',to:'npcs',label:'imports'},
+    {from:'dm-tools',to:'types',label:'imports'},
+    {from:'character-viewer',to:'types',label:'imports'},
+    {from:'character-viewer',to:'side-panel',label:'imports'},
+    {from:'map-test-mode',to:'sprite-system',label:'imports'},
+    {from:'map-test-mode',to:'tilemap-renderer',label:'imports'},
+  ];
+
+  // Determine ring color for each node
+  const ringColorMap = {};
+  INNER.forEach(n => ringColorMap[n.id] = 'var(--accent-core)');
+  MIDDLE.forEach(n => ringColorMap[n.id] = 'var(--accent-logic)');
+  OUTER.forEach(n => ringColorMap[n.id] = 'var(--accent-ui)');
+  FLOATING.forEach(n => ringColorMap[n.id] = 'var(--accent-infra)');
+
+  // Color connections by importer ring
+  CG_CONNECTIONS.forEach(c => { c.color = ringColorMap[c.from] || 'var(--text-dim)'; });
+
+  // Detail data
+  const CG_DETAILS = {
+    'types':{tag:'CORE DATA',title:'types.ts',desc:'Central type definitions shared across the entire codebase.',
+      items:['EmotionalState (8 axes)','RelationshipState (regard/affection/respect/trust/fear/debt/familiarity)','NPC (full character definition)','MemoryEntry + MemoryType (14 variants)','LLMResponse / BatchTurnData','ConversationType (6 types)']},
+    'npc-store':{tag:'CORE DATA',title:'npc-store.ts',desc:'Reactive store for all NPC state with subscription-based updates.',
+      items:['NpcStore class','get/getAll reads','applyEmotionDelta/applyRelationshipDelta mutations','addKnownSecret/addPromise/addBetrayal','computeAndSetMood','subscribe(listener)']},
+    'memory-service':{tag:'CORE DATA',title:'memory-service.ts',desc:'Dual-layer memory system with importance-based promotion and cached retrieval.',
+      items:['MemoryService class (short 40 + long 100)','add() with auto-promote at importance>=0.7','getSorted() cached by recency*importance','retrieve() -> direct/gossip/aboutPartner','decayAllRecency()']},
+    'random':{tag:'CORE DATA',title:'random.ts',desc:'Softmax-weighted random selection utility used throughout the simulation.',
+      items:['weightedPick(items, getScore)','softmax-weighted random selection']},
+    'conversation-manager':{tag:'BUSINESS LOGIC',title:'conversation-manager.ts',desc:'Largest module. Orchestrates the Director pipeline from pair selection through TTS playback.',
+      items:['ConversationManager class (largest module)','Director pipeline: 5s background loop','Pipeline: pickPair -> LLM -> TTS -> play on proximity','getDirectorStatus()','Post-conv: reflection, reactive chains, contagion']},
+    'world-simulation':{tag:'BUSINESS LOGIC',title:'world-simulation.ts',desc:'Spatial simulation with pathfinding, activities, interactions, and NPC drives.',
+      items:['WorldSimulation class','A* pathfinding with collision grid','14 activity types','22 interaction types','Drives: gift-seeking/loneliness/restlessness']},
+    'day-cycle':{tag:'BUSINESS LOGIC',title:'day-cycle.ts',desc:'Temporal rhythm of the simulation with promise resolution and emotion decay.',
+      items:['DayCycle class -- 3 phases (morning/afternoon/evening)','Promise resolution via LLM narrator','Emotion decay 15%/cycle','~400 ticks/phase']},
+    'prompt-builder':{tag:'BUSINESS LOGIC',title:'prompt-builder.ts',desc:'Assembles rich 18-section prompts from NPC state for LLM consumption.',
+      items:['buildSystemPrompt() -- 18-section assembly','buildBatchConversationMessages()','buildReflectionMessages()','buildSoliloquyMessages()']},
+    'response-parser':{tag:'BUSINESS LOGIC',title:'response-parser.ts',desc:'Parses and repairs LLM JSON responses into structured game data.',
+      items:['parseLLMResponse() -> LLMResponse','parseBatchLLMResponse() -> BatchTurnData[]','extractJson() + repairJson()']},
+    'ollama':{tag:'BUSINESS LOGIC',title:'ollama.ts',desc:'Dual-provider LLM client with streaming and rate limit tracking.',
+      items:['accumulateChat() -- streaming fetch (Ollama/Groq)','getGroqRateLimits()','ChatMessage type']},
+    'llm-config':{tag:'BUSINESS LOGIC',title:'llm-config.ts',desc:'LLM provider configuration with localStorage persistence.',
+      items:['loadLlmConfig()/saveLlmConfig() -- localStorage','LlmProvider "ollama"|"groq"','GROQ_MODELS']},
+    'activities':{tag:'BUSINESS LOGIC',title:'activities.ts',desc:'Activity definitions with trait-weighted selection and item yields.',
+      items:['ACTIVITIES (14 defs)','WAYPOINT_ACTIVITIES (per-waypoint)','pickActivity() weighted by traits','rollItemYield()']},
+    'interactions':{tag:'BUSINESS LOGIC',title:'interactions.ts',desc:'Proximity interaction definitions with condition-based selection.',
+      items:['INTERACTIONS (22 defs)','pickInteraction() condition+softmax','executeInteraction() -- apply deltas/consume items/memories']},
+    'npcs':{tag:'BUSINESS LOGIC',title:'npcs.ts',desc:'NPC creation utilities and preset character definitions.',
+      items:['createNpc()/randomizeNpc()','initialNpcs (5 presets)','PRESET_PROMISES/IMPULSES','generateBackstory()']},
+    'tts-service':{tag:'BUSINESS LOGIC',title:'tts-service.ts',desc:'TTS client with voice cloning, prefetch, and 13-voice pool.',
+      items:['TTSService class','speak()/prefetch()/playBuffer()','Voice cloning: upload/youtube','13-voice pool + custom']},
+    'premade-storage':{tag:'BUSINESS LOGIC',title:'premade-storage.ts',desc:'CRUD for premade NPC templates with bidirectional conversion.',
+      items:['PremadeTemplate interface','load/save/delete CRUD','premadeTemplateToNpc()/npcToPremadeTemplate()']},
+    'app':{tag:'UI COMPONENT',title:'App.tsx',desc:'Main React orchestrator that creates all system instances and manages routing.',
+      items:['Main React orchestrator','Creates all system instances','handleProximity() -- conversation vs interaction routing','State: bubbles/floaters/feed/camera/TTS/LLM']},
+    'world-canvas':{tag:'UI COMPONENT',title:'WorldCanvas.tsx',desc:'Canvas renderer with camera system, day tinting, and ambient particles.',
+      items:['Canvas renderer + camera system','Smooth lerp + auto-focus on conversations','Day/phase tinting + ambient particles']},
+    'setup-screen':{tag:'UI COMPONENT',title:'SetupScreen.tsx',desc:'Template strip, inline character builder, and settings configuration.',
+      items:['Template strip + inline character builder','Roster display (max 13)','Settings: language/map/LLM/TTS']},
+    'side-panel':{tag:'UI COMPONENT',title:'SidePanel.tsx',desc:'Activity feed with type filtering, auto-scroll, and log copying.',
+      items:['Activity feed with type filtering','NpcSnapshot/FeedItem/FilterKey types','Auto-scroll + copy log']},
+    'npc-inspector':{tag:'UI COMPONENT',title:'NpcInspector.tsx',desc:'Emotion visualization, relationship list, memory browser, and sprite picker.',
+      items:['Emotion bars + relationship list','Memory list + inventory','Sprite picker modal']},
+    'npc-creator':{tag:'UI COMPONENT',title:'NpcCreator.tsx',desc:'Character creation and editing modal with voice cloning UI.',
+      items:['Character creation/editing modal','Voice cloning UI (mic/file/YouTube)','Trait/desire editing']},
+    'director-dashboard':{tag:'UI COMPONENT',title:'DirectorDashboard.tsx',desc:'Pipeline visualization with prepared conversation cards and rate limits.',
+      items:['Pipeline visualization (LLM->TTS->Ready)','Prepared conversation cards','Groq rate limits + model selector']},
+    'dm-tools':{tag:'UI COMPONENT',title:'DmTools.tsx',desc:'DM interface for whispering to NPCs, forcing encounters, and planting rumors.',
+      items:['Whisper to NPC + trigger events','Force encounters + plant rumors']},
+    'character-viewer':{tag:'UI COMPONENT',title:'CharacterViewer.tsx',desc:'Character sheet display with snapshot history graph.',
+      items:['Character sheet display','Snapshot history graph']},
+    'map-test-mode':{tag:'UI COMPONENT',title:'MapTestMode.tsx',desc:'WASD map testing with collision and waypoint overlays.',
+      items:['WASD map testing','Collision/waypoint overlays']},
+    'sprite-system':{tag:'INFRASTRUCTURE',title:'sprite-system.ts',desc:'Sprite animation system with 4-character sprite sheets.',
+      items:['SpriteSystem class','4 characters (Adam/Alex/Amelia/Bob)','draw() -- animation frame rendering']},
+    'tilemap-renderer':{tag:'INFRASTRUCTURE',title:'tilemap-renderer.ts',desc:'Tilemap renderer with collision grid extraction and layer drawing.',
+      items:['TilemapRenderer class','collisionGrid/waypoints extraction','drawGround()/drawObjects()']},
+    'server-py':{tag:'INFRASTRUCTURE',title:'server.py',desc:'Flask TTS proxy with dual-engine routing and voice cloning endpoints.',
+      items:['Flask TTS proxy (port 8787)','Dual-engine: Chatterbox/Kokoro routing','Voice cloning endpoints','Emotion-aware speed modulation']},
+    'chatterbox-py':{tag:'INFRASTRUCTURE',title:'chatterbox_server.py',desc:'Dedicated Chatterbox Turbo server for English TTS with voice cloning.',
+      items:['Chatterbox Turbo server (port 8788)','Reference audio voice cloning','MPS->CUDA->CPU device support']},
+  };
+
+  currentConnections = CG_CONNECTIONS;
+
+  // Color lookup helpers
+  const glowMap = {'var(--accent-core)':'glow-core','var(--accent-logic)':'glow-logic','var(--accent-ui)':'glow-ui','var(--accent-infra)':'glow-infra'};
+  const fillMap = {
+    'var(--accent-core)':{fill:'rgba(240,168,48,.08)',stroke:'rgba(240,168,48,.3)',glowFill:'rgba(240,168,48,.06)'},
+    'var(--accent-logic)':{fill:'rgba(34,211,238,.08)',stroke:'rgba(34,211,238,.3)',glowFill:'rgba(34,211,238,.06)'},
+    'var(--accent-ui)':{fill:'rgba(74,222,128,.08)',stroke:'rgba(74,222,128,.3)',glowFill:'rgba(74,222,128,.06)'},
+    'var(--accent-infra)':{fill:'rgba(251,146,60,.08)',stroke:'rgba(251,146,60,.3)',glowFill:'rgba(251,146,60,.06)'},
+  };
+
+  // ─── Render inner ring (circles) ───────────────
+  const posMap = {};
+  INNER.forEach((node, idx) => {
+    const pos = polarToXY(0, 0, 130, node.angle);
+    posMap[node.id] = pos;
+    const color = 'var(--accent-core)';
+    const g = el('g',{class:'inner-node','data-id':node.id,transform:`translate(${pos.x},${pos.y})`});
+    const glow = el('circle',{r:30,fill:fillMap[color].glowFill,stroke:'none',filter:'url(#glow-core)',opacity:'.3'});
+    g.appendChild(glow);
+    g.appendChild(el('circle',{r:26,fill:fillMap[color].fill,stroke:fillMap[color].stroke,'stroke-width':1}));
+    const label = el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central',
+      'font-size':'7','font-family':'JetBrains Mono, monospace','font-weight':'600',
+      fill:color,'letter-spacing':'.3',opacity:'.9'});
+    label.textContent = node.label.replace('.ts','');
+    g.appendChild(label);
+    const sub = el('text',{x:0,y:40,'text-anchor':'middle',
+      'font-size':'7','font-family':'JetBrains Mono, monospace',
+      fill:'var(--text-dim)','letter-spacing':'.5'});
+    sub.textContent = node.label;
+    g.appendChild(sub);
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', ()=>{ openPanel(CG_DETAILS[node.id], color); openConnectionsPanel(node.id, color); });
+    g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
+    g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+    layerNodes.appendChild(g);
+    pulsingGlows.push({el:glow, offset:idx*.8, type:'inner'});
+    allNodeData[node.id] = {detail:CG_DETAILS[node.id], color};
+    nodeNames[node.id] = node.label;
+  });
+
+  // ─── Render middle ring (rounded rects) ────────
+  MIDDLE.forEach((node, idx) => {
+    const pos = polarToXY(0, 0, 290, node.angle);
+    posMap[node.id] = pos;
+    const color = 'var(--accent-logic)';
+    const g = el('g',{class:'mech-node','data-id':node.id,transform:`translate(${pos.x},${pos.y})`});
+    const labelText = node.label.toUpperCase();
+    const labelWidth = Math.max(48, labelText.length * 5.2 + 16);
+    const halfW = labelWidth / 2;
+    const glow = el('rect',{x:-(halfW+4),y:-13,width:labelWidth+8,height:26,rx:6,
+      fill:fillMap[color].glowFill,stroke:'none',filter:'url(#glow-logic)',opacity:'.3'});
+    g.appendChild(glow);
+    g.appendChild(el('rect',{x:-halfW,y:-11,width:labelWidth,height:22,rx:5,
+      fill:fillMap[color].fill,stroke:color,'stroke-width':1,opacity:'.7'}));
+    const label = el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central',
+      'font-size':'6.5','font-family':'JetBrains Mono, monospace','font-weight':'500',
+      fill:color,'letter-spacing':'.3',opacity:'.9'});
+    label.textContent = labelText;
+    g.appendChild(label);
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', ()=>{ openPanel(CG_DETAILS[node.id], color); openConnectionsPanel(node.id, color); });
+    g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
+    g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+    layerNodes.appendChild(g);
+    pulsingGlows.push({el:glow, offset:idx*0.7+1, type:'mech'});
+    allNodeData[node.id] = {detail:CG_DETAILS[node.id], color};
+    nodeNames[node.id] = node.label;
+  });
+
+  // ─── Render outer ring (rounded rects) ─────────
+  OUTER.forEach((node, idx) => {
+    const pos = polarToXY(0, 0, 430, node.angle);
+    posMap[node.id] = pos;
+    const color = 'var(--accent-ui)';
+    const g = el('g',{class:'outer-node','data-id':node.id,transform:`translate(${pos.x},${pos.y})`});
+    const labelText = node.label.toUpperCase();
+    const labelWidth = Math.max(48, labelText.length * 5.5 + 16);
+    const halfW = labelWidth / 2;
+    g.appendChild(el('rect',{x:-halfW,y:-13,width:labelWidth,height:26,rx:6,
+      fill:fillMap[color].fill,stroke:color,'stroke-width':1,opacity:'.7'}));
+    const label = el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central',
+      'font-size':'7','font-family':'JetBrains Mono, monospace','font-weight':'600',
+      fill:color,'letter-spacing':'.3',opacity:'.9'});
+    label.textContent = labelText;
+    g.appendChild(label);
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', ()=>{ openPanel(CG_DETAILS[node.id], color); openConnectionsPanel(node.id, color); });
+    g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
+    g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+    layerNodes.appendChild(g);
+    allNodeData[node.id] = {detail:CG_DETAILS[node.id], color};
+    nodeNames[node.id] = node.label;
+  });
+
+  // ─── Render floating nodes (diamonds) ──────────
+  FLOATING.forEach((node, idx) => {
+    const pos = polarToXY(0, 0, 370, node.angle);
+    posMap[node.id] = pos;
+    const color = 'var(--accent-infra)';
+    const g = el('g',{class:'prompt-node','data-id':node.id,transform:`translate(${pos.x},${pos.y})`});
+    g.appendChild(el('polygon',{
+      points:'0,-20 24,0 0,20 -24,0',
+      fill:fillMap[color].fill,stroke:color,'stroke-width':1,opacity:'.8',
+      filter:'url(#glow-infra)'}));
+    const label = el('text',{x:0,y:30,'text-anchor':'middle',
+      'font-size':'7','font-family':'JetBrains Mono, monospace',
+      fill:color,'letter-spacing':'.5',opacity:'.8'});
+    label.textContent = node.label;
+    g.appendChild(label);
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', ()=>{ openPanel(CG_DETAILS[node.id], color); openConnectionsPanel(node.id, color); });
+    g.addEventListener('mouseenter', (e)=>{ showTooltip(e, node.label); highlightNode(node.id); });
+    g.addEventListener('mouseleave', ()=>{ hideTooltip(); unhighlightAll(); });
+    layerNodes.appendChild(g);
+    pulsingGlows.push({el:g.querySelector('polygon'), offset:idx*1.3+2, type:'mech'});
+    allNodeData[node.id] = {detail:CG_DETAILS[node.id], color};
+    nodeNames[node.id] = node.label;
+  });
+
+  // ─── Render connections ────────────────────────
+  CG_CONNECTIONS.forEach(conn => {
+    const fromPos = posMap[conn.from];
+    const toPos = posMap[conn.to];
+    if(!fromPos || !toPos) return;
+    const line = el('line',{
+      x1:fromPos.x, y1:fromPos.y,
+      x2:toPos.x, y2:toPos.y,
+      stroke:conn.color,'stroke-width':1.5,opacity:'0',
+      'stroke-dasharray':'4 8'
+    });
+    line.style.transition = 'opacity .25s ease';
+    layerConnections.appendChild(line);
+    connectionEls.push({line, from:fromPos, to:toPos, color:conn.color, fromId:conn.from, toId:conn.to});
+  });
+
+  // ─── Flow arrows ───────────────────────────────
+  connectionEls.forEach(conn => {
+    flowParticles.push(createFlowArrow(conn));
+  });
+
+  // ─── Center label ──────────────────────────────
+  const ct = el('text',{x:0,y:-4,'text-anchor':'middle',
+    'dominant-baseline':'central','font-size':'13',
+    'font-family':'Outfit','font-weight':'700',fill:'var(--accent-core)',
+    opacity:'.8'});
+  ct.textContent = 'CODE';
+  layerLabels.appendChild(ct);
+  const ct2 = el('text',{x:0,y:14,'text-anchor':'middle',
+    'dominant-baseline':'central','font-size':'8',
+    'font-family':'JetBrains Mono, monospace',fill:'var(--text-dim)',
+    'letter-spacing':'2'});
+  ct2.textContent = 'GRAPH';
+  layerLabels.appendChild(ct2);
+
+  // ─── Ring labels ───────────────────────────────
+  [{r:210,label:'BUSINESS LOGIC',opacity:.25},{r:380,label:'UI LAYER',opacity:.2}].forEach(({r, label, opacity})=>{
+    const pos = polarToXY(0,0,r,90);
+    const t = el('text',{x:pos.x,y:pos.y,'text-anchor':'middle',
+      'font-size':'8','font-family':'JetBrains Mono, monospace',
+      fill:'var(--text-dim)','letter-spacing':'3',opacity});
+    t.textContent = label;
+    layerLabels.appendChild(t);
+  });
+
+  setLegend(CODE_LEGEND);
+}
+
+// ═══════════════════════════════════════════════
+// ─── TAB SWITCHING ─────────────────────────────
+// ═══════════════════════════════════════════════
+
+function switchTab(view){
+  if(view === currentView) return;
+  currentView = view;
+  document.getElementById('tab-arch').classList.toggle('active', view==='architecture');
+  document.getElementById('tab-code').classList.toggle('active', view==='codegraph');
+  clearView();
+  if(view === 'architecture') renderArchitecture();
+  else renderCodeGraph();
+}
 
 // ─── Animation loop ────────────────────────────
 function animate(){
   globalTime += 0.016;
 
-  // Animate arc dashes
-  for(const [id, data] of Object.entries(midNodeEls)){
-    if(data.dash){
-      const offset = -globalTime * 30;
-      data.dash.setAttribute('stroke-dashoffset', offset);
+  // Animate arc dashes (architecture only)
+  dashEls.forEach(d=>{
+    d.el.setAttribute('stroke-dashoffset', -globalTime * 30);
+  });
+
+  // Pulse glows
+  pulsingGlows.forEach(p=>{
+    if(p.type === 'inner'){
+      const pulse = .3 + Math.sin(globalTime * 1.5 + p.offset) * .15;
+      p.el.setAttribute('opacity', pulse);
+    } else {
+      const pulse = .2 + Math.sin(globalTime * 1.2 + p.offset) * .12;
+      p.el.setAttribute('opacity', pulse);
     }
-  }
-
-  // Pulse inner nodes
-  for(const [id, data] of Object.entries(innerNodeEls)){
-    const pulse = .3 + Math.sin(globalTime * 1.5 + INNER_NODES.findIndex(n=>n.id===id) * .8) * .15;
-    data.glow.setAttribute('opacity', pulse);
-  }
-
-  // Pulse mechanism nodes
-  for(const [id, data] of Object.entries(mechNodeEls)){
-    const pulse = .2 + Math.sin(globalTime * 1.2 + MECHANISM_NODES.findIndex(n=>n.id===id) * 1.1) * .12;
-    data.glow.setAttribute('opacity', pulse);
-  }
+  });
 
   // Animated flow arrows (only when hovered)
   flowParticles.forEach(p => {
@@ -1076,7 +1378,6 @@ function animate(){
 
   requestAnimationFrame(animate);
 }
-animate();
 
 // ─── Detail panel ──────────────────────────────
 function openPanel(detail, accentColor){
@@ -1114,23 +1415,18 @@ function closePanel(){
 }
 
 // ─── Connections panel (left) ──────────────────
-// Node name lookup
-const nodeNames = {};
-INNER_NODES.forEach(n => nodeNames[n.id] = n.label);
-MID_NODES.forEach(n => nodeNames[n.id] = n.label);
-OUTER_NODES.forEach(n => nodeNames[n.id] = n.label);
-nodeNames['prompt'] = 'Prompt Builder';
-MECHANISM_NODES.forEach(n => nodeNames[n.id] = n.label);
-
 function openConnectionsPanel(nodeId, accentColor){
   const panel = document.getElementById('connections-panel');
   const header = document.getElementById('conn-header');
   const body = document.getElementById('conn-body');
   const nodeName = nodeNames[nodeId] || nodeId;
 
-  // Find all connections involving this node
-  const outbound = CONNECTIONS.filter(c => c.fromId === nodeId || c.from === nodeId);
-  const inbound = CONNECTIONS.filter(c => c.toId === nodeId || c.to === nodeId);
+  const outbound = currentConnections.filter(c => c.from === nodeId);
+  const inbound = currentConnections.filter(c => c.to === nodeId);
+
+  const isCodeGraph = currentView === 'codegraph';
+  const outLabel = isCodeGraph ? '\u2192 Depends on' : '\u2192 Sends data to';
+  const inLabel = isCodeGraph ? '\u2190 Used by' : '\u2190 Receives data from';
 
   header.innerHTML = `
     <div class="tag-row">
@@ -1143,7 +1439,7 @@ function openConnectionsPanel(nodeId, accentColor){
   let html = '';
 
   if(outbound.length > 0){
-    html += `<div class="conn-section-title" style="color:${accentColor}"><span class="conn-arrow">\u2192</span> Sends data to</div>`;
+    html += `<div class="conn-section-title" style="color:${accentColor}"><span class="conn-arrow">${isCodeGraph?'\u2192':'\u2192'}</span> ${outLabel}</div>`;
     outbound.forEach(c => {
       const targetName = nodeNames[c.to] || c.to;
       html += `
@@ -1152,13 +1448,13 @@ function openConnectionsPanel(nodeId, accentColor){
             <span class="conn-item-node" style="color:${c.color}">${targetName}</span>
             <span class="conn-item-label">${c.label}</span>
           </div>
-          <div class="conn-item-desc">${c.desc || ''}</div>
+          ${c.desc ? `<div class="conn-item-desc">${c.desc}</div>` : ''}
         </div>`;
     });
   }
 
   if(inbound.length > 0){
-    html += `<div class="conn-section-title" style="color:${accentColor}"><span class="conn-arrow">\u2190</span> Receives data from</div>`;
+    html += `<div class="conn-section-title" style="color:${accentColor}"><span class="conn-arrow">\u2190</span> ${inLabel}</div>`;
     inbound.forEach(c => {
       const sourceName = nodeNames[c.from] || c.from;
       html += `
@@ -1167,7 +1463,7 @@ function openConnectionsPanel(nodeId, accentColor){
             <span class="conn-item-node" style="color:${c.color}">${sourceName}</span>
             <span class="conn-item-label">${c.label}</span>
           </div>
-          <div class="conn-item-desc">${c.desc || ''}</div>
+          ${c.desc ? `<div class="conn-item-desc">${c.desc}</div>` : ''}
         </div>`;
     });
   }
@@ -1189,8 +1485,9 @@ document.addEventListener('click', (e)=>{
   const detailPanel = document.getElementById('detail-panel');
   const connPanel = document.getElementById('connections-panel');
   const isOnNode = e.target.closest('.inner-node,.mid-node,.outer-node,.prompt-node,.mech-node');
-  if(detailPanel.classList.contains('open') && !detailPanel.contains(e.target) && !isOnNode) closePanel();
-  if(connPanel.classList.contains('open') && !connPanel.contains(e.target) && !isOnNode) closeConnectionsPanel();
+  const isOnTab = e.target.closest('.tab-btn');
+  if(detailPanel.classList.contains('open') && !detailPanel.contains(e.target) && !isOnNode && !isOnTab) closePanel();
+  if(connPanel.classList.contains('open') && !connPanel.contains(e.target) && !isOnNode && !isOnTab) closeConnectionsPanel();
 });
 
 // Close on Escape
@@ -1215,6 +1512,10 @@ function positionTooltip(e){
   tooltipEl.style.left = (e.clientX + 12) + 'px';
   tooltipEl.style.top = (e.clientY - 8) + 'px';
 }
+
+// ─── Initial render ────────────────────────────
+renderArchitecture();
+animate();
 </script>
 </body>
 </html>
