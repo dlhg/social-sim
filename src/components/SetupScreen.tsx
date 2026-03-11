@@ -1104,21 +1104,26 @@ Guidelines:
                   const isSaved = savedPremadeIds.has(npc.id);
                   return (
                     <div key={npc.id} className="roster-card">
-                      <button className="roster-card-remove" onClick={() => onRemoveFromRoster(npc.id)} title="Remove">×</button>
-                      <button className={`roster-card-save ${isSaved ? "saved" : ""}`} onClick={() => handleSaveAsPremade(npc)} title={isSaved ? "Saved as premade" : "Save as premade"}>
-                        {isSaved ? "★" : "☆"}
-                      </button>
-                      {npc.customVoiceId && <span className="roster-card-voice" title="Custom voice">🎙</span>}
                       <div className="roster-card-sprite">
                         <div className="sprite-frame-mini">
                           <img src={SPRITE_URL(npc.spriteId || "Adam")} alt="" draggable={false} />
                         </div>
                       </div>
-                      <div className="roster-card-name" style={{ color: npc.color }}>{npc.name}</div>
-                      <div className="roster-card-traits">
-                        {npc.personalityTraits.slice(0, 2).map((t) => <span key={t} className="trait-chip">{t}</span>)}
+                      <div className="roster-card-info">
+                        <div className="roster-card-name" style={{ color: npc.color }}>
+                          {npc.name}
+                          {npc.customVoiceId && <span className="roster-card-voice" title="Custom voice">🎙</span>}
+                        </div>
+                        <div className="roster-card-traits">
+                          {npc.personalityTraits.slice(0, 2).map((t) => <span key={t} className="trait-chip">{t}</span>)}
+                        </div>
                       </div>
-                      {npc.coreDesires[0] && <div className="roster-card-desire">{npc.coreDesires[0]}</div>}
+                      <div className="roster-card-actions">
+                        <button className={`roster-card-save ${isSaved ? "saved" : ""}`} onClick={() => handleSaveAsPremade(npc)} title={isSaved ? "Saved as premade" : "Save as premade"}>
+                          {isSaved ? "★" : "☆"}
+                        </button>
+                        <button className="roster-card-remove" onClick={() => onRemoveFromRoster(npc.id)} title="Remove">×</button>
+                      </div>
                     </div>
                   );
                 })}

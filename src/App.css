@@ -1696,11 +1696,9 @@
 }
 
 .roster-card-voice {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  font-size: 12px;
-  opacity: 0.7;
+  font-size: 10px;
+  opacity: 0.6;
+  margin-left: 4px;
 }
 
 /* ── DM Tools ──────────────────────────────── */
@@ -2094,9 +2092,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px 24px 96px;
+  padding: 16px 12px 96px;
   overflow-y: auto;
-  gap: 28px;
+  gap: 16px;
   position: relative;
 }
 
@@ -2130,9 +2128,9 @@
 
 .setup-columns {
   display: flex;
-  gap: 48px;
+  gap: 24px;
   width: 100%;
-  max-width: 1100px;
+  max-width: 1400px;
   align-items: flex-start;
 }
 
@@ -2140,12 +2138,12 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
   min-width: 0;
 }
 
 .setup-right {
-  width: 340px;
+  width: 300px;
   flex-shrink: 0;
 }
 
@@ -2153,7 +2151,7 @@
 
 .template-strip {
   width: 100%;
-  max-width: 1100px;
+  max-width: 1400px;
 }
 
 .template-strip-label {
@@ -2555,7 +2553,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
 .roster-label {
@@ -2574,23 +2572,22 @@
 }
 
 .roster-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .roster-empty {
   border: 1px dashed var(--border-default);
-  border-radius: 12px;
-  padding: 40px 24px;
+  border-radius: 10px;
+  padding: 24px 16px;
   text-align: center;
   color: var(--text-faint);
-  min-height: 200px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .roster-empty-icon {
@@ -2605,17 +2602,37 @@
 }
 
 .roster-card {
-  position: relative;
-  padding: 16px 12px;
+  padding: 5px 6px;
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--bg-surface);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   transition: all var(--duration-fast) var(--ease-out-expo);
   animation: card-enter var(--duration-normal) var(--ease-out-expo);
+}
+
+.roster-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.roster-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--duration-fast);
+}
+
+.roster-card:hover .roster-card-actions {
+  opacity: 1;
 }
 
 @keyframes card-enter {
@@ -2629,26 +2646,19 @@
 }
 
 .roster-card-remove {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border: none;
   border-radius: 50%;
   background: transparent;
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transition: opacity var(--duration-fast), color var(--duration-fast), background var(--duration-fast);
-}
-
-.roster-card:hover .roster-card-remove {
-  opacity: 1;
+  padding: 0;
+  transition: color var(--duration-fast), background var(--duration-fast);
 }
 
 .roster-card-remove:hover {
@@ -2667,31 +2677,32 @@
 }
 
 .roster-card-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
 }
 
 .roster-card-traits {
   display: flex;
   flex-wrap: wrap;
   gap: 3px;
-  justify-content: center;
 }
 
 .roster-card-traits .trait-chip {
-  font-size: 10px;
-  padding: 1px 6px;
+  font-size: 9px;
+  padding: 1px 5px;
 }
 
 .roster-card-desire {
   font-size: 10px;
   color: var(--text-faint);
-  text-align: center;
-  line-height: 1.3;
+  line-height: 1.2;
+  white-space: nowrap;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 /* ── Action Buttons ────────────────────────────── */
@@ -3061,27 +3072,19 @@
 /* ── Roster Card Save Button ──────────────────── */
 
 .roster-card-save {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border: none;
   border-radius: 50%;
   background: transparent;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transition: opacity var(--duration-fast), color var(--duration-fast), background var(--duration-fast);
   padding: 0;
-}
-
-.roster-card:hover .roster-card-save {
-  opacity: 1;
+  transition: color var(--duration-fast), background var(--duration-fast);
 }
 
 .roster-card-save:hover {
@@ -3090,8 +3093,12 @@
 }
 
 .roster-card-save.saved {
-  opacity: 1;
   color: var(--accent-caution);
+}
+
+.roster-card:hover .roster-card-save.saved,
+.roster-card-save.saved {
+  opacity: 1;
 }
 
 /* ── Delete Confirmation Modal ────────────────── */
