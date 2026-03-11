@@ -24,35 +24,6 @@ const PHASE_TINTS: Record<DayPhase, { bg: string; grid: string; tintColor: strin
   evening: { bg: "#10141e", grid: "#161c28", tintColor: "80, 100, 180", tintAlpha: 0.06 },
 };
 
-// Ambient particles
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  size: number;
-  alpha: number;
-  alphaSpeed: number;
-  phase: number; // for sin wave brightness
-}
-
-function createParticles(count: number, w: number, h: number): Particle[] {
-  const particles: Particle[] = [];
-  for (let i = 0; i < count; i++) {
-    particles.push({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.15,
-      vy: (Math.random() - 0.5) * 0.1 - 0.05,
-      size: Math.random() * 1.5 + 0.5,
-      alpha: Math.random() * 0.3,
-      alphaSpeed: Math.random() * 0.003 + 0.001,
-      phase: Math.random() * Math.PI * 2,
-    });
-  }
-  return particles;
-}
-
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -135,7 +106,6 @@ export function WorldCanvas({
   const bubbleSizeCache = useRef(new Map<string, { w: number; h: number }>());
   const bubbleResizeObserver = useRef<ResizeObserver | null>(null);
   const floaterRefsMap = useRef(new Map<string, HTMLDivElement>());
-  const particlesRef = useRef<Particle[]>([]);
   const npcScreenPositions = useRef<{ npcId: string; x: number; y: number; radius: number }[]>([]);
   const onNpcClickRef = useRef(onNpcClick);
   onNpcClickRef.current = onNpcClick;
@@ -346,36 +316,6 @@ export function WorldCanvas({
       const envAlpha = 1 - cam.dimAmount * 0.6;
       ctx.globalAlpha = envAlpha;
 
-      // Ambient particles — batched by alpha bucket to reduce fillStyle changes
-      if (particlesRef.current.length === 0 && width > 0) {
-        particlesRef.current = createParticles(40, width, height);
-      }
-      const isEvening = dayPhaseRef.current === "evening";
-      const particleColor = isEvening ? "180, 200, 255" : "255, 240, 200";
-      const alphaMult = (isEvening ? 1.5 : 0.8) * envAlpha;
-      // Group particles into ~5 alpha buckets to batch draws
-      const buckets: Particle[][] = [[], [], [], [], []];
-      for (const p of particlesRef.current) {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.phase += p.alphaSpeed;
-        if (p.x < 0) p.x = width; else if (p.x > width) p.x = 0;
-        if (p.y < 0) p.y = height; else if (p.y > height) p.y = 0;
-        const pAlpha = Math.max(0, (0.15 + 0.2 * Math.sin(p.phase)) * alphaMult);
-        const bucket = Math.min(4, Math.max(0, Math.floor(pAlpha * 14)));
-        buckets[bucket].push(p);
-      }
-      for (let b = 0; b < 5; b++) {
-        if (buckets[b].length === 0) continue;
-        const a = ((b + 1) / 14).toFixed(3);
-        ctx.fillStyle = `rgba(${particleColor},${a})`;
-        ctx.beginPath();
-        for (const p of buckets[b]) {
-          ctx.moveTo(p.x + p.size, p.y);
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        }
-        ctx.fill();
-      }
 
       // Waypoints
       const wpFont = `500 ${Math.max(9, tileSize * 0.28)}px "Inter", -apple-system, sans-serif`;

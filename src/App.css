@@ -3129,15 +3129,6 @@
   background: var(--accent-danger-dim);
 }
 
-/* ── Particle Canvas ───────────────────────────── */
-
-.particle-canvas {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-}
-
 /* ── Director Dashboard ──────────────────────── */
 
 .director-dashboard {
