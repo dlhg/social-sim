@@ -36,7 +36,6 @@ const EMOTION_COLORS: Record<string, string> = {
   joy: "#e0c84c",
   sadness: "#90a4ae",
   curiosity: "#4fc3f7",
-  disgust: "#a1887f",
   guilt: "#b39ddb",
 };
 
@@ -190,7 +189,7 @@ export function CharacterViewer({
           <div className="npc-section">
             <div className="section-label">Emotional State</div>
             <div className="emotion-bars">
-              {(["anger", "trust", "fear", "joy", "sadness", "curiosity", "disgust", "guilt"] as const).map((emotion) => {
+              {(["anger", "trust", "fear", "joy", "sadness", "curiosity", "guilt"] as const).map((emotion) => {
                 const value = selected.emotionalState[emotion];
                 const historyData = history.map((s) => s.emotions[emotion]);
                 return (

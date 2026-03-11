@@ -17,6 +17,8 @@ import type { LlmProvider, LlmConfig } from "../llm-config";
 import { GROQ_MODELS, GEMINI_MODELS } from "../llm-config";
 import { uploadVoiceClip, fetchVoices, getVoicePreviewUrl, deleteVoice, youtubeVoiceClip } from "../tts-service";
 import type { VoiceInfo } from "../tts-service";
+import { accumulateChat } from "../ollama";
+import { NpcStore } from "../npc-store";
 
 const MAX_ROSTER = 13;
 
@@ -113,6 +115,9 @@ export function SetupScreen({
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emotionalStateOverride, setEmotionalStateOverride] = useState<Partial<EmotionalState> | undefined>();
+  const [baselinesMode, setBaselinesMode] = useState<"default" | "derive" | "manual">("default");
+  const [baselines, setBaselines] = useState<Partial<EmotionalState> | undefined>();
+  const [isDeriving, setIsDeriving] = useState(false);
 
   // ── Voice cloning state ─────────────────────────
   const [customVoiceId, setCustomVoiceId] = useState<string | undefined>();
@@ -251,6 +256,7 @@ export function SetupScreen({
       secrets: parsedSecrets,
       inventory: inventory.map((i) => ({ ...i })),
       emotionalState: emotionalStateOverride,
+      emotionalBaselines: baselinesMode !== "default" ? baselines : undefined,
       customVoiceId: finalVoiceId,
     };
 
@@ -278,6 +284,8 @@ export function SetupScreen({
     setSecrets(template.secrets.join("\n"));
     setInventory(template.inventory.map((i) => ({ ...i })));
     setEmotionalStateOverride(template.emotionalState);
+    setBaselines(template.emotionalBaselines);
+    setBaselinesMode(template.emotionalBaselines ? "manual" : "default");
     setCustomVoiceId(template.customVoiceId);
     setVoiceMode(
       template.customVoiceId
@@ -304,6 +312,8 @@ export function SetupScreen({
     setSecrets("");
     setInventory([]);
     setEmotionalStateOverride(undefined);
+    setBaselines(undefined);
+    setBaselinesMode("default");
     setCustomVoiceId(undefined);
     setVoiceMode("auto");
     setSelectedVoiceId(undefined);
@@ -325,8 +335,50 @@ export function SetupScreen({
     setSecrets(r.secrets.join("\n"));
     setInventory(r.inventory);
     setEmotionalStateOverride(undefined);
+    setBaselines(undefined);
+    setBaselinesMode("default");
     setActiveTemplateId(null);
     setFormError("");
+  }
+
+  async function handleDeriveBaselines() {
+    const parsedTraits = traits.split(",").map((t) => t.trim()).filter(Boolean);
+    if (parsedTraits.length === 0) { setFormError("Add personality traits first"); return; }
+    setIsDeriving(true);
+    try {
+      const prompt = `Given an NPC character with these traits: ${parsedTraits.join(", ")}${
+        backstory ? `\nBackstory: ${backstory.trim()}` : ""
+      }
+
+Suggest emotional baselines — the resting emotional state this character naturally returns to over time. These are NOT current emotions, but their default equilibrium.
+
+Respond with ONLY a JSON object with these 7 keys, values from 0.0 to 1.0:
+{"anger": 0.0, "trust": 0.0, "fear": 0.0, "joy": 0.0, "sadness": 0.0, "curiosity": 0.0, "guilt": 0.0}
+
+Guidelines:
+- Most values should be 0.1-0.5 (moderate baselines)
+- An optimistic character might have joy: 0.5, anger: 0.1
+- An anxious character might have fear: 0.4, trust: 0.2
+- A cynical character might have trust: 0.15, joy: 0.25
+- Only go above 0.6 for truly extreme personality traits`;
+
+      const raw = await accumulateChat([{ role: "user", content: prompt }]);
+      const match = raw.match(/\{[^}]+\}/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        const result: Partial<EmotionalState> = {};
+        for (const key of ["anger", "trust", "fear", "joy", "sadness", "curiosity", "guilt"] as const) {
+          const v = parseFloat(parsed[key]);
+          if (!isNaN(v)) result[key] = Math.max(0, Math.min(1, v));
+        }
+        setBaselines(result);
+        setBaselinesMode("manual"); // show the sliders with derived values for tweaking
+      }
+    } catch (e) {
+      console.warn("[SetupScreen] Failed to derive baselines:", e);
+      setFormError("Failed to derive baselines — is the LLM running?");
+    }
+    setIsDeriving(false);
   }
 
   // ── Template hover/click ────────────────────────
@@ -599,7 +651,9 @@ export function SetupScreen({
       personalityTraits: parsedTraits, coreDesires: parsedDesires,
       backstory: backstory.trim() || undefined,
       secrets: parsedSecrets, inventory,
-      emotionalState: emotionalStateOverride, customVoiceId: finalVoiceId,
+      emotionalState: emotionalStateOverride,
+      emotionalBaselines: baselinesMode !== "default" ? baselines : undefined,
+      customVoiceId: finalVoiceId,
     });
 
     onAddToRoster(npc);
@@ -769,6 +823,42 @@ export function SetupScreen({
                   placeholder={"I once did something terrible...\nI secretly admire..."}
                   rows={3}
                 />
+
+                {/* Emotional Baselines */}
+                <label className="builder-label">Emotional Baselines</label>
+                <div className="voice-section">
+                  <div className="voice-mode-tabs">
+                    <button className={`voice-mode-tab ${baselinesMode === "default" ? "active" : ""}`} onClick={() => { setBaselinesMode("default"); setBaselines(undefined); }}>Default</button>
+                    <button className={`voice-mode-tab ${baselinesMode === "derive" || (baselinesMode === "manual" && isDeriving) ? "active" : ""}`} onClick={() => handleDeriveBaselines()} disabled={isDeriving}>
+                      {isDeriving ? "Deriving..." : "Derive from Traits"}
+                    </button>
+                    <button className={`voice-mode-tab ${baselinesMode === "manual" && !isDeriving ? "active" : ""}`} onClick={() => { setBaselinesMode("manual"); if (!baselines) setBaselines({ ...NpcStore.DEFAULT_EMOTION_BASELINES } as EmotionalState); }}>Manual</button>
+                  </div>
+
+                  {baselinesMode === "default" && (
+                    <div className="voice-auto-hint">Emotions will decay toward global defaults after conversations.</div>
+                  )}
+
+                  {baselinesMode === "manual" && baselines && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "6px 0" }}>
+                      {(["anger", "trust", "fear", "joy", "sadness", "curiosity", "guilt"] as const).map((key) => (
+                        <div key={key} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ width: "60px", fontSize: "0.75em", opacity: 0.7, textTransform: "capitalize" }}>{key}</span>
+                          <input
+                            type="range"
+                            min="0" max="1" step="0.05"
+                            value={baselines[key] ?? NpcStore.DEFAULT_EMOTION_BASELINES[key] ?? 0.3}
+                            onChange={(e) => setBaselines({ ...baselines, [key]: parseFloat(e.target.value) })}
+                            style={{ flex: 1 }}
+                          />
+                          <span style={{ width: "28px", fontSize: "0.7em", opacity: 0.6, textAlign: "right" }}>
+                            {(baselines[key] ?? NpcStore.DEFAULT_EMOTION_BASELINES[key] ?? 0.3).toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* Voice */}
                 <label className="builder-label">Voice</label>

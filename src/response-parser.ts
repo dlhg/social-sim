@@ -98,7 +98,6 @@ function validate(obj: unknown): LLMResponse {
     joy: clampDelta(toNumber(emotions.joy, 0)),
     sadness: clampDelta(toNumber(emotions.sadness, 0)),
     curiosity: clampDelta(toNumber(emotions.curiosity, 0)),
-    disgust: clampDelta(toNumber(emotions.disgust, 0)),
     guilt: clampDelta(toNumber(emotions.guilt, 0)),
   };
 
@@ -167,6 +166,7 @@ function validate(obj: unknown): LLMResponse {
   const respectDelta = o.respect_delta != null ? clampRelDelta(toNumber(o.respect_delta, 0)) : undefined;
   const trustDelta = o.trust_delta != null ? clampRelDelta(toNumber(o.trust_delta, 0)) : undefined;
   const fearDelta = o.fear_delta != null ? clampRelDelta(toNumber(o.fear_delta, 0)) : undefined;
+  const disgustDelta = o.disgust_delta != null ? clampRelDelta(toNumber(o.disgust_delta, 0)) : undefined;
   const debtDelta = o.debt_delta != null ? clampRelDelta(toNumber(o.debt_delta, 0)) : undefined;
 
   const forgive =
@@ -183,6 +183,7 @@ function validate(obj: unknown): LLMResponse {
     respect_delta: respectDelta,
     trust_delta: trustDelta,
     fear_delta: fearDelta,
+    disgust_delta: disgustDelta,
     debt_delta: debtDelta,
     justification,
     intent,
@@ -247,6 +248,7 @@ export function parseBatchLLMResponse(raw: string, validSpeakerIds: [string, str
       respect_delta: validated.respect_delta,
       trust_delta: validated.trust_delta,
       fear_delta: validated.fear_delta,
+      disgust_delta: validated.disgust_delta,
       debt_delta: validated.debt_delta,
       justification: validated.justification,
       intent: validated.intent,

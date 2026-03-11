@@ -830,7 +830,6 @@ export class WorldSimulation {
         joy: actDef.emotionEffect.joy ?? 0,
         sadness: actDef.emotionEffect.sadness ?? 0,
         curiosity: actDef.emotionEffect.curiosity ?? 0,
-        disgust: actDef.emotionEffect.disgust ?? 0,
         guilt: actDef.emotionEffect.guilt ?? 0,
       };
       this.npcStore.applyEmotionDelta(npc.npcId, effect);

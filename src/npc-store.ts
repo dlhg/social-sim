@@ -35,7 +35,7 @@ export class NpcStore {
 
   // ── Mutations ────────────────────────────────
 
-  static readonly EMOTION_KEYS = ["anger", "trust", "fear", "joy", "sadness", "curiosity", "disgust", "guilt"] as const;
+  static readonly EMOTION_KEYS = ["anger", "trust", "fear", "joy", "sadness", "curiosity", "guilt"] as const;
 
   applyEmotionDelta(npcId: string, delta: EmotionalState): void {
     const npc = this.npcs.get(npcId);
@@ -54,7 +54,7 @@ export class NpcStore {
     if (!npc.relationships[targetId]) {
       npc.relationships[targetId] = {
         regard: 0, affection: 0, respect: 0.3, trust: 0.3,
-        fear: 0, debt: 0, familiarity: 0,
+        fear: 0, disgust: 0, debt: 0, familiarity: 0,
       };
     }
     // Backfill new fields for existing relationships created before the upgrade
@@ -62,6 +62,7 @@ export class NpcStore {
     if (rel.respect === undefined) rel.respect = 0.3;
     if (rel.trust === undefined) rel.trust = 0.3;
     if (rel.fear === undefined) rel.fear = 0;
+    if (rel.disgust === undefined) rel.disgust = 0;
     if (rel.debt === undefined) rel.debt = 0;
     if (rel.familiarity === undefined) rel.familiarity = 0;
     return rel;
@@ -72,7 +73,7 @@ export class NpcStore {
     targetId: string,
     delta: number,
     affectionDelta = 0,
-    extras?: { respect?: number; trust?: number; fear?: number; debt?: number }
+    extras?: { respect?: number; trust?: number; fear?: number; disgust?: number; debt?: number }
   ): void {
     const npc = this.npcs.get(npcId);
     if (!npc) { console.warn(`[npc-store] applyRelationshipDelta: NPC "${npcId}" not found`); return; }
@@ -83,6 +84,7 @@ export class NpcStore {
       if (extras.respect) rel.respect = clamp(rel.respect + extras.respect, 0, 1);
       if (extras.trust) rel.trust = clamp(rel.trust + extras.trust, 0, 1);
       if (extras.fear) rel.fear = clamp(rel.fear + extras.fear, 0, 1);
+      if (extras.disgust) rel.disgust = clamp(rel.disgust + extras.disgust, 0, 1);
       if (extras.debt) rel.debt = clamp(rel.debt + extras.debt, -1, 1);
     }
     this.notify();
@@ -286,7 +288,7 @@ export class NpcStore {
 
     // Priority: negative moods first (most dramatically interesting)
     if (s.fear > 0.5 && s.trust < 0.3) newMood = "paranoid";
-    else if (s.anger > 0.5 && s.disgust > 0.3) newMood = "bitter";
+    else if (s.anger > 0.5 && s.trust < 0.3) newMood = "bitter";
     else if (s.sadness > 0.5) newMood = "melancholy";
     else if (s.guilt > 0.5) newMood = "guilt-ridden";
     else if (s.anger > 0.6) newMood = "volatile";
@@ -337,17 +339,18 @@ export class NpcStore {
 
   // ── Decay ───────────────────────────────────
 
-  private static readonly EMOTION_BASELINES: Record<string, number> = {
+  static readonly DEFAULT_EMOTION_BASELINES: Record<string, number> = {
     anger: 0.3, trust: 0.3, fear: 0.3, joy: 0.3,
-    sadness: 0.15, curiosity: 0.4, disgust: 0.1, guilt: 0.1,
+    sadness: 0.15, curiosity: 0.4, guilt: 0.1,
   };
 
-  /** Pull all emotions toward their baselines by the given rate. Call after each conversation. */
+  /** Pull all emotions toward per-NPC baselines (or global defaults) by the given rate. Call after each conversation. */
   decayEmotions(npcId: string, rate = 0.15): void {
     const npc = this.npcs.get(npcId);
     if (!npc) { console.warn(`[npc-store] decayEmotions: NPC "${npcId}" not found`); return; }
+    const npcBaselines = npc.emotionalBaselines;
     for (const key of NpcStore.EMOTION_KEYS) {
-      const baseline = NpcStore.EMOTION_BASELINES[key] ?? 0.3;
+      const baseline = npcBaselines?.[key] ?? NpcStore.DEFAULT_EMOTION_BASELINES[key] ?? 0.3;
       npc.emotionalState[key] += (baseline - npc.emotionalState[key]) * rate;
     }
     this.notify();

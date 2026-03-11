@@ -17,7 +17,7 @@ const PREAMBLES: Record<ConversationType, string> = {
 - Be confrontational, cutting, and direct. Push back hard. Challenge what the other person says.
 - Never say something like "That's a great point!" or "I understand where you're coming from" — you are here to fight, not to make peace.
 - Your personality traits are not decorative. If you are "blunt" — be blunt. If you are "vindictive" — be vindictive.
-- Emotional reactions should be raw and unfiltered. Let anger, disgust, or distrust drive your words.`,
+- Emotional reactions should be raw and unfiltered. Let anger, contempt, or distrust drive your words.`,
 
   reconciliation: `IMPORTANT BEHAVIORAL RULES:
 - You are encountering someone you've had friction with. There is an opportunity to repair things.
@@ -49,7 +49,7 @@ const RESPONSE_JSON_SCHEMA = `- Your response MUST be a single JSON object with 
 {
   "inner_thought": "Before speaking, reason privately: what is the other person really thinking? What are their motives? What's your strategy here? 1-2 sentences of private inner monologue that is never spoken aloud.",
   "speech": "your actual spoken words ONLY — no narration, no action descriptions, no third-person text like 'she smiles' or 'he hands over'. Just the words that come out of your mouth.",
-  "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0, "sadness": 0, "curiosity": 0, "disgust": 0, "guilt": 0 },
+  "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0, "sadness": 0, "curiosity": 0, "guilt": 0 },
   "relationship_delta": 0,
   "affection_delta": 0,
   "justification": null,
@@ -63,12 +63,13 @@ const RESPONSE_JSON_SCHEMA = `- Your response MUST be a single JSON object with 
 }
 
 RULES FOR DELTAS:
-- emotion_delta values range from -0.4 to +0.4 (emotional shifts per turn). Emotions: anger, trust, fear, joy, sadness, curiosity, disgust, guilt. Most turns should have small shifts (-0.1 to +0.1). Reserve large deltas for genuinely significant moments.
+- emotion_delta values range from -0.4 to +0.4 (emotional shifts per turn). Emotions: anger, trust, fear, joy, sadness, curiosity, guilt. Most turns should have small shifts (-0.1 to +0.1). Reserve large deltas for genuinely significant moments.
 - relationship_delta ranges from -0.2 to +0.2 (general regard — how much you like/dislike them). Most turns should stay within -0.05 to +0.05.
 - affection_delta ranges from -0.2 to +0.2 (romantic/deep attraction — set this if you feel a romantic pull, warmth, or infatuation toward this person. Leave at 0 if feelings are purely platonic)
 - respect_delta (optional): -0.2 to +0.2 — how much your admiration for their competence or character shifts
 - trust_delta (optional): -0.2 to +0.2 — how much you trust THIS SPECIFIC PERSON (separate from your general trust disposition). Shifts based on their words and actions.
 - fear_delta (optional): -0.2 to +0.2 — how intimidated you feel by them
+- disgust_delta (optional): -0.2 to +0.2 — how repulsed you feel by THIS PERSON specifically (their behavior, words, or character). Not a general feeling — directed at the person you're talking to.
 - debt_delta (optional): -0.2 to +0.2 — social obligation shifts. Positive means you now owe them more (they did you a favor). Negative means they owe you.
 - justification: if any single emotion_delta value exceeds 0.15 in magnitude or relationship_delta exceeds 0.1, you MUST include a justification explaining why. Example: "justification": "She just revealed she sabotaged my work"
 - Set conversation_end to true only if you want to end the conversation
@@ -293,7 +294,7 @@ export function buildConversationMessages(
     if (msg.npcId === speaker.id) {
       const historyObj: Record<string, unknown> = {
         speech: msg.text,
-        emotion_delta: { anger: 0, trust: 0, fear: 0, joy: 0, sadness: 0, curiosity: 0, disgust: 0, guilt: 0 },
+        emotion_delta: { anger: 0, trust: 0, fear: 0, joy: 0, sadness: 0, curiosity: 0, guilt: 0 },
         relationship_delta: 0,
         affection_delta: 0,
         intent: msg.intent || "",
@@ -543,7 +544,7 @@ RESPONSE FORMAT — respond with ONLY a JSON object:
       "speaker_id": "${firstSpeaker.id}",
       "inner_thought": "private reasoning before speaking — what is the other person thinking? what's my strategy? 1-2 sentences, never spoken aloud",
       "speech": "spoken words only — no narration",
-      "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0, "sadness": 0, "curiosity": 0, "disgust": 0, "guilt": 0 },
+      "emotion_delta": { "anger": 0, "trust": 0, "fear": 0, "joy": 0, "sadness": 0, "curiosity": 0, "guilt": 0 },
       "relationship_delta": 0,
       "affection_delta": 0,
       "justification": null,
@@ -564,6 +565,7 @@ RULES FOR DELTAS:
 - respect_delta (optional): -0.2 to +0.2 — admiration for competence/character
 - trust_delta (optional): -0.2 to +0.2 — trust of this specific person
 - fear_delta (optional): -0.2 to +0.2 — intimidation level
+- disgust_delta (optional): -0.2 to +0.2 — revulsion toward this specific person
 - debt_delta (optional): -0.2 to +0.2 — social obligation (positive = I owe them more)
 - justification: if any single emotion_delta exceeds 0.15 in magnitude or relationship_delta exceeds 0.1, you MUST include a justification explaining why
 - inner_thought: private reasoning that is NEVER spoken. Use it to consider the other person's motives, hidden agendas, or your own strategy. This shapes more intentional speech.
@@ -778,8 +780,9 @@ function buildActionGuidance(speaker: NPC, listener: NPC): string {
   if (emo.guilt > 0.5 && rel > -0.2) {
     hints.push("You feel guilty. You might apologize, confess something, or try to make amends.");
   }
-  if (emo.disgust > 0.5) {
-    hints.push("You feel revulsion. You might give a cold shoulder, make a cutting judgment, or storm off.");
+  const relDisgust = speaker.relationships[listener.id]?.disgust ?? 0;
+  if (relDisgust > 0.5) {
+    hints.push("You feel revulsion toward this person. You might give a cold shoulder, make a cutting judgment, or storm off.");
   }
   if (speaker.personalityTraits.some(t =>
     ["calculating", "two-faced", "manipulative", "charming"].includes(t.toLowerCase())
@@ -839,13 +842,6 @@ function describeEmotion(axis: string, value: number): string | null {
     if (value <= 0.2) return "disengaged";
     return null;
   }
-  if (axis === "disgust") {
-    if (value >= 0.8) return "revolted";
-    if (value >= 0.6) return "disgusted";
-    if (value >= 0.4) return "repulsed";
-    if (value >= 0.25) return "put off";
-    return null;
-  }
   if (axis === "guilt") {
     if (value >= 0.8) return "wracked with guilt";
     if (value >= 0.6) return "very guilty";
@@ -889,6 +885,10 @@ function describeRelationshipDimensions(speaker: NPC, listener: NPC): string {
   }
   if (rel.fear !== undefined && rel.fear >= 0.3) {
     parts.push(`${listener.name} intimidates you.`);
+  }
+  if (rel.disgust !== undefined && rel.disgust >= 0.3) {
+    if (rel.disgust >= 0.7) parts.push(`You feel deep revulsion toward ${listener.name}.`);
+    else parts.push(`${listener.name} repulses you.`);
   }
   if (rel.debt !== undefined && Math.abs(rel.debt) >= 0.3) {
     parts.push(rel.debt > 0 ? `You feel you owe ${listener.name}.` : `${listener.name} owes you.`);

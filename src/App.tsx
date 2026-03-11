@@ -359,7 +359,6 @@ function App() {
             joy: emotionDelta.joy ?? 0,
             sadness: emotionDelta.sadness ?? 0,
             curiosity: emotionDelta.curiosity ?? 0,
-            disgust: emotionDelta.disgust ?? 0,
             guilt: emotionDelta.guilt ?? 0,
           };
           storeRef.current.applyEmotionDelta(observerId, full);

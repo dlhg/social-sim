@@ -72,7 +72,6 @@ const EMOTION_COLORS: Record<string, string> = {
   joy: "#e0c84c",
   sadness: "#90a4ae",
   curiosity: "#4fc3f7",
-  disgust: "#a1887f",
   guilt: "#b39ddb",
 };
 
@@ -300,7 +299,7 @@ export function NpcInspector({
             <div className="npc-section">
               <div className="section-label">Emotional State</div>
               <div className="emotion-bars">
-                {(["anger", "trust", "fear", "joy", "sadness", "curiosity", "disgust", "guilt"] as const).map((emotion) => {
+                {(["anger", "trust", "fear", "joy", "sadness", "curiosity", "guilt"] as const).map((emotion) => {
                   const value = selected.emotionalState[emotion];
                   const historyData = history.map((s) => s.emotions[emotion]);
                   return (
@@ -365,6 +364,7 @@ export function NpcInspector({
                         {(relState?.respect ?? 0) >= 0.6 && <span title={`Respect: ${(relState?.respect ?? 0).toFixed(2)}`} style={{ fontSize: "0.7em", opacity: 0.7 }}>⭐</span>}
                         {(relState?.trust ?? 0) >= 0.6 && <span title={`Trust: ${(relState?.trust ?? 0).toFixed(2)}`} style={{ fontSize: "0.7em", opacity: 0.7 }}>🤝</span>}
                         {(relState?.fear ?? 0) >= 0.3 && <span title={`Fear: ${(relState?.fear ?? 0).toFixed(2)}`} style={{ fontSize: "0.7em", opacity: 0.7 }}>😨</span>}
+                        {(relState?.disgust ?? 0) >= 0.25 && <span title={`Disgust: ${(relState?.disgust ?? 0).toFixed(2)}`} style={{ fontSize: "0.7em", opacity: 0.7 }}>🤢</span>}
                         {Math.abs(relState?.debt ?? 0) >= 0.3 && <span title={`Debt: ${(relState?.debt ?? 0).toFixed(2)}`} style={{ fontSize: "0.7em", opacity: 0.7 }}>{(relState?.debt ?? 0) > 0 ? "📋" : "📌"}</span>}
                         {(relState?.familiarity ?? 0) >= 0.5 && <span title={`Familiarity: ${(relState?.familiarity ?? 0).toFixed(2)}`} style={{ fontSize: "0.7em", opacity: 0.7 }}>👁️</span>}
                       </span>

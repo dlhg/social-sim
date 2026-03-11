@@ -347,8 +347,7 @@ export function pickActivity(
       if (traits.includes(trait)) score += 2;
     }
 
-    // Emotional state influence (thresholds vary per emotion — joy/curiosity have higher
-    // baselines so use 0.6; disgust baseline is low so triggers at 0.4)
+    // Emotional state influence (thresholds vary per emotion — joy/curiosity have higher baselines so use 0.6)
     if (emo.anger > 0.5 && (actId === "training" || actId === "gardening")) score += 2;
     if (emo.fear > 0.5 && (actId === "meditating" || actId === "napping" || actId === "reading")) score += 2;
     if (emo.joy > 0.6 && (actId === "sketching" || actId === "cooking" || actId === "people_watching")) score += 1.5;
@@ -356,7 +355,6 @@ export function pickActivity(
     if (emo.sadness > 0.5 && (actId === "napping" || actId === "writing" || actId === "meditating")) score += 2;
     if (emo.curiosity > 0.6 && (actId === "reading" || actId === "foraging" || actId === "people_watching")) score += 1.5;
     if (emo.guilt > 0.5 && (actId === "writing" || actId === "meditating" || actId === "wishing")) score += 1.5;
-    if (emo.disgust > 0.4 && (actId === "gardening" || actId === "training")) score += 1;
 
     // Random jitter
     score += Math.random() * 1.5;

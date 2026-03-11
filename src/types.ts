@@ -6,7 +6,6 @@ export interface EmotionalState {
   joy: number; // 0 to 1
   sadness: number; // 0 to 1
   curiosity: number; // 0 to 1
-  disgust: number; // 0 to 1
   guilt: number; // 0 to 1
 }
 
@@ -17,6 +16,7 @@ export interface RelationshipState {
   respect: number; // 0 to 1 (admiration for competence/character)
   trust: number; // 0 to 1 (per-relationship trust, separate from emotional trust axis)
   fear: number; // 0 to 1 (intimidation, power imbalance)
+  disgust: number; // 0 to 1 (revulsion toward this person's behavior/character)
   debt: number; // -1 to 1 (social obligation; positive = I owe them)
   familiarity: number; // 0 to 1 (how well they know each other)
 }
@@ -131,6 +131,8 @@ export interface NPC {
   coreDesires: string[];
   backstory?: string; // narrative paragraph — preferred over traits/desires for prompts
   emotionalState: EmotionalState;
+  /** Per-NPC baselines emotions decay toward. Falls back to global defaults if absent. */
+  emotionalBaselines?: Partial<EmotionalState>;
   relationships: Record<string, RelationshipState>; // NPC id -> relationship state
   shortTermMemory: MemoryEntry[];
   longTermMemory: MemoryEntry[];
@@ -197,6 +199,7 @@ export interface LLMResponse {
   respect_delta?: number; // -0.2 to 0.2
   trust_delta?: number; // -0.2 to 0.2 (per-relationship trust)
   fear_delta?: number; // -0.2 to 0.2
+  disgust_delta?: number; // -0.2 to 0.2 (revulsion toward this person)
   debt_delta?: number; // -0.2 to 0.2
   justification?: string; // required when deltas are large
   intent: string;
@@ -220,6 +223,7 @@ export interface BatchTurnData {
   respect_delta?: number;
   trust_delta?: number;
   fear_delta?: number;
+  disgust_delta?: number;
   debt_delta?: number;
   justification?: string; // required when deltas are large
   intent: string;

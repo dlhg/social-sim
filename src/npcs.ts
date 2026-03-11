@@ -324,7 +324,7 @@ function deriveEmotionsFromTraits(traits: string[]): Partial<EmotionalState> {
     if (["competitive", "confrontational", "vindictive", "territorial"].includes(tl)) { emo.anger = (emo.anger ?? 0) + 0.2; }
     if (["playful", "optimistic", "enthusiastic", "whimsical"].includes(tl)) { emo.joy = (emo.joy ?? 0.5) + 0.15; }
     if (["curious", "perceptive", "dreamy"].includes(tl)) { emo.curiosity = (emo.curiosity ?? 0.4) + 0.15; }
-    if (["cynical", "calculating", "detached"].includes(tl)) { emo.trust = Math.min(emo.trust ?? 0.5, 0.2); emo.disgust = (emo.disgust ?? 0) + 0.1; }
+    if (["cynical", "calculating", "detached"].includes(tl)) { emo.trust = Math.min(emo.trust ?? 0.5, 0.2); }
     if (["loyal", "nurturing", "compassionate", "gentle"].includes(tl)) { emo.trust = (emo.trust ?? 0.5) + 0.1; }
     if (["self-destructive", "reckless"].includes(tl)) { emo.guilt = (emo.guilt ?? 0) + 0.15; }
   }
@@ -340,7 +340,7 @@ function computeInitialMood(npc: NPC): void {
   const s = npc.emotionalState;
   let mood: string | undefined;
   if (s.fear > 0.5 && s.trust < 0.3) mood = "paranoid";
-  else if (s.anger > 0.5 && s.disgust > 0.3) mood = "bitter";
+  else if (s.anger > 0.5 && s.trust < 0.3) mood = "bitter";
   else if (s.sadness > 0.5) mood = "melancholy";
   else if (s.guilt > 0.5) mood = "guilt-ridden";
   else if (s.anger > 0.6) mood = "volatile";
@@ -353,7 +353,7 @@ function computeInitialMood(npc: NPC): void {
 }
 
 function defaultEmotionalState(): EmotionalState {
-  return { anger: 0, trust: 0.5, fear: 0, joy: 0.5, sadness: 0.1, curiosity: 0.4, disgust: 0, guilt: 0 };
+  return { anger: 0, trust: 0.5, fear: 0, joy: 0.5, sadness: 0.1, curiosity: 0.4, guilt: 0 };
 }
 
 export function createNpc(partial: {
@@ -366,6 +366,7 @@ export function createNpc(partial: {
   coreDesires: string[];
   backstory?: string;
   emotionalState?: Partial<EmotionalState>;
+  emotionalBaselines?: Partial<EmotionalState>;
   secrets?: string[];
   inventory?: InventoryItem[];
   customVoiceId?: string;
@@ -378,6 +379,7 @@ export function createNpc(partial: {
       ...defaultEmotionalState(),
       ...(partial.emotionalState ?? {}),
     },
+    emotionalBaselines: partial.emotionalBaselines,
     relationships: {},
     shortTermMemory: [],
     longTermMemory: [],
@@ -396,9 +398,9 @@ export function createNpc(partial: {
 // ── Relationship constructor helper ──
 function rel(
   regard: number, affection = 0, respect = 0.3, trust = 0.3,
-  fear = 0, debt = 0, familiarity = 0.1,
+  fear = 0, disgust = 0, debt = 0, familiarity = 0.1,
 ): import("./types").RelationshipState {
-  return { regard, affection, respect, trust, fear, debt, familiarity };
+  return { regard, affection, respect, trust, fear, disgust, debt, familiarity };
 }
 
 // ── Seed memory helper ──
@@ -486,7 +488,7 @@ export const initialNpcs: NPC[] = (() => {
       "find a worthy intellectual rival",
     ],
     backstory: "Victor treats every conversation like a debate he intends to win. He was rejected from the university he'd built his entire identity around, and the wound never healed — it just calcified into a need to prove, constantly, that the rejection was their mistake. He's genuinely brilliant, but his brilliance is weaponized: he finds the weak point in any argument and drives into it without mercy. What makes Victor complicated is that he secretly admires people who don't play his game. Alice's unselfconscious curiosity fascinates him precisely because he can't replicate it. He'd never admit this. Admitting it would mean admitting that intelligence isn't the only thing that matters, and that's the one argument he can't afford to lose.",
-    emotionalState: { anger: 0.6, trust: 0.2, joy: 0.3, curiosity: 0.5, disgust: 0.2 },
+    emotionalState: { anger: 0.6, trust: 0.2, joy: 0.3, curiosity: 0.5 },
     secrets: [
       "I secretly admire Alice's intellect but would never admit it",
       "I was rejected from my dream university",
@@ -676,7 +678,7 @@ export const initialNpcs: NPC[] = (() => {
   // Ellis: fear 0.7, trust 0.15 → paranoid
   ellis.mood = "paranoid";
   ellis.moodSince = Date.now() - 180_000;
-  // Victor: anger 0.6 → volatile (just under the threshold at 0.6, but combined with disgust 0.2)
+  // Victor: anger 0.6 → volatile
   victor.mood = "volatile";
   victor.moodSince = Date.now() - 120_000;
 

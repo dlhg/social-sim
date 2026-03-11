@@ -527,7 +527,7 @@ export const INTERACTIONS: Record<InteractionId, InteractionDef> = {
     feedText: "{actor} showed off to {target}",
     relationshipDelta: [0.01, -0.02],
     emotionActor: { joy: 0.04 },
-    emotionTarget: { curiosity: 0.02, anger: 0.02, disgust: 0.01 },
+    emotionTarget: { curiosity: 0.02, anger: 0.02 },
     importance: 0.3,
     condition: (actor, target) => {
       const traits = actor.personalityTraits.map(t => t.toLowerCase());
@@ -667,7 +667,6 @@ export function executeInteraction(
     joy: partial.joy ?? 0,
     sadness: partial.sadness ?? 0,
     curiosity: partial.curiosity ?? 0,
-    disgust: partial.disgust ?? 0,
     guilt: partial.guilt ?? 0,
   });
   store.applyEmotionDelta(actorId, toEmo(def.emotionActor));

@@ -16,6 +16,7 @@ export interface PremadeTemplate {
   secrets: string[];
   inventory: InventoryItem[];
   emotionalState?: Partial<EmotionalState>;
+  emotionalBaselines?: Partial<EmotionalState>;
   customVoiceId?: string;
 }
 
@@ -70,6 +71,7 @@ export function premadeTemplateToNpc(template: PremadeTemplate): NPC {
     secrets: [...template.secrets],
     inventory: template.inventory.map((item) => ({ ...item })),
     emotionalState: template.emotionalState,
+    emotionalBaselines: template.emotionalBaselines,
     customVoiceId: template.customVoiceId,
   });
 }
@@ -89,6 +91,7 @@ export function npcToPremadeTemplate(npc: NPC): PremadeTemplate {
       ...item,
     })),
     emotionalState: { ...npc.emotionalState },
+    emotionalBaselines: npc.emotionalBaselines ? { ...npc.emotionalBaselines } : undefined,
     customVoiceId: npc.customVoiceId,
   };
 }

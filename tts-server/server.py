@@ -203,7 +203,6 @@ def compute_emotion_speed(emotions: dict) -> float:
     speed_delta += emotions.get("curiosity", 0) * 0.05
     speed_delta -= emotions.get("sadness", 0) * 0.20
     speed_delta -= emotions.get("guilt", 0) * 0.15
-    speed_delta -= emotions.get("disgust", 0) * 0.10
 
     return max(0.85, min(1.25, 1.0 + speed_delta))
 
