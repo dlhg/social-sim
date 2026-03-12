@@ -59,6 +59,7 @@ interface SetupScreenProps {
   ttsEngine: TTSEngine;
   llmConfig: LlmConfig;
   mapUrl: string;
+  worldPrompt: string;
   onMapChange: (url: string) => void;
   onAddToRoster: (npc: NPC) => void;
   onRemoveFromRoster: (npcId: string) => void;
@@ -68,6 +69,7 @@ interface SetupScreenProps {
   onTestTts: (text: string, engine: TTSEngine) => void;
   onStartSimulation: () => void;
   onTestMap?: () => void;
+  onWorldPromptChange: (prompt: string) => void;
 }
 
 export function SetupScreen({
@@ -85,6 +87,8 @@ export function SetupScreen({
   onTestTts,
   onStartSimulation,
   onTestMap,
+  worldPrompt,
+  onWorldPromptChange,
 }: SetupScreenProps) {
   // ── Premade / gallery state ──────────────────────
   const [customPremades, setCustomPremades] = useState<PremadeTemplate[]>(() => {
@@ -1027,6 +1031,18 @@ Guidelines:
             )}
           </div>
         </div>
+      </div>
+
+      {/* ── World Prompt ─────────────────────────── */}
+      <div className="setup-world-prompt">
+        <label className="setup-world-prompt-label">World Prompt</label>
+        <textarea
+          className="setup-world-prompt-input"
+          placeholder="Optional: Set the scene for all characters (e.g. &quot;Everyone woke up in this village with no memory of how they got here. The surrounding forest is dense and impassable.&quot;)"
+          value={worldPrompt}
+          onChange={(e) => onWorldPromptChange(e.target.value)}
+          rows={3}
+        />
       </div>
 
       {/* ── Start Bar ──────────────────────────────── */}

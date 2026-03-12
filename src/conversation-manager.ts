@@ -168,6 +168,7 @@ export class ConversationManager {
   private dayCycle: DayCycle | null = null;
   private conversationEavesdroppers: Set<string> = new Set();
   private language = "English";
+  private worldPrompt = "";
   private _batchMode = false;
   private ttsService: TTSService | null = null;
 
@@ -247,6 +248,10 @@ export class ConversationManager {
 
   setTTSService(tts: TTSService): void {
     this.ttsService = tts;
+  }
+
+  setWorldPrompt(prompt: string): void {
+    this.worldPrompt = prompt;
   }
 
   set batchMode(enabled: boolean) {
@@ -621,6 +626,7 @@ export class ConversationManager {
         memoriesA, memoriesB,
         narrativeSummary: this.narrativeSummary || undefined,
         language: this.language,
+        worldPrompt: this.worldPrompt || undefined,
       });
       const sdRaw = await accumulateChat(sdMessages, {
         signal: this.abortController!.signal,
@@ -673,6 +679,7 @@ export class ConversationManager {
         betrayalsKnownByB: this.getDiscoveredBetrayals(npcBId),
         brokenPromisesA: this.getBrokenPromisesFor(npcAId),
         brokenPromisesB: this.getBrokenPromisesFor(npcBId),
+        worldPrompt: this.worldPrompt || undefined,
       }
     );
 
@@ -1097,6 +1104,7 @@ export class ConversationManager {
         narrativeSummary: this.narrativeSummary || undefined,
         language: this.language,
         narrativePatterns,
+        worldPrompt: this.worldPrompt || undefined,
       });
       const sdRaw = await accumulateChat(sdMessages, {
         signal: this.llmAbort.signal,
@@ -1144,6 +1152,7 @@ export class ConversationManager {
         betrayalsKnownByB: this.getDiscoveredBetrayals(npcBId),
         brokenPromisesA: this.getBrokenPromisesFor(npcAId),
         brokenPromisesB: this.getBrokenPromisesFor(npcBId),
+        worldPrompt: this.worldPrompt || undefined,
       }
     );
 
@@ -1788,6 +1797,7 @@ export class ConversationManager {
         conversationType: this.activeConvType,
         frozenRegard: frozen?.regard,
         frozenAffection: frozen?.affection,
+        worldPrompt: this.worldPrompt || undefined,
       }
     );
 
@@ -3239,7 +3249,7 @@ export class ConversationManager {
     const allNpcs = this.store.getAll().map(n => ({ id: n.id, name: n.name }));
 
     try {
-      const messages = buildSoliloquyMessages(npc, waypointName, activityLabel, allNpcs, this.language);
+      const messages = buildSoliloquyMessages(npc, waypointName, activityLabel, allNpcs, this.language, this.worldPrompt || undefined);
       const modelOverride = loadLlmConfig().provider === "groq" ? this.pickGroqModel() : undefined;
       const raw = await accumulateChat(messages, { numPredict: 512, modelOverride });
       const json = extractJson(raw);
@@ -3616,7 +3626,7 @@ Respond with ONLY the summary text, no JSON, no markdown.`,
         if (!npc || !other) return;
 
         try {
-          const messages = buildReflectionMessages(npc, other.name, summary, this.language);
+          const messages = buildReflectionMessages(npc, other.name, summary, this.language, this.worldPrompt || undefined);
           const raw = await accumulateChat(messages);
           const json = extractJson(raw);
           const parsed = JSON.parse(json);

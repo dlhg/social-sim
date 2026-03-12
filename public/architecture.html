@@ -545,9 +545,9 @@ function renderArchitecture(){
     id:'prompt', label:'Prompt Builder', color:'var(--accent-prompt)', glow:'glow-prompt',
     angle:10, radius:370,
     detail:{tag:'BRIDGE', title:'Prompt Builder',
-      desc:'The translator between NPC state and LLM comprehension. Assembles a rich context window from all NPC data, relationship history, and narrative state into a structured prompt that guides conversation generation.',
+      desc:'The translator between NPC state and LLM comprehension. Assembles a rich context window from all NPC data, relationship history, and narrative state into a structured prompt that guides conversation generation. World prompt (optional shared premise) injected into all prompt types.',
       sections:[
-        {title:'Prompt Structure',items:['1. Identity (backstory preferred over trait list)','2. Character arc (growth narrative)','3. Persistent mood (if active >1 min)','4. Emotional state (prose description of 7 axes)','5. Current goal','6. Secrets (hint to reveal at trust \u22650.7)','7. Inventory (items with emoji)','8. Betrayals discovered (active grudges)','9. Broken promises from others','10. Relationship context (regard label + dimensions)','11. Relationship trajectory (warming/deteriorating/stable)','12. Location (waypoint description)','13. Time of day','14. Pending plans (active promises)','15. Retrieved memories (direct + gossip + about-listener)','16. Known NPCs list','17. Conversation type preamble','18. Escalation directive (early/mid/late turn)']},
+        {title:'Prompt Structure',items:['0. World Setting (optional shared premise, injected if set)','1. Identity (backstory preferred over trait list)','2. Character arc (growth narrative)','3. Persistent mood (if active >1 min)','4. Emotional state (prose description of 7 axes)','5. Current goal','6. Secrets (hint to reveal at trust \u22650.7)','7. Inventory (items with emoji)','8. Betrayals discovered (active grudges)','9. Broken promises from others','10. Relationship context (regard label + dimensions)','11. Relationship trajectory (warming/deteriorating/stable)','12. Location (waypoint description)','13. Time of day','14. Pending plans (active promises)','15. Retrieved memories (direct + gossip + about-listener)','16. Known NPCs list','17. Conversation type preamble','18. Escalation directive (early/mid/late turn)']},
         {title:'Response Format (JSON)',items:['inner_thought, speech','emotion_delta (7 axes, -0.4 to +0.4)','relationship_delta (-0.2 to +0.2) + extras','intent, conversation_end','secret_revealed, promise, action','forgive (for betrayals)','actions: give_gift, mock, embrace, threaten, storm_off, conspire, spread_rumor','justification required if delta >0.15 or relationship_delta >0.1']}
       ]}
   };
@@ -643,6 +643,8 @@ function renderArchitecture(){
       desc:'Moods are derived from emotional state via priority-ordered threshold checks. Negative moods take priority (paranoid, bitter, melancholy, guilt-ridden, volatile, restless) over positive (euphoric). Clears if no threshold met.'},
     {from:'moods',to:'prompt',color:'var(--accent-prompt)',label:'persistent mood',
       desc:'If the NPC has been in a mood for >1 minute (moodSince check), the prompt builder includes it as a PERSISTENT MOOD block: "You\'ve been feeling [mood] for a while now. This colors everything \u2014 your patience, your openness, your reactions."'},
+    {from:'director',to:'prompt',color:'var(--accent-prompt)',label:'world prompt',
+      desc:'Optional shared world premise set by the user on the setup screen (e.g. "Everyone woke up here with no memory"). Injected near the top of every prompt type — system, batch, scene direction, reflection, soliloquy — as background context. Framed so NPCs don\'t dwell on it unless relevant.'},
     {from:'identity',to:'prompt',color:'var(--accent-prompt)',label:'backstory & traits',
       desc:'Prompt builder includes the NPC\'s backstory (preferred) or personality traits + core desires as the identity block. This shapes the LLM\'s voice for the character.'},
     {from:'emotions',to:'prompt',color:'var(--accent-prompt)',label:'emotional context',
@@ -658,7 +660,7 @@ function renderArchitecture(){
     {from:'goals',to:'prompt',color:'var(--accent-prompt)',label:'current goal & arc',
       desc:'The NPC\'s current goal string and character arc (growth narrative) are included for continuity. Goals influence conversation topics and waypoint selection.'},
     {from:'prompt',to:'llm',color:'var(--accent-prompt)',label:'assembled prompt',
-      desc:'The complete prompt (18 sections: identity, emotions, relationships, memories, secrets, inventory, location, time, conversation preamble, etc.) is sent to the LLM. Response is JSON with speech, deltas, actions.'},
+      desc:'The complete prompt (world setting + 18 sections: identity, emotions, relationships, memories, secrets, inventory, location, time, conversation preamble, etc.) is sent to the LLM. Response is JSON with speech, deltas, actions.'},
     {from:'llm',to:'director',color:'var(--accent-llm)',label:'generated conversation JSON',
       desc:'LLM returns a full conversation as JSON turns, each containing: inner_thought, speech, emotion_delta (7 axes), relationship_delta, intent, actions (give_gift, threaten, storm_off, etc.), secret_revealed, promise, and forgive. The Director parses and applies all of these during playback.'},
     {from:'llm',to:'daycycle',color:'var(--accent-llm)',label:'promise resolution outcome',
@@ -1111,8 +1113,8 @@ function renderCodeGraph(){
       items:['WorldSimulation class','A* pathfinding with collision grid','14 activity types','22 interaction types','Drives: gift-seeking/loneliness/restlessness']},
     'day-cycle':{tag:'BUSINESS LOGIC',title:'day-cycle.ts',desc:'Temporal rhythm of the simulation with promise resolution and emotion decay.',
       items:['DayCycle class -- 3 phases (morning/afternoon/evening)','Promise resolution via LLM narrator','Emotion decay 15%/cycle','~400 ticks/phase']},
-    'prompt-builder':{tag:'BUSINESS LOGIC',title:'prompt-builder.ts',desc:'Assembles rich 18-section prompts from NPC state for LLM consumption.',
-      items:['buildSystemPrompt() -- 18-section assembly','buildBatchConversationMessages()','buildReflectionMessages()','buildSoliloquyMessages()']},
+    'prompt-builder':{tag:'BUSINESS LOGIC',title:'prompt-builder.ts',desc:'Assembles rich prompts from NPC state for LLM consumption. World prompt injected into all prompt types.',
+      items:['buildSystemPrompt() -- world setting + 18-section assembly','buildBatchConversationMessages()','buildReflectionMessages(worldPrompt?)','buildSoliloquyMessages(worldPrompt?)','buildSceneDirectionMessages(worldPrompt?)']},
     'response-parser':{tag:'BUSINESS LOGIC',title:'response-parser.ts',desc:'Parses and repairs LLM JSON responses into structured game data.',
       items:['parseLLMResponse() -> LLMResponse','parseBatchLLMResponse() -> BatchTurnData[]','extractJson() + repairJson()']},
     'ollama':{tag:'BUSINESS LOGIC',title:'ollama.ts',desc:'Dual-provider LLM client with streaming and rate limit tracking.',

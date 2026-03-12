@@ -139,6 +139,8 @@ export interface PromptContext {
   betrayalsKnown?: Array<{ betrayerName: string; description: string; forgiven: boolean }>;
   /** Promises broken by others toward this speaker */
   brokenPromises?: Array<{ promiserName: string; text: string }>;
+  /** Shared world premise/scenario that all NPCs are aware of */
+  worldPrompt?: string;
 }
 
 export function buildSystemPrompt(
@@ -226,8 +228,12 @@ export function buildSystemPrompt(
     ? `\nBROKEN PROMISES: ${ctx.brokenPromises.map(p => `${p.promiserName} promised "${p.text}" but didn't follow through`).join("; ")}. This weighs on you.`
     : "";
 
-  return `You are ${speaker.name}.
+  const worldBlock = ctx.worldPrompt
+    ? `\nWORLD SETTING (shared context — this is the world you all inhabit, don't dwell on it unless relevant to the moment):\n${ctx.worldPrompt}\n`
+    : "";
 
+  return `You are ${speaker.name}.
+${worldBlock}
 ${identityBlock}${arcBlock}${moodBlock}
 CURRENT EMOTIONAL STATE: ${emotionSummary}
 CURRENT GOAL: ${speaker.currentGoal ?? "none"}
@@ -402,6 +408,8 @@ export interface BatchPromptContext {
   brokenPromisesA?: Array<{ promiserName: string; text: string }>;
   /** Promises broken toward NPC B */
   brokenPromisesB?: Array<{ promiserName: string; text: string }>;
+  /** Shared world premise/scenario that all NPCs are aware of */
+  worldPrompt?: string;
 }
 
 export function buildBatchConversationMessages(
@@ -504,8 +512,12 @@ export function buildBatchConversationMessages(
     ? `\nBROKEN PROMISES: ${ctx.brokenPromisesB.map(p => `${p.promiserName} promised "${p.text}" but didn't follow through`).join("; ")}`
     : "";
 
-  const system = `You are a dialogue writer. Generate a complete conversation between two characters.
+  const worldBlock = ctx.worldPrompt
+    ? `\nWORLD SETTING (shared context all characters are aware of — don't dwell on it unless relevant):\n${ctx.worldPrompt}\n`
+    : "";
 
+  const system = `You are a dialogue writer. Generate a complete conversation between two characters.
+${worldBlock}
 CHARACTER A: ${npcA.name} (id: "${npcA.id}")
 ${identityA}${arcA}${moodA}
 Emotional state: ${emotionsA}
@@ -596,6 +608,7 @@ export function buildReflectionMessages(
   otherNpcName: string,
   conversationSummary: string,
   language = "English",
+  worldPrompt?: string,
 ): ChatMessage[] {
   const emotionSummary = describeEmotions(npc.emotionalState);
   const reflectionIdentity = npc.backstory
@@ -610,7 +623,7 @@ export function buildReflectionMessages(
     {
       role: "system",
       content: `You are ${npc.name}. You just finished a conversation with ${otherNpcName}.
-
+${worldPrompt ? `\nWORLD SETTING:\n${worldPrompt}\n` : ""}
 ${reflectionIdentity}${arcBlock}
 CURRENT EMOTIONAL STATE: ${emotionSummary}
 CURRENT GOAL: ${npc.currentGoal ?? "none"}
@@ -647,6 +660,7 @@ export function buildSoliloquyMessages(
   activityLabel: string,
   allNpcs: Array<{ id: string; name: string }>,
   language = "English",
+  worldPrompt?: string,
 ): ChatMessage[] {
   const emotionSummary = describeEmotions(npc.emotionalState);
   const identity = npc.backstory
@@ -676,7 +690,7 @@ export function buildSoliloquyMessages(
     {
       role: "system",
       content: `You are ${npc.name}, alone at ${waypointName}, ${activityLabel}.
-
+${worldPrompt ? `\nWORLD SETTING:\n${worldPrompt}\n` : ""}
 Who you are: ${identity}${arcBlock}${moodBlock}
 Emotional state: ${emotionSummary}
 Current goal: ${npc.currentGoal ?? "none"}
@@ -922,6 +936,8 @@ export interface SceneDirectionContext {
   language?: string;
   /** Detected dramatic patterns to inform scene direction */
   narrativePatterns?: string[];
+  /** Shared world premise/scenario */
+  worldPrompt?: string;
 }
 
 const VALID_CONVERSATION_TYPES: ConversationType[] = [
@@ -957,8 +973,12 @@ export function buildSceneDirectionMessages(
     ? `\nSTORY SO FAR:\n${ctx.narrativeSummary}`
     : "";
 
-  const system = `You are a scene director for an NPC social simulation. Given two characters about to have a conversation, decide what kind of scene this should be and write a brief creative direction.
+  const worldBlock = ctx.worldPrompt
+    ? `\nWORLD SETTING:\n${ctx.worldPrompt}\n`
+    : "";
 
+  const system = `You are a scene director for an NPC social simulation. Given two characters about to have a conversation, decide what kind of scene this should be and write a brief creative direction.
+${worldBlock}
 ${npcA.name}: ${identityA}
 Emotions: ${emotionsA}
 Regard for ${npcB.name}: ${regardAB.toFixed(2)} (${relationshipLabel(regardAB)})

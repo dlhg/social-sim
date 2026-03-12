@@ -70,6 +70,9 @@ function App() {
   const [mapUrl, setMapUrl] = useState("/assets/levels/village.tmj");
   const mapUrlRef = useRef(mapUrl);
   mapUrlRef.current = mapUrl;
+  const [worldPrompt, setWorldPrompt] = useState("");
+  const worldPromptRef = useRef(worldPrompt);
+  worldPromptRef.current = worldPrompt;
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [dmToolsOpen, setDmToolsOpen] = useState(false);
   const [npcViewerOpen, setNpcViewerOpen] = useState(false);
@@ -656,6 +659,7 @@ function App() {
     manager.setWorldSimulation(world);
     manager.setDayCycle(dayCycle);
     manager.setLanguage(languageRef.current);
+    manager.setWorldPrompt(worldPromptRef.current);
     manager.setTTSService(ttsRef.current);
     manager.batchMode = true;
 
@@ -876,6 +880,8 @@ function App() {
           }}
           onStartSimulation={handleStartSimulation}
           onTestMap={() => setStatus("map-test")}
+          worldPrompt={worldPrompt}
+          onWorldPromptChange={setWorldPrompt}
         />
       </div>
     );
