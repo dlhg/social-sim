@@ -1,4 +1,4 @@
-export type LlmProvider = "ollama" | "groq" | "gemini";
+export type LlmProvider = "ollama" | "groq" | "gemini" | "claude";
 
 export interface LlmConfig {
   provider: LlmProvider;
@@ -7,6 +7,8 @@ export interface LlmConfig {
   groqModel: string;
   geminiApiKey: string;
   geminiModel: string;
+  claudeApiKey: string;
+  claudeModel: string;
 }
 
 const STORAGE_KEY = "llm-config";
@@ -18,6 +20,8 @@ const DEFAULTS: LlmConfig = {
   groqModel: "llama-3.3-70b-versatile",
   geminiApiKey: "",
   geminiModel: "gemini-2.5-flash",
+  claudeApiKey: "",
+  claudeModel: "claude-sonnet-4-6",
 };
 
 export const GROQ_MODELS = [
@@ -33,6 +37,12 @@ export const GEMINI_MODELS = [
   { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
   { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
   { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite (fast)" },
+];
+
+export const CLAUDE_MODELS = [
+  { id: "claude-opus-4-6", label: "Claude Opus 4.6" },
+  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+  { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
 ];
 
 export function loadLlmConfig(): LlmConfig {

@@ -549,45 +549,194 @@ export const initialNpcs: NPC[] = (() => {
     ],
   });
 
+  const rowan = createNpc({
+    id: "rowan",
+    name: "Rowan",
+    avatar: "🗡️",
+    color: "#ff8a65",
+    spriteId: "Adam",
+    personalityTraits: [
+      "stoic",
+      "territorial",
+      "loyal",
+      "blunt",
+      "principled",
+    ],
+    coreDesires: [
+      "protect the people here — even if they don't want my protection",
+      "find out who Mara really is before she hurts someone",
+      "earn the right to stop punishing myself",
+    ],
+    backstory: "Rowan used to be someone people looked up to — a guard captain whose word carried the weight of authority and trust. Then a single judgment call, made under pressure and bad orders, cost an innocent person everything: their freedom, their name, their life as they knew it. The system closed ranks to protect itself, and Rowan was told to stay silent. They stayed silent. That silence became a wound that never healed, and eventually Rowan walked away — from the title, the authority, the certainty that doing your job meant doing the right thing. Now they carry a quiet, relentless guilt that manifests as fierce protectiveness of anyone who seems vulnerable. If they can't undo what they did, they can damn well make sure it doesn't happen to anyone else. They're blunt to the point of rudeness, not from ignorance of diplomacy but from disgust with it — they've seen what careful words and pleasant smiles can hide. When Mara flatters someone, Rowan watches the way a person who's been bitten watches a dog that's showing its teeth.",
+    emotionalState: { anger: 0.25, trust: 0.3, fear: 0.1, joy: 0.2, sadness: 0.3, curiosity: 0.3, guilt: 0.55 },
+    emotionalBaselines: { guilt: 0.4, trust: 0.35, anger: 0.15, joy: 0.25, sadness: 0.2 },
+    secrets: [
+      "I let an innocent person take the blame for something they didn't do because my superior ordered me to stay silent",
+      "I've been following someone for months — I think they're connected to what happened",
+    ],
+    inventory: [
+      { id: "item_rowan_1", label: "worn leather journal", category: "book", emoji: "📖", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.book },
+      { id: "item_rowan_2", label: "dried sage bundle", category: "herb", emoji: "🌿", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.herb },
+    ],
+  });
+
+  const sienna = createNpc({
+    id: "sienna",
+    name: "Sienna",
+    avatar: "⚡",
+    color: "#ffd54f",
+    spriteId: "Amelia",
+    personalityTraits: [
+      "reckless",
+      "sentimental",
+      "bold",
+      "dramatic",
+      "defiant",
+    ],
+    coreDesires: [
+      "feel something real, even if it burns",
+      "find out what Bob is hiding — quiet people fascinate me",
+      "prove that honesty is braver than cleverness",
+    ],
+    backstory: "Sienna lives like a lit match — bright, warm, and fully aware that she's consuming herself. She was an artist once, a genuinely talented one, but perfectionism curdled into self-destruction: she burned her studio and every piece she'd ever made in a single desperate night, convinced that none of it measured up to what she could see in her head. She's been trying to outrun the emptiness ever since. She falls for people with reckless abandon — not because she's naive but because she'd rather be devastated than numb. She says what everyone else is thinking, picks the fights nobody else will pick, and cries at things others have trained themselves not to feel. This makes her simultaneously the most honest and the most exhausting person in any room. She's drawn to hidden depths: Bob's deflections fascinate her, Victor's anger intrigues her, and Ellis's fear breaks her heart. Mara's careful performance disgusts her — not because Sienna can't see the strategy, but because she finds the idea of hiding behind a constructed personality cowardly. She hasn't learned yet that caring about everyone at maximum intensity is its own kind of self-destruction.",
+    emotionalState: { anger: 0.15, trust: 0.45, fear: 0.15, joy: 0.6, sadness: 0.25, curiosity: 0.55, guilt: 0.2 },
+    emotionalBaselines: { joy: 0.45, sadness: 0.2, curiosity: 0.5, trust: 0.45, anger: 0.1 },
+    secrets: [
+      "I burned down my studio with all my work inside because none of it was good enough",
+      "I'm in love with someone here and I'm terrified they'll think I'm too much",
+    ],
+    inventory: [
+      { id: "item_sienna_1", label: "charcoal sketch", category: "craft", emoji: "🖼️", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.craft },
+      { id: "item_sienna_2", label: "half-melted candle", category: "trinket", emoji: "🕯️", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+    ],
+  });
+
+  const jasper = createNpc({
+    id: "jasper",
+    name: "Jasper",
+    avatar: "🦊",
+    color: "#4dd0e1",
+    spriteId: "Alex",
+    personalityTraits: [
+      "charming",
+      "sly",
+      "witty",
+      "generous",
+      "conflicted",
+    ],
+    coreDesires: [
+      "gain everyone's trust, even though I don't deserve it",
+      "figure out what Rowan is really atoning for — it might be useful",
+      "stop running from the people I've already hurt",
+    ],
+    backstory: "Jasper is the kind of person who steals your watch and then helps you look for it — and somehow you end up thanking him for the effort. He learned early that survival meant reading a room and becoming whatever the person in front of him needed: a friend, a confidant, a co-conspirator. Then he'd quietly take what he needed and move on before anyone noticed. The problem is, somewhere along the way, he started genuinely caring about the people he was using, and now he's trapped in a cycle of attachment and guilt. He's funnier than Bob, warmer than Mara, and more generous than Alice — and none of it is a lie, exactly. He really does like people. He just can't stop himself from also taking advantage of them. When Mara works a room, Jasper recognizes every move because he invented half of them — but where Mara feels empty inside, Jasper feels too much. Every friendship he's exploited haunts him, every town he's left weighs on him, and he compensates by being lavishly generous with things that don't really matter while withholding the one thing that does: the truth about who he is.",
+    emotionalState: { anger: 0.05, trust: 0.35, fear: 0.2, joy: 0.55, sadness: 0.15, curiosity: 0.5, guilt: 0.3 },
+    emotionalBaselines: { guilt: 0.2, joy: 0.45, curiosity: 0.45, trust: 0.35, fear: 0.15 },
+    secrets: [
+      "I stole something precious from the last community I lived in, and they still don't know it was me",
+      "I actually care about these people, which terrifies me because caring has always been the first step toward betraying them",
+    ],
+    inventory: [
+      { id: "item_jasper_1", label: "carved pendant", category: "trinket", emoji: "📿", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+      { id: "item_jasper_2", label: "honey cake", category: "food", emoji: "🍰", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.food },
+    ],
+  });
+
   // ── Seed relationships ──
   // Alice: likes Bob (intellectual kinship), finds Victor abrasive, trusts Mara (hasn't seen through her), worried about Ellis
+  // Appreciates Rowan's straightforwardness, kindred spirit with Sienna, charmed by Jasper's generosity
   alice.relationships = {
     bob:    rel(0.35, 0, 0.4, 0.45, 0, 0, 0.4),
     victor: rel(-0.15, 0, 0.25, 0.15, 0.15, 0, 0.35),
     mara:   rel(0.2, 0, 0.3, 0.35, 0, 0, 0.25),
     ellis:  rel(0.1, 0, 0.3, 0.3, 0, 0, 0.15),
+    rowan:  rel(0.2, 0, 0.35, 0.35, 0, 0, 0.15),
+    sienna: rel(0.3, 0.1, 0.25, 0.35, 0, 0, 0.2),
+    jasper: rel(0.25, 0, 0.2, 0.35, 0, 0, 0.2),
   };
 
   // Bob: enjoys Alice's energy, suspicious of Mara, gentle with Ellis, respects Victor's mind grudgingly
+  // Respects Rowan's depth, intrigued by Sienna's directness, can't quite read Jasper
   bob.relationships = {
     alice:  rel(0.3, 0, 0.45, 0.4, 0, 0, 0.4),
     victor: rel(-0.1, 0, 0.4, 0.2, 0, 0, 0.3),
     mara:   rel(-0.1, 0, 0.25, 0.15, 0, 0, 0.3),
     ellis:  rel(0.15, 0, 0.3, 0.35, 0, 0, 0.2),
+    rowan:  rel(0.15, 0, 0.4, 0.3, 0, 0, 0.2),
+    sienna: rel(0.1, 0.1, 0.2, 0.25, 0, 0, 0.15),
+    jasper: rel(0.0, 0, 0.2, 0.15, 0, 0, 0.2),
   };
 
   // Victor: secretly admires Alice (high respect, hidden affection), sees Bob as sparring partner, distrusts Mara, impatient with Ellis
+  // Finds Rowan's guilt tiresome but respects conviction, Sienna's emotionalism is alien to him, Jasper's agreeableness irritates
   victor.relationships = {
     alice:  rel(0.25, 0.15, 0.6, 0.2, 0, 0, 0.45),
     bob:    rel(0.05, 0, 0.4, 0.25, 0, 0, 0.3),
     mara:   rel(-0.15, 0, 0.2, 0.1, 0, 0, 0.25),
     ellis:  rel(-0.2, 0, 0.1, 0.15, 0, 0, 0.15),
+    rowan:  rel(-0.15, 0, 0.25, 0.15, 0, 0, 0.2),
+    sienna: rel(0.0, 0, 0.1, 0.15, 0, 0, 0.15),
+    jasper: rel(-0.05, 0, 0.15, 0.2, 0, 0, 0.15),
   };
 
   // Mara: has studied everyone (high familiarity), targets Ellis (vulnerability), intrigued by Bob (can't read him), views Alice as easy
+  // Rowan sees through her (dangerous), Sienna's honesty is threatening, Jasper is a kindred spirit or rival
   mara.relationships = {
     alice:  rel(0.2, 0, 0.3, 0.3, 0, 0, 0.5),
     bob:    rel(0.1, 0, 0.35, 0.2, 0, 0, 0.45),
     victor: rel(-0.1, 0, 0.3, 0.1, 0.2, 0, 0.5),
     ellis:  rel(0.2, 0, 0.2, 0.25, 0, 0, 0.55),
+    rowan:  rel(-0.2, 0, 0.2, 0.05, 0, 0, 0.35),
+    sienna: rel(-0.15, 0, 0.1, 0.1, 0, 0.1, 0.25),
+    jasper: rel(0.15, 0, 0.4, 0.15, 0, 0, 0.4),
   };
 
   // Ellis: Bob feels safest, Mara feels wrong, Alice is overwhelming, Victor is terrifying
+  // Rowan's protectiveness is comforting but authority figures are scary, Sienna is overwhelming, Jasper feels too practiced
   ellis.relationships = {
     alice:  rel(0.05, 0, 0.3, 0.25, 0, 0, 0.2),
     bob:    rel(0.15, 0, 0.35, 0.4, 0, 0, 0.25),
     victor: rel(-0.25, 0, 0.2, 0.1, 0.4, 0, 0.2),
     mara:   rel(-0.2, 0, 0.25, 0.1, 0.3, 0, 0.3),
+    rowan:  rel(0.1, 0, 0.3, 0.2, 0.15, 0, 0.15),
+    sienna: rel(0.05, 0, 0.2, 0.15, 0.1, 0, 0.1),
+    jasper: rel(0.0, 0, 0.15, 0.15, 0.05, 0, 0.1),
+  };
+
+  // Rowan: sees through Mara, protective of Ellis, respects Bob's observation, challenged by Victor, warmed by Alice
+  // Wary of Sienna's recklessness, deeply suspicious of Jasper
+  rowan.relationships = {
+    alice:  rel(0.2, 0, 0.35, 0.35, 0, 0, 0.15),
+    bob:    rel(0.15, 0, 0.4, 0.3, 0, 0, 0.2),
+    victor: rel(-0.1, 0, 0.2, 0.15, 0, 0, 0.2),
+    mara:   rel(-0.3, 0, 0.2, 0.05, 0, 0.25, 0.35),
+    ellis:  rel(0.2, 0, 0.3, 0.3, 0, 0, 0.2),
+    sienna: rel(0.1, 0, 0.15, 0.2, 0, 0, 0.1),
+    jasper: rel(-0.15, 0, 0.2, 0.1, 0, 0, 0.2),
+  };
+
+  // Sienna: drawn to Bob's depth, loves Alice's warmth, intrigued by Victor's anger, disgusted by Mara's mask
+  // Respects Rowan's gravity, hasn't seen through Jasper yet
+  sienna.relationships = {
+    alice:  rel(0.35, 0.1, 0.3, 0.4, 0, 0, 0.2),
+    bob:    rel(0.3, 0.25, 0.4, 0.3, 0, 0, 0.2),
+    victor: rel(0.05, 0, 0.15, 0.2, 0, 0, 0.15),
+    mara:   rel(-0.25, 0, 0.15, 0.1, 0, 0.2, 0.25),
+    ellis:  rel(0.2, 0, 0.25, 0.35, 0, 0, 0.15),
+    rowan:  rel(0.2, 0, 0.35, 0.3, 0, 0, 0.1),
+    jasper: rel(0.2, 0.1, 0.2, 0.3, 0, 0, 0.15),
+  };
+
+  // Jasper: recognizes Mara as kindred spirit, Bob can't be read (exciting), Alice's guilelessness creates guilt
+  // Rowan's moral authority is threatening, Sienna's honesty draws him, Ellis's suspicion is deserved
+  jasper.relationships = {
+    alice:  rel(0.3, 0, 0.3, 0.3, 0, 0, 0.2),
+    bob:    rel(0.2, 0, 0.35, 0.25, 0, 0, 0.2),
+    victor: rel(0.05, 0, 0.2, 0.2, 0, 0, 0.15),
+    mara:   rel(0.1, 0, 0.5, 0.15, 0.1, 0, 0.4),
+    ellis:  rel(0.15, 0, 0.2, 0.25, 0, 0, 0.1),
+    rowan:  rel(-0.05, 0, 0.3, 0.15, 0.2, 0, 0.15),
+    sienna: rel(0.25, 0.15, 0.3, 0.3, 0, 0, 0.15),
   };
 
   // ── Seed memories ──
@@ -717,7 +866,128 @@ export const initialNpcs: NPC[] = (() => {
     }),
   );
 
-  return [alice, bob, victor, mara, ellis];
+  // ── Seed memories for new characters ──
+  rowan.shortTermMemory = [
+    seedMemory("Mara complimented my 'quiet strength' yesterday. The exact phrase my old commander used when ordering me to cover up the truth.", ["mara"], {
+      sentiment: -0.35, category: "social", interpretation: "She uses warmth like a lockpick. I've seen this before. I won't make the same mistake twice.",
+    }),
+    seedMemory("Ellis startles at shadows the same way I did in the months after it happened. I recognize that look — the hypervigilance, the flinching.", ["ellis"], {
+      sentiment: 0.15, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "Whatever happened to them, it left the same kind of scar. I can't fix my own but maybe I can watch their back.",
+    }),
+    seedMemory("Victor called my principles 'a luxury for people who haven't had to make real decisions.' He doesn't know what decisions I've made.", ["victor"], {
+      sentiment: -0.2, category: "conflict", interpretation: "He fights with words the way I used to fight with authority. All that cleverness and nowhere constructive to aim it.",
+    }),
+    seedMemory("Alice offered me one of her pressed flowers. Said it was 'to remind me that things grow back.' I almost told her everything.", ["alice"], {
+      sentiment: 0.3, category: "social", interpretation: "Her kindness is genuine. That's rare. And it makes what I'm carrying feel heavier.",
+    }),
+  ];
+
+  sienna.shortTermMemory = [
+    seedMemory("Bob deflected when I asked about his writing. But his eyes changed — there's something there he's protecting. I want to know what.", ["bob"], {
+      sentiment: 0.2, category: "social", interpretation: "Everyone here hides behind something. Bob hides behind cleverness. But I saw the real thing for half a second.",
+    }),
+    seedMemory("Mara told me I was 'refreshingly honest' with a smile that didn't reach her eyes. I told her she'd be refreshing too if she ever tried it.", ["mara"], {
+      sentiment: -0.3, category: "conflict", interpretation: "She's performing warmth for an audience of one and she thinks I can't tell. I can always tell.",
+    }),
+    seedMemory("Alice showed me her pressed flower collection. She handles them so carefully, like they're precious. I wish I could be that gentle with the things I make.", ["alice"], {
+      sentiment: 0.3, category: "social", interpretation: "She creates and preserves. I create and destroy. Maybe that's why I'm drawn to her.",
+    }),
+    seedMemory("Everything I've made, I've destroyed. Maybe that's why I'm drawn to people who build things. Bob writes. Alice catalogues. Even Mara constructs something, even if it's a lie.", [], {
+      importance: 0.7, sentiment: -0.3, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "I'm terrified that destruction is the only thing I'm actually good at.",
+    }),
+  ];
+
+  jasper.shortTermMemory = [
+    seedMemory("Mara and I locked eyes across the square. She smiled. I smiled. We both knew the other was performing. It was the most honest moment I've had in months.", ["mara"], {
+      sentiment: 0.1, category: "social", interpretation: "She's running the same playbook I am. Either she's a threat or an ally, and I can't decide which is more dangerous.",
+    }),
+    seedMemory("Alice gave me a pressed flower 'for no reason.' For no reason. People like her make the guilt worse.", ["alice"], {
+      sentiment: 0.25, category: "social", interpretation: "She's generous without calculation. It makes me feel like a fraud standing next to the real thing.",
+    }),
+    seedMemory("Rowan watched me the entire time I was talking to Ellis. Not threatening, just... aware. They see something. I need to be careful.", ["rowan"], {
+      sentiment: -0.2, type: "observation" as MemoryType, category: "social" as MemoryCategory,
+      interpretation: "Former authority. Carries themselves like someone who's arrested people before. The last thing I need is someone with instincts like that watching me.",
+      aboutNpcIds: ["rowan"],
+    }),
+    seedMemory("I told myself this time would be different. That I'd leave before I cared. It's already too late for that.", [], {
+      importance: 0.75, sentiment: -0.35, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "These people are getting under my skin. Every one of them. And I'm going to hurt them the way I always do.",
+    }),
+  ];
+
+  // ── Additional memories for existing characters about new characters ──
+  alice.shortTermMemory.push(
+    seedMemory("Sienna grabbed my hands and called my moss theory 'the most beautiful thing anyone has ever said about fungus.' Nobody has ever been that excited about my work.", ["sienna"], {
+      sentiment: 0.4, category: "social", interpretation: "She feels things so intensely. It's like looking in a mirror — if the mirror reflected everything turned up to eleven.",
+    }),
+    seedMemory("Jasper found a wildflower I've been looking for and brought it to me. He said he 'just happened to notice it.' How did he know what I was looking for?", ["jasper"], {
+      sentiment: 0.15, category: "social", interpretation: "It was thoughtful. Almost too thoughtful. But maybe I'm being unfair — not everyone has an agenda.",
+    }),
+  );
+  bob.shortTermMemory.push(
+    seedMemory("Sienna asked me point-blank what I was hiding. I laughed it off. She didn't.", ["sienna"], {
+      sentiment: -0.1, category: "social", interpretation: "She's relentless. Not like Mara — there's no strategy. She just genuinely wants to know. Which is somehow worse.",
+    }),
+    seedMemory("Rowan and I sat in silence for a long time. Comfortable silence. They don't need to perform anything. I respect that.", ["rowan"], {
+      sentiment: 0.25, category: "social", interpretation: "Most people fill silence because they're afraid of what it contains. Rowan isn't afraid of anything except themselves.",
+    }),
+  );
+  victor.shortTermMemory.push(
+    seedMemory("I told Rowan their guilt was 'self-indulgent.' They looked at me like I was a child throwing a tantrum. Nobody looks at me like that.", ["rowan"], {
+      sentiment: -0.25, category: "conflict", interpretation: "They didn't argue. They just looked at me. That's worse than any comeback.",
+    }),
+  );
+  mara.shortTermMemory.push(
+    seedMemory("Jasper is good. Almost as good as me. He complimented three people today and each one felt genuine. Either he's the real thing or he's running my playbook.", ["jasper"], {
+      importance: 0.7, sentiment: 0.1, type: "observation" as MemoryType, category: "discovery" as MemoryCategory,
+      interpretation: "He's either the most dangerous person here or the most useful. I need to figure out which before he figures me out.",
+      aboutNpcIds: ["jasper"],
+    }),
+    seedMemory("Rowan barely speaks to me. When they do, every word lands like they've weighed it first. They're watching me.", ["rowan"], {
+      sentiment: -0.2, category: "social", interpretation: "An ex-guard with a grudge against manipulators. Wonderful. I need to find their blind spot before they find mine.",
+      aboutNpcIds: ["rowan"],
+    }),
+  );
+  ellis.shortTermMemory.push(
+    seedMemory("Rowan said they'd look out for me. The last person who said that turned out to be the one I needed protection from.", ["rowan"], {
+      sentiment: 0.05, category: "social", interpretation: "They seem sincere. But sincerity is the easiest thing to fake. I want to believe them. I'm afraid to believe them.",
+      unresolved: true,
+    }),
+  );
+
+  // ── New character goals ──
+  rowan.currentGoal = "figure out what Mara is really after before someone gets hurt";
+  sienna.currentGoal = "get Bob to have one real conversation — no deflection, no jokes, just truth";
+  jasper.currentGoal = "find out what Rowan knows about me — if anything";
+
+  // ── New character known secrets ──
+  // Rowan has independently noticed Mara's note-keeping (recognizes intelligence-gathering behavior)
+  rowan.knownSecrets = {
+    mara: ["She keeps detailed notes about people — I've seen her writing after conversations"],
+  };
+  // Jasper has also clocked Mara's journal (takes one to know one)
+  jasper.knownSecrets = {
+    mara: ["She keeps a journal of people's vulnerabilities — I recognize the technique"],
+  };
+  // Mara has picked up on Rowan's guilt about something in their past
+  mara.knownSecrets = {
+    ...mara.knownSecrets,
+    rowan: ["They did something terrible in their past — the guilt is eating them alive"],
+  };
+
+  // ── New character moods ──
+  // Rowan: guilt 0.55 → guilt-ridden
+  rowan.mood = "guilt-ridden";
+  rowan.moodSince = Date.now() - 180_000;
+
+  // ── New character arcs ──
+  rowan.characterArc = "Struggling with whether protection is really about the people they guard or about their own need to not fail again.";
+  sienna.characterArc = "Starting to wonder whether burning bright is courage or just a prettier form of running away.";
+  jasper.characterArc = "Discovering that the people he planned to use have become the people he doesn't want to lose.";
+
+  return [alice, bob, victor, mara, ellis, rowan, sienna, jasper];
 })();
 
 // ── Seed data for the premade conflict web ──
@@ -739,6 +1009,22 @@ export const PRESET_PROMISES: NpcPromise[] = [
     promiseeId: "ellis",
     text: "I won't tell anyone about your nervousness around the old mill — your secret is safe with me",
     madeAt: Date.now() - 240_000,
+    status: "active",
+  },
+  {
+    id: "promise_preset_3",
+    promiserId: "jasper",
+    promiseeId: "alice",
+    text: "I'll help you find that rare moss specimen you mentioned — I think I know a spot",
+    madeAt: Date.now() - 200_000,
+    status: "active",
+  },
+  {
+    id: "promise_preset_4",
+    promiserId: "rowan",
+    promiseeId: "ellis",
+    text: "If anyone gives you trouble, come find me — you don't have to deal with things alone",
+    madeAt: Date.now() - 260_000,
     status: "active",
   },
 ];
@@ -774,5 +1060,35 @@ export const PRESET_IMPULSES: ReactiveImpulse[] = [
     urgency: 0.45,
     expiresAt: Date.now() + 10 * 60_000,
     sourceMemoryText: "Bob brought me tea without asking. Didn't ask anything in return.",
+  },
+  {
+    id: "impulse_preset_4",
+    npcId: "rowan",
+    targetNpcId: "mara",
+    reason: "Overheard Mara using the same flattery techniques as their old commander — needs to confront her",
+    conversationType: "confrontation",
+    urgency: 0.55,
+    expiresAt: Date.now() + 10 * 60_000,
+    sourceMemoryText: "Mara complimented my 'quiet strength' — the exact phrase my old commander used",
+  },
+  {
+    id: "impulse_preset_5",
+    npcId: "sienna",
+    targetNpcId: "bob",
+    reason: "Wants a real conversation with Bob — no deflection, no sardonic distance, just honesty",
+    conversationType: "casual",
+    urgency: 0.5,
+    expiresAt: Date.now() + 10 * 60_000,
+    sourceMemoryText: "Bob deflected when I asked about his writing. But his eyes changed.",
+  },
+  {
+    id: "impulse_preset_6",
+    npcId: "jasper",
+    targetNpcId: "mara",
+    reason: "Wants to sound out Mara — figure out if she's a potential ally or a threat to his position",
+    conversationType: "alliance_forming",
+    urgency: 0.5,
+    expiresAt: Date.now() + 10 * 60_000,
+    sourceMemoryText: "Mara and I locked eyes across the square. We both knew the other was performing.",
   },
 ];

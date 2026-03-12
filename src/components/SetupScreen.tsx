@@ -13,7 +13,7 @@ import {
 } from "../premade-storage";
 import type { PremadeTemplate } from "../premade-storage";
 import type { LlmProvider, LlmConfig } from "../llm-config";
-import { GROQ_MODELS, GEMINI_MODELS } from "../llm-config";
+import { GROQ_MODELS, GEMINI_MODELS, CLAUDE_MODELS } from "../llm-config";
 import { uploadVoiceClip, fetchVoices, getVoicePreviewUrl, deleteVoice, youtubeVoiceClip } from "../tts-service";
 import type { VoiceInfo } from "../tts-service";
 import { accumulateChat } from "../ollama";
@@ -1025,7 +1025,7 @@ Guidelines:
           <button className="btn btn-settings-gear" onClick={() => setSettingsOpen((p) => !p)} title="Settings">
             <span className="settings-gear-icon">⚙</span>
             <span className="setup-settings-summary">
-              {{ ollama: "Ollama", groq: "Groq", gemini: "Gemini" }[llmConfig.provider]} · {ttsEngine === "chatterbox" ? "Chatterbox" : "Kokoro"} · {MAPS.find(m => m.url === mapUrl)?.label ?? "Custom"}
+              {{ ollama: "Ollama", groq: "Groq", gemini: "Gemini", claude: "Claude" }[llmConfig.provider]} · {ttsEngine === "chatterbox" ? "Chatterbox" : "Kokoro"} · {MAPS.find(m => m.url === mapUrl)?.label ?? "Custom"}
             </span>
           </button>
           {onTestMap && <button className="btn btn-test-map" onClick={onTestMap}>Test Map</button>}
@@ -1061,6 +1061,7 @@ Guidelines:
                   <button className={`tts-engine-btn ${llmConfig.provider === "ollama" ? "active" : ""}`} onClick={() => onLlmConfigChange({ provider: "ollama" as LlmProvider })}>Local (Ollama)</button>
                   <button className={`tts-engine-btn ${llmConfig.provider === "groq" ? "active" : ""}`} onClick={() => onLlmConfigChange({ provider: "groq" as LlmProvider })}>Cloud (Groq)</button>
                   <button className={`tts-engine-btn ${llmConfig.provider === "gemini" ? "active" : ""}`} onClick={() => onLlmConfigChange({ provider: "gemini" as LlmProvider })}>Cloud (Gemini)</button>
+                  <button className={`tts-engine-btn ${llmConfig.provider === "claude" ? "active" : ""}`} onClick={() => onLlmConfigChange({ provider: "claude" as LlmProvider })}>Cloud (Claude)</button>
                 </div>
                 {llmConfig.provider === "ollama" && (
                   <div className="llm-detail">
@@ -1080,6 +1081,14 @@ Guidelines:
                     <input className="llm-input" type="password" value={llmConfig.geminiApiKey} onChange={(e) => onLlmConfigChange({ geminiApiKey: e.target.value })} placeholder="Gemini API key" />
                     <select className="llm-select" value={llmConfig.geminiModel} onChange={(e) => onLlmConfigChange({ geminiModel: e.target.value })}>
                       {GEMINI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                    </select>
+                  </div>
+                )}
+                {llmConfig.provider === "claude" && (
+                  <div className="llm-detail">
+                    <input className="llm-input" type="password" value={llmConfig.claudeApiKey} onChange={(e) => onLlmConfigChange({ claudeApiKey: e.target.value })} placeholder="Anthropic API key" />
+                    <select className="llm-select" value={llmConfig.claudeModel} onChange={(e) => onLlmConfigChange({ claudeModel: e.target.value })}>
+                      {CLAUDE_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
                     </select>
                   </div>
                 )}

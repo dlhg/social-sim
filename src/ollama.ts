@@ -8,6 +8,7 @@ import { loadLlmConfig } from "./llm-config";
 const OLLAMA_URL = "/api/chat";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const CLAUDE_URL = "/anthropic-api/v1/messages";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -67,6 +68,10 @@ export async function accumulateChat(
   if (config.provider === "gemini") {
     const model = modelOverride ?? config.geminiModel;
     return accumulateGemini(messages, config.geminiApiKey, model, numPredict, onProgress, abortSignal);
+  }
+  if (config.provider === "claude") {
+    const model = modelOverride ?? config.claudeModel;
+    return accumulateClaude(messages, config.claudeApiKey, model, numPredict, onProgress, abortSignal);
   }
   return accumulateOllama(messages, config.ollamaModel, numPredict, onProgress, abortSignal);
 }
@@ -210,6 +215,95 @@ async function accumulateGroq(
         const content = json.choices?.[0]?.delta?.content;
         if (content) {
           full += content;
+          onProgress?.(full);
+        }
+      } catch {
+        // skip malformed SSE lines
+      }
+    }
+  }
+
+  return full;
+}
+
+// ── Claude (Anthropic Messages API, SSE stream) ──
+
+async function accumulateClaude(
+  messages: ChatMessage[],
+  apiKey: string,
+  model: string,
+  numPredict: number | undefined,
+  onProgress: ((accumulated: string) => void) | undefined,
+  signal: AbortSignal | undefined,
+): Promise<string> {
+  if (!apiKey) {
+    throw new Error("Claude API key is not set. Configure it in the setup screen.");
+  }
+
+  // Anthropic API: system is a top-level param, not in the messages array
+  const systemParts: string[] = [];
+  const apiMessages: { role: string; content: string }[] = [];
+  for (const msg of messages) {
+    if (msg.role === "system") {
+      systemParts.push(msg.content);
+    } else {
+      apiMessages.push({ role: msg.role, content: msg.content });
+    }
+  }
+
+  const body: Record<string, unknown> = {
+    model,
+    messages: apiMessages,
+    stream: true,
+    max_tokens: numPredict ?? 4096,
+  };
+  if (systemParts.length > 0) {
+    body.system = systemParts.join("\n\n");
+  }
+
+  const res = await fetch(CLAUDE_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Claude error: ${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`);
+  }
+
+  if (!res.body) {
+    throw new Error("Claude response body is null");
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let full = "";
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("event:")) continue;
+      if (!trimmed.startsWith("data: ")) continue;
+
+      try {
+        const json = JSON.parse(trimmed.slice(6));
+        // Anthropic streaming: content_block_delta events carry text
+        if (json.type === "content_block_delta" && json.delta?.text) {
+          full += json.delta.text;
           onProgress?.(full);
         }
       } catch {
