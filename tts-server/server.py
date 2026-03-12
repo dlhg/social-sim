@@ -229,8 +229,15 @@ def process_voice_audio(audio_data: np.ndarray, sample_rate: int) -> tuple[np.nd
     return audio_data, sample_rate
 
 
+MIN_VOICE_DURATION = 0.5  # seconds — reject reference clips shorter than this
+
+
 def save_voice(voice_id: str, audio_data: np.ndarray, sample_rate: int) -> float:
     """Save processed audio as WAV and kick off preview generation. Returns duration."""
+    duration = len(audio_data) / sample_rate
+    if duration < MIN_VOICE_DURATION:
+        raise ValueError(f"Audio too short ({duration:.2f}s) — need at least {MIN_VOICE_DURATION}s")
+
     out_path = VOICES_DIR / f"{voice_id}.wav"
     sf.write(str(out_path), audio_data, sample_rate, subtype="PCM_16")
     duration = round(len(audio_data) / sample_rate, 2)
@@ -408,7 +415,10 @@ def upload_voice():
         return Response(f"Could not read audio file: {e}", status=400)
 
     audio_data, sample_rate = process_voice_audio(audio_data, sample_rate)
-    duration = save_voice(voice_id, audio_data, sample_rate)
+    try:
+        duration = save_voice(voice_id, audio_data, sample_rate)
+    except ValueError as e:
+        return Response(str(e), status=400)
 
     return jsonify({
         "voice_id": voice_id,
@@ -482,7 +492,10 @@ def youtube_voice():
             return Response(f"Could not read extracted audio: {e}", status=500)
 
     audio_data, sample_rate = process_voice_audio(audio_data, sample_rate)
-    duration = save_voice(voice_id, audio_data, sample_rate)
+    try:
+        duration = save_voice(voice_id, audio_data, sample_rate)
+    except ValueError as e:
+        return Response(str(e), status=400)
 
     return jsonify({
         "voice_id": voice_id,
