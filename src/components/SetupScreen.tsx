@@ -718,6 +718,7 @@ Guidelines:
                   </div>
                   <span className="template-row-name" style={{ color: added ? undefined : template.color }}>
                     {template.name}
+                    {template.customVoiceId && <span title="Custom voice"> 🎙️</span>}
                   </span>
                   {!added && !atCapacity && (
                     <button
