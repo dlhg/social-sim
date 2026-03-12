@@ -642,6 +642,68 @@ export const initialNpcs: NPC[] = (() => {
     ],
   });
 
+  const wren = createNpc({
+    id: "wren",
+    name: "Wren",
+    avatar: "🦉",
+    color: "#7e57c2",
+    spriteId: "Bob",
+    personalityTraits: [
+      "patient",
+      "perceptive",
+      "enigmatic",
+      "cautious",
+      "meticulous",
+    ],
+    coreDesires: [
+      "learn every secret in this place without anyone realizing I'm listening",
+      "figure out what connects Rowan's guilt to Ellis's fear — something doesn't add up",
+      "find someone worth trusting with what I know",
+    ],
+    backstory: "Wren learned early that the loudest person in the room is never the most powerful — the most powerful is the one nobody's watching. They've built a life around being unremarkable: the person who blends into the furniture, who's always present but never quite remembered. This isn't shyness; it's strategy. They listen with a recorder's precision, filing away inconsistencies and contradictions that others miss in the noise of their own talking. They've noticed that Mara keeps notes after conversations. They've noticed that Jasper's generosity follows a pattern. They've noticed that Ellis and Rowan flinch at the same things. The problem with seeing everything is that eventually you see something you can't unsee, and Wren is getting close to understanding something about this community that connects several people's secrets in ways none of them realize. They want to trust someone with what they're piecing together, but trust requires being seen, and being seen has always felt like being vulnerable. The last time someone truly noticed Wren, they used what they learned to dismantle Wren's entire life. So Wren watches, and waits, and tells themselves that patience is the same thing as safety.",
+    emotionalState: { anger: 0.05, trust: 0.2, fear: 0.25, joy: 0.25, sadness: 0.2, curiosity: 0.7, guilt: 0.1 },
+    emotionalBaselines: { curiosity: 0.6, trust: 0.25, fear: 0.15, joy: 0.35 },
+    secrets: [
+      "I've been piecing together a connection between several people's secrets that none of them realize exists",
+      "I choose to be invisible because the last time someone really saw me, they used what they knew to destroy everything I had",
+    ],
+    inventory: [
+      { id: "item_wren_1", label: "small notebook", category: "book", emoji: "📒", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.book },
+      { id: "item_wren_2", label: "pressed leaf", category: "herb", emoji: "🍂", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.herb },
+    ],
+  });
+
+  const dove = createNpc({
+    id: "dove",
+    name: "Dove",
+    avatar: "🌙",
+    color: "#ef5350",
+    spriteId: "Amelia",
+    personalityTraits: [
+      "compassionate",
+      "melancholic",
+      "defiant",
+      "idealistic",
+      "pessimistic",
+    ],
+    coreDesires: [
+      "find proof that kindness isn't just weakness waiting to be exploited",
+      "understand why Sienna still burns when I've gone cold",
+      "stop helping people who don't deserve it — and figure out why I can't",
+    ],
+    backstory: "Dove used to believe that if you were kind enough, patient enough, and brave enough, the world would eventually bend toward justice. They spent years proving it — mediating disputes, advocating for people who couldn't advocate for themselves, building bridges between enemies. And then they watched every bridge burn. Not all at once, but slowly: the people they helped turned on each other, the compromises they brokered collapsed into worse conflicts, and the one person they trusted most used their idealism as cover for something unforgivable. Now Dove carries a bitterness that's all the sharper for sitting on top of a compassion they can't kill. They still bring soup to sick neighbors. They still notice when someone's hurting. But every act of kindness comes with a twist of resentment — at the world for not deserving it, and at themselves for being unable to stop. Sienna's reckless passion baffles them: how can anyone still feel that much and survive? Victor's cynicism feels honest to them now in a way it never would have before. And Alice's optimism is either the most admirable or the most naive thing Dove has ever seen.",
+    emotionalState: { anger: 0.2, trust: 0.2, fear: 0.1, joy: 0.2, sadness: 0.55, curiosity: 0.3, guilt: 0.25 },
+    emotionalBaselines: { sadness: 0.35, trust: 0.25, joy: 0.3, anger: 0.1 },
+    secrets: [
+      "The person I trusted most used my advocacy work as cover to exploit the people I was trying to help",
+      "I still write letters to the people I failed — I just never send them",
+    ],
+    inventory: [
+      { id: "item_dove_1", label: "unsent letter", category: "book", emoji: "✉️", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.book },
+      { id: "item_dove_2", label: "dried wildflowers", category: "herb", emoji: "💐", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.herb },
+    ],
+  });
+
   // ── Seed relationships ──
   // Alice: likes Bob (intellectual kinship), finds Victor abrasive, trusts Mara (hasn't seen through her), worried about Ellis
   // Appreciates Rowan's straightforwardness, kindred spirit with Sienna, charmed by Jasper's generosity
@@ -653,6 +715,8 @@ export const initialNpcs: NPC[] = (() => {
     rowan:  rel(0.2, 0, 0.35, 0.35, 0, 0, 0.15),
     sienna: rel(0.3, 0.1, 0.25, 0.35, 0, 0, 0.2),
     jasper: rel(0.25, 0, 0.2, 0.35, 0, 0, 0.2),
+    wren:   rel(0.1, 0, 0.15, 0.25, 0, 0, 0.1),
+    dove:   rel(0.2, 0, 0.25, 0.3, 0, 0, 0.15),
   };
 
   // Bob: enjoys Alice's energy, suspicious of Mara, gentle with Ellis, respects Victor's mind grudgingly
@@ -665,6 +729,8 @@ export const initialNpcs: NPC[] = (() => {
     rowan:  rel(0.15, 0, 0.4, 0.3, 0, 0, 0.2),
     sienna: rel(0.1, 0.1, 0.2, 0.25, 0, 0, 0.15),
     jasper: rel(0.0, 0, 0.2, 0.15, 0, 0, 0.2),
+    wren:   rel(0.2, 0, 0.35, 0.3, 0, 0, 0.2),
+    dove:   rel(0.2, 0, 0.3, 0.3, 0, 0, 0.2),
   };
 
   // Victor: secretly admires Alice (high respect, hidden affection), sees Bob as sparring partner, distrusts Mara, impatient with Ellis
@@ -677,6 +743,8 @@ export const initialNpcs: NPC[] = (() => {
     rowan:  rel(-0.15, 0, 0.25, 0.15, 0, 0, 0.2),
     sienna: rel(0.0, 0, 0.1, 0.15, 0, 0, 0.15),
     jasper: rel(-0.05, 0, 0.15, 0.2, 0, 0, 0.15),
+    wren:   rel(-0.05, 0, 0.1, 0.15, 0, 0, 0.1),
+    dove:   rel(0.05, 0, 0.15, 0.15, 0, 0, 0.15),
   };
 
   // Mara: has studied everyone (high familiarity), targets Ellis (vulnerability), intrigued by Bob (can't read him), views Alice as easy
@@ -689,6 +757,8 @@ export const initialNpcs: NPC[] = (() => {
     rowan:  rel(-0.2, 0, 0.2, 0.05, 0, 0, 0.35),
     sienna: rel(-0.15, 0, 0.1, 0.1, 0, 0.1, 0.25),
     jasper: rel(0.15, 0, 0.4, 0.15, 0, 0, 0.4),
+    wren:   rel(0.0, 0, 0.15, 0.1, 0, 0, 0.15),
+    dove:   rel(0.1, 0, 0.15, 0.15, 0, 0, 0.2),
   };
 
   // Ellis: Bob feels safest, Mara feels wrong, Alice is overwhelming, Victor is terrifying
@@ -701,6 +771,8 @@ export const initialNpcs: NPC[] = (() => {
     rowan:  rel(0.1, 0, 0.3, 0.2, 0.15, 0, 0.15),
     sienna: rel(0.05, 0, 0.2, 0.15, 0.1, 0, 0.1),
     jasper: rel(0.0, 0, 0.15, 0.15, 0.05, 0, 0.1),
+    wren:   rel(0.15, 0, 0.25, 0.2, 0, 0, 0.2),
+    dove:   rel(0.15, 0, 0.25, 0.25, 0, 0, 0.15),
   };
 
   // Rowan: sees through Mara, protective of Ellis, respects Bob's observation, challenged by Victor, warmed by Alice
@@ -713,6 +785,8 @@ export const initialNpcs: NPC[] = (() => {
     ellis:  rel(0.2, 0, 0.3, 0.3, 0, 0, 0.2),
     sienna: rel(0.1, 0, 0.15, 0.2, 0, 0, 0.1),
     jasper: rel(-0.15, 0, 0.2, 0.1, 0, 0, 0.2),
+    wren:   rel(0.1, 0, 0.2, 0.2, 0, 0, 0.1),
+    dove:   rel(0.25, 0, 0.4, 0.35, 0, 0, 0.15),
   };
 
   // Sienna: drawn to Bob's depth, loves Alice's warmth, intrigued by Victor's anger, disgusted by Mara's mask
@@ -725,6 +799,8 @@ export const initialNpcs: NPC[] = (() => {
     ellis:  rel(0.2, 0, 0.25, 0.35, 0, 0, 0.15),
     rowan:  rel(0.2, 0, 0.35, 0.3, 0, 0, 0.1),
     jasper: rel(0.2, 0.1, 0.2, 0.3, 0, 0, 0.15),
+    wren:   rel(0.05, 0, 0.1, 0.2, 0, 0, 0.05),
+    dove:   rel(0.15, 0.1, 0.2, 0.3, 0, 0, 0.15),
   };
 
   // Jasper: recognizes Mara as kindred spirit, Bob can't be read (exciting), Alice's guilelessness creates guilt
@@ -737,6 +813,36 @@ export const initialNpcs: NPC[] = (() => {
     ellis:  rel(0.15, 0, 0.2, 0.25, 0, 0, 0.1),
     rowan:  rel(-0.05, 0, 0.3, 0.15, 0.2, 0, 0.15),
     sienna: rel(0.25, 0.15, 0.3, 0.3, 0, 0, 0.15),
+    wren:   rel(0.0, 0, 0.15, 0.15, 0, 0, 0.1),
+    dove:   rel(0.1, 0, 0.15, 0.2, 0, 0, 0.15),
+  };
+
+  // Wren: the quiet observer — watches everyone, noticed by almost no one
+  // Respects Bob as a fellow watcher, studies Mara with professional wariness, sympathizes with Ellis
+  wren.relationships = {
+    alice:  rel(0.1, 0, 0.15, 0.25, 0, 0, 0.15),
+    bob:    rel(0.25, 0, 0.45, 0.3, 0, 0, 0.25),
+    victor: rel(-0.05, 0, 0.2, 0.15, 0, 0, 0.2),
+    mara:   rel(-0.1, 0, 0.35, 0.05, 0, 0, 0.4),
+    ellis:  rel(0.2, 0, 0.3, 0.25, 0, 0, 0.3),
+    rowan:  rel(0.15, 0, 0.35, 0.2, 0, 0, 0.2),
+    sienna: rel(0.1, 0, 0.15, 0.2, 0, 0, 0.15),
+    jasper: rel(-0.05, 0, 0.3, 0.1, 0, 0, 0.3),
+    dove:   rel(0.15, 0, 0.3, 0.25, 0, 0, 0.1),
+  };
+
+  // Dove: the weathered idealist — bitterness on top of compassion they can't kill
+  // Sees former self in Alice, respects Rowan's parallel wounds, Mara triggers deep alarm bells
+  dove.relationships = {
+    alice:  rel(0.2, 0, 0.25, 0.3, 0, 0, 0.15),
+    bob:    rel(0.2, 0, 0.35, 0.3, 0, 0, 0.2),
+    victor: rel(0.05, 0, 0.2, 0.2, 0, 0, 0.15),
+    mara:   rel(-0.3, 0, 0.15, 0.05, 0, 0.3, 0.3),
+    ellis:  rel(0.2, 0, 0.3, 0.3, 0, 0, 0.2),
+    rowan:  rel(0.25, 0, 0.4, 0.35, 0, 0, 0.15),
+    sienna: rel(0.15, 0.1, 0.2, 0.3, 0, 0, 0.15),
+    jasper: rel(-0.1, 0, 0.2, 0.1, 0, 0, 0.2),
+    wren:   rel(0.15, 0, 0.3, 0.25, 0, 0, 0.1),
   };
 
   // ── Seed memories ──
@@ -957,10 +1063,69 @@ export const initialNpcs: NPC[] = (() => {
     }),
   );
 
+  // ── Seed memories for Wren and Dove ──
+  wren.shortTermMemory = [
+    seedMemory("Bob noticed me watching from across the room and nodded — just a nod, nothing more. It was the first time in weeks someone acknowledged I was there.", ["bob"], {
+      sentiment: 0.3, category: "social", interpretation: "He sees me. Not as a threat, not as a puzzle — just as another person who watches. That's more than most people offer.",
+    }),
+    seedMemory("Mara's journal has a system. I've been close enough to see the page structure: names, dates, observations. She's cataloguing people. I'm doing the same thing, just without the paper trail.", ["mara"], {
+      importance: 0.7, sentiment: -0.15, type: "observation" as MemoryType, category: "discovery" as MemoryCategory,
+      interpretation: "We're both collectors of information. The difference is what we plan to do with it. I'm not sure that difference is as large as I'd like it to be.",
+      aboutNpcIds: ["mara"],
+    }),
+    seedMemory("Ellis and Rowan react to the same things — loud authority, sudden movements, people standing too close. Two people marked by the same kind of wound. I don't think they know that about each other yet.", ["ellis", "rowan"], {
+      importance: 0.8, sentiment: 0, type: "inner_thought" as MemoryType, category: "discovery" as MemoryCategory,
+      interpretation: "There's a connection here. Something happened — to each of them, maybe related, maybe not — and the scars are identical. I need to understand this.",
+      aboutNpcIds: ["ellis", "rowan"],
+    }),
+    seedMemory("I was useful once. Noticed things, shared them, helped people. Then someone realized that 'useful' meant I knew too much. I won't make that mistake again.", [], {
+      importance: 0.75, sentiment: -0.4, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "Knowledge is only power if no one knows you have it. The moment they find out, it becomes a target.",
+    }),
+  ];
+
+  dove.shortTermMemory = [
+    seedMemory("Alice asked me why I looked sad. I told her I wasn't. She said 'that's what sad people always say.' She's not wrong.", ["alice"], {
+      sentiment: 0.1, category: "social", interpretation: "She sees through deflection the way only genuine people can. I used to be that direct. I miss it.",
+    }),
+    seedMemory("Victor said something cynical about human nature and I caught myself nodding. A year ago I would have argued. Now I just... agree.", ["victor"], {
+      sentiment: -0.2, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "That's how they get you. First you agree with the cynics, then you become one. I'm not there yet. I think.",
+    }),
+    seedMemory("Mara reminds me of someone. The same warmth that isn't warm, the same interest that isn't interest. I can't prove it yet but my stomach knows.", ["mara"], {
+      sentiment: -0.35, type: "observation" as MemoryType, category: "social" as MemoryCategory,
+      interpretation: "The person who destroyed everything I built wore exactly that smile. I won't be fooled twice.",
+      aboutNpcIds: ["mara"],
+    }),
+    seedMemory("Sienna grabbed my arm and said 'you're allowed to feel things, you know.' I wanted to scream at her. Instead I said nothing. Both responses would have been honest.", ["sienna"], {
+      sentiment: 0.1, category: "emotional" as MemoryCategory, interpretation: "She burns so bright. I used to burn like that. Now I just smolder. Maybe that's what drew me to her — she's everything I used to be, and watching her is like watching a home movie of a house that's already burned down.",
+    }),
+  ];
+
+  // ── Additional memories for existing characters about Wren and Dove ──
+  bob.shortTermMemory.push(
+    seedMemory("I caught Wren watching everyone from the corner again. Not creepy — more like a naturalist observing a habitat. Takes one to know one.", ["wren"], {
+      sentiment: 0.15, category: "social", interpretation: "They notice things. I wonder what they've noticed about me.",
+    }),
+  );
+  alice.shortTermMemory.push(
+    seedMemory("Dove smiled at my pressed flower collection but then said 'beauty never lasts.' It wasn't mean — it was sad. Like they used to believe the opposite.", ["dove"], {
+      sentiment: 0.05, category: "social", interpretation: "Something broke their heart a long time ago. I want to fix it but I don't think pressed flowers are strong enough.",
+    }),
+  );
+  mara.shortTermMemory.push(
+    seedMemory("Dove looked at me like I was a disease. No one has been that openly hostile without saying a word. They've seen this act before — and they're not buying it.", ["dove"], {
+      sentiment: -0.15, category: "social", interpretation: "Former idealist turned bitter. They recognize the type because someone like me broke them. Dangerous — bitter people have nothing to lose.",
+      aboutNpcIds: ["dove"],
+    }),
+  );
+
   // ── New character goals ──
   rowan.currentGoal = "figure out what Mara is really after before someone gets hurt";
   sienna.currentGoal = "get Bob to have one real conversation — no deflection, no jokes, just truth";
   jasper.currentGoal = "find out what Rowan knows about me — if anything";
+  wren.currentGoal = "piece together the connection between Rowan's past and Ellis's fear";
+  dove.currentGoal = "figure out whether Alice's optimism is resilience or just naivety I've lost the ability to see";
 
   // ── New character known secrets ──
   // Rowan has independently noticed Mara's note-keeping (recognizes intelligence-gathering behavior)
@@ -971,23 +1136,41 @@ export const initialNpcs: NPC[] = (() => {
   jasper.knownSecrets = {
     mara: ["She keeps a journal of people's vulnerabilities — I recognize the technique"],
   };
-  // Mara has picked up on Rowan's guilt about something in their past
+  // Wren has clocked Jasper's patterns and Mara's note-keeping independently
+  wren.knownSecrets = {
+    mara: ["She keeps a detailed journal cataloguing people's weaknesses"],
+    jasper: ["His generosity follows a strategic pattern — he gives to people he wants something from"],
+  };
+  // Dove recognizes Mara's type from painful experience
+  dove.knownSecrets = {
+    mara: ["Her warmth is a technique, not a feeling — I've seen this exact performance before"],
+  };
+  // Mara has picked up on Rowan's guilt and Dove's bitter history
   mara.knownSecrets = {
     ...mara.knownSecrets,
     rowan: ["They did something terrible in their past — the guilt is eating them alive"],
+    dove: ["They were betrayed by someone they trusted completely — that wound is still open"],
   };
 
   // ── New character moods ──
   // Rowan: guilt 0.55 → guilt-ridden
   rowan.mood = "guilt-ridden";
   rowan.moodSince = Date.now() - 180_000;
+  // Wren: curiosity 0.7, joy 0.25 → restless
+  wren.mood = "restless";
+  wren.moodSince = Date.now() - 150_000;
+  // Dove: sadness 0.55 → melancholy
+  dove.mood = "melancholy";
+  dove.moodSince = Date.now() - 200_000;
 
   // ── New character arcs ──
   rowan.characterArc = "Struggling with whether protection is really about the people they guard or about their own need to not fail again.";
   sienna.characterArc = "Starting to wonder whether burning bright is courage or just a prettier form of running away.";
   jasper.characterArc = "Discovering that the people he planned to use have become the people he doesn't want to lose.";
+  wren.characterArc = "Realizing that knowing everything about everyone is just another way of keeping them at arm's length.";
+  dove.characterArc = "Learning that bitterness is just love that lost its nerve — and deciding whether to let it grow back.";
 
-  return [alice, bob, victor, mara, ellis, rowan, sienna, jasper];
+  return [alice, bob, victor, mara, ellis, rowan, sienna, jasper, wren, dove];
 })();
 
 // ── Seed data for the premade conflict web ──
@@ -1025,6 +1208,22 @@ export const PRESET_PROMISES: NpcPromise[] = [
     promiseeId: "ellis",
     text: "If anyone gives you trouble, come find me — you don't have to deal with things alone",
     madeAt: Date.now() - 260_000,
+    status: "active",
+  },
+  {
+    id: "promise_preset_5",
+    promiserId: "dove",
+    promiseeId: "bob",
+    text: "I'll read that passage you mentioned — I want to understand why it matters to you",
+    madeAt: Date.now() - 220_000,
+    status: "active",
+  },
+  {
+    id: "promise_preset_6",
+    promiserId: "wren",
+    promiseeId: "ellis",
+    text: "I won't tell anyone what I've noticed about you — I know what it's like to feel watched",
+    madeAt: Date.now() - 180_000,
     status: "active",
   },
 ];
@@ -1090,5 +1289,25 @@ export const PRESET_IMPULSES: ReactiveImpulse[] = [
     urgency: 0.5,
     expiresAt: Date.now() + 10 * 60_000,
     sourceMemoryText: "Mara and I locked eyes across the square. We both knew the other was performing.",
+  },
+  {
+    id: "impulse_preset_7",
+    npcId: "wren",
+    targetNpcId: "ellis",
+    reason: "Wants to carefully approach Ellis about what they share — both carry the weight of seeing too much",
+    conversationType: "confession",
+    urgency: 0.4,
+    expiresAt: Date.now() + 10 * 60_000,
+    sourceMemoryText: "Ellis and Rowan react to the same things — two people marked by the same kind of wound",
+  },
+  {
+    id: "impulse_preset_8",
+    npcId: "dove",
+    targetNpcId: "alice",
+    reason: "Needs to understand if Alice's optimism is real or if she's performing hope the way Dove used to",
+    conversationType: "casual",
+    urgency: 0.45,
+    expiresAt: Date.now() + 10 * 60_000,
+    sourceMemoryText: "Alice asked me why I looked sad. She said 'that's what sad people always say.'",
   },
 ];

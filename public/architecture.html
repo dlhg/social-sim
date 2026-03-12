@@ -509,8 +509,8 @@ function renderArchitecture(){
           {title:'Movement',items:['A* pathfinding with collision grid','waypoint selection: personality + emotions + time-of-day + relationships','trait bonuses: curious \u2192 exploration, anxious \u2192 edges, charming \u2192 crowds','recency penalty on just-visited waypoints','stuck detection: recompute after 8 blocked ticks','behavioral overrides (seek/avoid) from Director']},
           {title:'Activities (14 types)',items:['reading, gardening, fishing, meditating, cooking, sketching, shopping, people_watching, wishing, stargazing, foraging, training, writing, napping','emotion effects (e.g. gardening: anger -0.03, joy +0.03)','item yields (fishing 40%, foraging 60%, cooking 70%)','waypoint-specific availability','5-minute cooldown before repeating','soliloquy trigger: reflective waypoint + solo activity']},
           {title:'Interactions (22 types)',items:['offer_food, give_herb, give_trinket, share_sketch, offer_fish (item-based)','comfort, encourage, compliment, apologize (supportive)','taunt, cold_shoulder, challenge, show_off (antagonistic)','confide, share_story, reminisce, vent (personal)','joke, tease, debate, people_watch, ask_favor (social)','item-based interactions get +2 scoring boost']},
-          {title:'Passive Systems',items:['eavesdropping (range 6 tiles, 3-min cooldown per pair)','item decay by category timer','drives: gift-seeking (30%), loneliness (90s+, 15%), restlessness (10% at anger/fear >0.6)']},
-          {title:'Write-Back to NPC State',items:['activities create memories + shift emotions','interactions change relationships + create memories','eavesdropping creates gossip memories','drives set behavioral overrides']}
+          {title:'Passive Systems',items:['activity observation (range 6 tiles, 3-min cooldown per pair)','conversation eavesdropping (range 4 tiles, 1 per NPC per conversation)','item decay by category timer','drives: gift-seeking (30%), loneliness (90s+, 15%), restlessness (10% at anger/fear >0.6)']},
+          {title:'Write-Back to NPC State',items:['activities create memories + shift emotions','interactions change relationships + create memories','activity observation creates observation memories','eavesdropping creates gossip memories','drives set behavioral overrides']}
         ]}},
     {id:'daycycle', label:'Day Cycle', color:'var(--accent-day)', glow:'glow-day',
       angle:280, span:80, radius:290,
@@ -528,7 +528,7 @@ function renderArchitecture(){
       angle:10, radius:430,
       detail:{tag:'EXTERNAL', title:'LLM Providers',
         desc:'The language model generates conversations, scene direction, promise outcomes, and inner thoughts. Supports multiple providers with automatic failover and rate limit handling.',
-        items:['Ollama (local): any model, no rate limits','Groq (cloud): fast inference, token quota tracking','Gemini: Google\'s models','rate limit detection: 429 \u2192 60s backoff','auto-downgrade to llama-3.1-8b-instant at <20% tokens','re-upgrade when quota recovers to >50%','JSON response format with repair for malformed output']}},
+        items:['Ollama (local): any model, no rate limits','Groq (cloud): fast inference, token quota tracking','Gemini: Google\'s models via OpenAI-compatible endpoint','Claude (Anthropic): proxied via Vite to Messages API','rate limit detection: 429 \u2192 60s backoff','auto-downgrade to llama-3.1-8b-instant at <20% tokens (Groq)','re-upgrade when quota recovers to >50%','JSON response format with repair for malformed output']}},
     {id:'tts', label:'TTS', color:'var(--accent-tts)', glow:'glow-tts',
       angle:130, radius:430,
       detail:{tag:'EXTERNAL', title:'Text-to-Speech',
@@ -547,8 +547,8 @@ function renderArchitecture(){
     detail:{tag:'BRIDGE', title:'Prompt Builder',
       desc:'The translator between NPC state and LLM comprehension. Assembles a rich context window from all NPC data, relationship history, and narrative state into a structured prompt that guides conversation generation.',
       sections:[
-        {title:'Prompt Structure',items:['1. Identity (backstory preferred over trait list)','2. Character arc (growth narrative)','3. Persistent mood (if active >1 min)','4. Emotional state (prose description of 8 axes)','5. Current goal','6. Secrets (hint to reveal at trust \u22650.7)','7. Inventory (items with emoji)','8. Betrayals discovered (active grudges)','9. Broken promises from others','10. Relationship context (regard label + dimensions)','11. Relationship trajectory (warming/deteriorating/stable)','12. Location (waypoint description)','13. Time of day','14. Pending plans (active promises)','15. Retrieved memories (direct + gossip + about-listener)','16. Known NPCs list','17. Conversation type preamble','18. Escalation directive (early/mid/late turn)']},
-        {title:'Response Format (JSON)',items:['inner_thought, speech','emotion_delta (8 axes, -0.4 to +0.4)','relationship_delta (-0.2 to +0.2) + extras','intent, conversation_end','secret_revealed, promise, action','forgive (for betrayals)','actions: give_gift, mock, embrace, threaten, storm_off, conspire, spread_rumor','justification required if delta >0.15 or relationship_delta >0.1']}
+        {title:'Prompt Structure',items:['1. Identity (backstory preferred over trait list)','2. Character arc (growth narrative)','3. Persistent mood (if active >1 min)','4. Emotional state (prose description of 7 axes)','5. Current goal','6. Secrets (hint to reveal at trust \u22650.7)','7. Inventory (items with emoji)','8. Betrayals discovered (active grudges)','9. Broken promises from others','10. Relationship context (regard label + dimensions)','11. Relationship trajectory (warming/deteriorating/stable)','12. Location (waypoint description)','13. Time of day','14. Pending plans (active promises)','15. Retrieved memories (direct + gossip + about-listener)','16. Known NPCs list','17. Conversation type preamble','18. Escalation directive (early/mid/late turn)']},
+        {title:'Response Format (JSON)',items:['inner_thought, speech','emotion_delta (7 axes, -0.4 to +0.4)','relationship_delta (-0.2 to +0.2) + extras','intent, conversation_end','secret_revealed, promise, action','forgive (for betrayals)','actions: give_gift, mock, embrace, threaten, storm_off, conspire, spread_rumor','justification required if delta >0.15 or relationship_delta >0.1']}
       ]}
   };
 
@@ -626,7 +626,7 @@ function renderArchitecture(){
     {from:'director',to:'tts',color:'var(--accent-tts)',label:'prefetch audio',
       desc:'After LLM generates conversation turns, Director sends each turn to TTS for audio synthesis. Serialized to avoid GPU contention. Playback starts after 2+ turns are buffered.'},
     {from:'director',to:'emotions',color:'var(--accent-director)',label:'applies emotion deltas',
-      desc:'Each conversation turn includes an LLM-generated emotion_delta (8 axes, -0.4 to +0.4). Director applies these cumulatively during playback. Emotional contagion also spreads to nearby NPCs within 5 tiles.'},
+      desc:'Each conversation turn includes an LLM-generated emotion_delta (7 axes, -0.4 to +0.4). Director applies these cumulatively during playback. Emotional contagion also spreads to nearby NPCs within 5 tiles.'},
     {from:'director',to:'relationships',color:'var(--accent-director)',label:'applies relationship deltas',
       desc:'LLM generates relationship_delta per turn (-0.2 to +0.2), plus extras (respect, trust, fear, debt). Capped per conversation type (0.30\u20130.50). Familiarity increments after each conversation.'},
     {from:'director',to:'memory',color:'var(--accent-director)',label:'creates conversation memories',
@@ -1098,7 +1098,7 @@ function renderCodeGraph(){
   // Detail data
   const CG_DETAILS = {
     'types':{tag:'CORE DATA',title:'types.ts',desc:'Central type definitions shared across the entire codebase.',
-      items:['EmotionalState (8 axes)','RelationshipState (regard/affection/respect/trust/fear/debt/familiarity)','NPC (full character definition)','MemoryEntry + MemoryType (14 variants)','LLMResponse / BatchTurnData','ConversationType (6 types)']},
+      items:['EmotionalState (7 axes)','RelationshipState (regard/affection/respect/trust/fear/debt/familiarity)','NPC (full character definition)','MemoryEntry + MemoryType (14 variants)','LLMResponse / BatchTurnData','ConversationType (6 types)']},
     'npc-store':{tag:'CORE DATA',title:'npc-store.ts',desc:'Reactive store for all NPC state with subscription-based updates.',
       items:['NpcStore class','get/getAll reads','applyEmotionDelta/applyRelationshipDelta mutations','addKnownSecret/addPromise/addBetrayal','computeAndSetMood','subscribe(listener)']},
     'memory-service':{tag:'CORE DATA',title:'memory-service.ts',desc:'Dual-layer memory system with importance-based promotion and cached retrieval.',
