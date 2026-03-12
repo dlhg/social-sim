@@ -19,7 +19,8 @@ import { DayCycle } from "./day-cycle";
 import type { NPC, BubbleData, FloaterData, ActionType, WaypointActivityId, DayPhase } from "./types";
 import { ACTIVITIES } from "./activities";
 import { pickInteraction, executeInteraction } from "./interactions";
-import { TTSService } from "./tts-service";
+import { TTSService, fetchVoices, uploadVoiceClip } from "./tts-service";
+import { syncVoicesToServer } from "./voice-storage";
 import { PRESET_PROMISES, PRESET_IMPULSES } from "./npcs";
 import type { NpcSnapshot, FeedItem } from "./components/SidePanel";
 import "./App.css";
@@ -666,6 +667,14 @@ function App() {
         ttsRef.current.assignVoice(npc.id);
       }
     }
+
+    // Sync locally-cached voice clips to TTS server (fire-and-forget)
+    fetchVoices().then((voices) => {
+      const serverIds = voices.map((v) => v.id);
+      syncVoicesToServer(serverIds, uploadVoiceClip).then((n) => {
+        if (n > 0) console.log(`[voice-storage] restored ${n} voice(s) to server`);
+      });
+    }).catch(() => {});
 
     setStatus("running");
     manager.start();

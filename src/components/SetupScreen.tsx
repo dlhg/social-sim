@@ -16,6 +16,7 @@ import type { LlmProvider, LlmConfig } from "../llm-config";
 import { GROQ_MODELS, GEMINI_MODELS, CLAUDE_MODELS } from "../llm-config";
 import { uploadVoiceClip, fetchVoices, getVoicePreviewUrl, deleteVoice, youtubeVoiceClip } from "../tts-service";
 import type { VoiceInfo } from "../tts-service";
+import { storeVoice, deleteStoredVoice } from "../voice-storage";
 import { accumulateChat } from "../ollama";
 import { NpcStore } from "../npc-store";
 
@@ -235,6 +236,7 @@ export function SetupScreen({
         if (!result) { setFormError("Failed to upload voice clip."); return; }
         finalVoiceId = result.voice_id;
         setCustomVoiceId(finalVoiceId);
+        storeVoice(finalVoiceId, audioBlob).catch(() => {});
       }
     }
 
@@ -574,7 +576,11 @@ Guidelines:
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     try {
       const clipRes = await fetch(`http://localhost:8787/voice-clip/${result.voice_id}`);
-      if (clipRes.ok) { const blob = await clipRes.blob(); setAudioUrl(URL.createObjectURL(blob)); }
+      if (clipRes.ok) {
+        const blob = await clipRes.blob();
+        storeVoice(result.voice_id, blob).catch(() => {});
+        setAudioUrl(URL.createObjectURL(blob));
+      }
     } catch { /* preview will still work via Test button */ }
   }
 
@@ -597,6 +603,7 @@ Guidelines:
   async function handleDeleteVoice(voiceId: string) {
     const ok = await deleteVoice(voiceId);
     if (ok) {
+      deleteStoredVoice(voiceId).catch(() => {});
       setAvailableVoices((prev) => prev.filter((v) => v.id !== voiceId));
       if (selectedVoiceId === voiceId) setSelectedVoiceId(undefined);
     } else { setFormError("Failed to delete voice"); }
@@ -612,6 +619,7 @@ Guidelines:
       if (!result) { setFormError("Could not upload voice for testing."); setIsTesting(false); return; }
       voiceId = result.voice_id;
       setCustomVoiceId(voiceId);
+      storeVoice(voiceId, audioBlob).catch(() => {});
     }
     if (!voiceId) { setIsTesting(false); return; }
     try {
@@ -656,6 +664,7 @@ Guidelines:
         setIsSubmitting(false);
         if (!result) { setFormError("Failed to upload voice clip."); return; }
         finalVoiceId = result.voice_id;
+        storeVoice(finalVoiceId, audioBlob).catch(() => {});
       }
     }
 

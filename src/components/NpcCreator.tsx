@@ -4,6 +4,7 @@ import type { NPC, InventoryItem, ItemCategory, EmotionalState } from "../types"
 import { ITEM_LIFETIME_BY_CATEGORY } from "../types";
 import { uploadVoiceClip, fetchVoices, getVoicePreviewUrl, deleteVoice, youtubeVoiceClip } from "../tts-service";
 import type { VoiceInfo } from "../tts-service";
+import { storeVoice, deleteStoredVoice } from "../voice-storage";
 
 interface NpcCreatorProps {
   onClose: () => void;
@@ -303,6 +304,7 @@ export function NpcCreator({
       const clipRes = await fetch(`http://localhost:8787/voice-clip/${result.voice_id}`);
       if (clipRes.ok) {
         const blob = await clipRes.blob();
+        storeVoice(result.voice_id, blob).catch(() => {});
         setAudioUrl(URL.createObjectURL(blob));
       }
     } catch { /* preview will still work via Test button */ }
@@ -345,6 +347,7 @@ export function NpcCreator({
   async function handleDeleteVoice(voiceId: string) {
     const ok = await deleteVoice(voiceId);
     if (ok) {
+      deleteStoredVoice(voiceId).catch(() => {});
       setAvailableVoices((prev) => prev.filter((v) => v.id !== voiceId));
       if (selectedVoiceId === voiceId) setSelectedVoiceId(undefined);
     } else {
@@ -368,6 +371,7 @@ export function NpcCreator({
       }
       voiceId = result.voice_id;
       setCustomVoiceId(voiceId);
+      storeVoice(voiceId, audioBlob).catch(() => {});
     }
 
     if (!voiceId) {
@@ -461,6 +465,7 @@ export function NpcCreator({
           return;
         }
         finalVoiceId = result.voice_id;
+        storeVoice(finalVoiceId, audioBlob).catch(() => {});
       }
     }
 
