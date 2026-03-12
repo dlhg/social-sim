@@ -97,6 +97,7 @@ export function SetupScreen({
   });
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [worldPromptOpen, setWorldPromptOpen] = useState(false);
   const [testPhrase, setTestPhrase] = useState("");
   const [testPlaying, setTestPlaying] = useState(false);
   const testTimeout = useRef<number | null>(null);
@@ -1033,18 +1034,6 @@ Guidelines:
         </div>
       </div>
 
-      {/* ── World Prompt ─────────────────────────── */}
-      <div className="setup-world-prompt">
-        <label className="setup-world-prompt-label">World Prompt</label>
-        <textarea
-          className="setup-world-prompt-input"
-          placeholder="Optional: Set the scene for all characters (e.g. &quot;Everyone woke up in this village with no memory of how they got here. The surrounding forest is dense and impassable.&quot;)"
-          value={worldPrompt}
-          onChange={(e) => onWorldPromptChange(e.target.value)}
-          rows={3}
-        />
-      </div>
-
       {/* ── Start Bar ──────────────────────────────── */}
       <div className="setup-start-bar">
         <div className="setup-start-bar-inner">
@@ -1053,6 +1042,9 @@ Guidelines:
             <span className="setup-settings-summary">
               {{ ollama: "Ollama", groq: "Groq", gemini: "Gemini", claude: "Claude" }[llmConfig.provider]} · {ttsEngine === "chatterbox" ? "Chatterbox" : "Kokoro"} · {MAPS.find(m => m.url === mapUrl)?.label ?? "Custom"}
             </span>
+          </button>
+          <button className={`btn btn-world-prompt${worldPrompt ? " has-prompt" : ""}`} onClick={() => setWorldPromptOpen(true)} title="World Prompt">
+            Scenario{worldPrompt ? " *" : ""}
           </button>
           {onTestMap && <button className="btn btn-test-map" onClick={onTestMap}>Test Map</button>}
           <button className="btn btn-start-sim" disabled={roster.length < 2} onClick={onStartSimulation}>
@@ -1140,6 +1132,30 @@ Guidelines:
                   >{testPlaying ? "Playing..." : "Test"}</button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── World Prompt Modal ─────────────────────── */}
+      {worldPromptOpen && (
+        <div className="modal-overlay" onClick={() => setWorldPromptOpen(false)}>
+          <div className="modal-content world-prompt-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>World Scenario</h3>
+            <p className="world-prompt-hint">Set a shared premise that all characters are aware of. This is background context — characters won't fixate on it unless it's relevant to the moment.</p>
+            <textarea
+              className="world-prompt-textarea"
+              placeholder='e.g. "Everyone woke up in this village with no memory of how they got here. The surrounding forest is dense and impassable. Strange lights flicker on the horizon at night."'
+              value={worldPrompt}
+              onChange={(e) => onWorldPromptChange(e.target.value)}
+              rows={5}
+              autoFocus
+            />
+            <div className="world-prompt-actions">
+              {worldPrompt && (
+                <button className="btn btn-ghost" onClick={() => onWorldPromptChange("")}>Clear</button>
+              )}
+              <button className="btn btn-start-sim" onClick={() => setWorldPromptOpen(false)}>Done</button>
             </div>
           </div>
         </div>
