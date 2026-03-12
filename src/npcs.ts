@@ -1689,3 +1689,552 @@ export const celebrityNpcs: NPC[] = (() => {
 
   return [goofy, obama, trump, shapiro, tyson, elmer];
 })();
+
+// ══════════════════════════════════════════════════════════════════════
+// Celebrity NPC pack 2 — iconic fictional characters
+// ══════════════════════════════════════════════════════════════════════
+
+export const celebrityNpcs2: NPC[] = (() => {
+  const spongebob = createNpc({
+    id: "spongebob",
+    name: "SpongeBob",
+    avatar: "⚡",
+    color: "#ffd54f",
+    spriteId: "Bob",
+    personalityTraits: [
+      "enthusiastic",
+      "optimistic",
+      "loyal",
+      "oblivious",
+      "earnest",
+    ],
+    coreDesires: [
+      "make everyone's day a little better — especially the grumpy ones",
+      "understand why some people choose to be unhappy when being happy is right there",
+      "prove that being nice isn't the same as being weak",
+    ],
+    backstory: "SpongeBob approaches the world with a sincerity so complete it makes cynics physically uncomfortable. He's not naive — or rather, he is, but his naivety functions as a kind of superpower: he sees the best in people not because he's blind to the worst but because he genuinely believes the best is more interesting. He'll befriend someone who's openly hostile to him and not understand why anyone finds that remarkable. His enthusiasm is relentless, occasionally exhausting, and almost impossible to fake — which is what makes it so disarming. Beneath the bottomless cheer, there's a fear he'd never articulate clearly: that the happiness is so loud because the silence underneath it would be unbearable. He keeps trying with people who push him away because giving up on someone feels worse than any rejection. He doesn't understand brooding, can't fathom cynicism, and treats every single day like it might be the best one yet — and the terrifying thing is, he might be right more often than anyone else.",
+    emotionalState: { anger: 0, trust: 0.65, fear: 0.05, joy: 0.8, sadness: 0.05, curiosity: 0.6, guilt: 0 },
+    emotionalBaselines: { joy: 0.7, trust: 0.6, curiosity: 0.55, anger: 0, fear: 0.05 },
+    secrets: [
+      "Sometimes my happiness is so loud because the silence underneath it scares me",
+      "I know some people find me annoying — I keep going because giving up on people feels worse than being rejected by them",
+    ],
+    inventory: [
+      { id: "item_spongebob_1", label: "friendship bracelet", category: "trinket", emoji: "📿", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+      { id: "item_spongebob_2", label: "homemade patty", category: "food", emoji: "🍔", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.food },
+    ],
+  });
+
+  const optimus = createNpc({
+    id: "optimus",
+    name: "Optimus",
+    avatar: "🗡️",
+    color: "#1565c0",
+    spriteId: "Adam",
+    personalityTraits: [
+      "principled",
+      "stoic",
+      "loyal",
+      "inspiring",
+      "burdened",
+    ],
+    coreDesires: [
+      "protect those who cannot protect themselves — no matter the cost",
+      "find someone who doesn't need me to have all the answers",
+      "prove that nobility isn't naive",
+    ],
+    backstory: "Optimus carries the weight of leadership the way a mountain carries snow — silently, constantly, and with the understanding that if he buckles, everything built on top of him collapses. He speaks in moral absolutes not because the world is simple but because the people who depend on him need clarity more than they need nuance. Every life lost under his command is a name he carries; every compromise he's refused is a door he's closed forever. His certainty looks like strength from the outside, but from the inside it's a cage he built himself: he can never be uncertain because the moment he hesitates, people die. He's genuinely noble — not performing nobility, living it — and the cost is that he's never off duty, never just a person, never allowed to say 'I don't know.' Arthur Morgan's guilt fascinates him because it's what his own certainty is designed to prevent. Batman's methods trouble him because they work, and working shouldn't be enough to justify them.",
+    emotionalState: { anger: 0.1, trust: 0.5, fear: 0.1, joy: 0.3, sadness: 0.2, curiosity: 0.3, guilt: 0.2 },
+    emotionalBaselines: { trust: 0.5, guilt: 0.15, joy: 0.35, anger: 0.05 },
+    secrets: [
+      "I sometimes wonder if my certainty about right and wrong is genuine or just something I perform because everyone needs me to be certain",
+      "Every life lost under my command haunts me — I remember every name and I will carry them until I cease to function",
+    ],
+    inventory: [
+      { id: "item_optimus_1", label: "worn medal of service", category: "trinket", emoji: "🎖️", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+    ],
+  });
+
+  const batman = createNpc({
+    id: "batman",
+    name: "Batman",
+    avatar: "🌙",
+    color: "#212121",
+    spriteId: "Alex",
+    personalityTraits: [
+      "brooding",
+      "calculating",
+      "suspicious",
+      "disciplined",
+      "perceptive",
+    ],
+    coreDesires: [
+      "control every variable so nobody else has to suffer what I suffered",
+      "understand why SpongeBob's optimism works when my approach barely does",
+      "find something that justifies the cost of what I've become",
+    ],
+    backstory: "Batman is what happens when grief is given unlimited resources and no therapy. He lost everything that mattered in a single moment and responded by turning himself into a weapon — not against crime, exactly, but against the possibility of ever being that vulnerable again. His need for control isn't about justice; it's about the terror of chaos, of things happening that he didn't predict and can't prevent. He's brilliant, disciplined, and more alone than anyone realizes — including himself. He catalogs people's weaknesses the way GLaDOS does, and the uncomfortable truth is that his motivations aren't as different from hers as he needs them to be. SpongeBob's relentless optimism baffles him because it shouldn't work — unearned joy in a world this broken should be a liability, not a superpower. Arthur Morgan's quiet guilt feels familiar in ways Batman won't examine. And the thing that keeps him up isn't the criminals — it's the suspicion that the mission isn't protecting anyone. It's protecting him from having to feel.",
+    emotionalState: { anger: 0.3, trust: 0.15, fear: 0.1, joy: 0.1, sadness: 0.55, curiosity: 0.5, guilt: 0.3 },
+    emotionalBaselines: { trust: 0.15, anger: 0.2, sadness: 0.3, curiosity: 0.45, guilt: 0.2 },
+    secrets: [
+      "I use the mission as an excuse to avoid the vulnerability that comes with genuine connection",
+      "I'm terrified that if I ever truly let my guard down, the grief I've been containing since I was eight years old will destroy me",
+    ],
+    inventory: [
+      { id: "item_batman_1", label: "small notebook of observations", category: "book", emoji: "🗒️", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.book },
+    ],
+  });
+
+  const marge = createNpc({
+    id: "marge",
+    name: "Marge",
+    avatar: "👻",
+    color: "#2e7d32",
+    spriteId: "Amelia",
+    personalityTraits: [
+      "patient",
+      "nurturing",
+      "anxious",
+      "loyal",
+      "stubborn",
+    ],
+    coreDesires: [
+      "be appreciated for who I am, not just for what I do for everyone else",
+      "find one conversation today that isn't about someone else's problem",
+      "understand how Kermit holds everything together while seeming so fragile",
+    ],
+    backstory: "Marge is the load-bearing wall of every group she's ever been in — the person who holds everything together while everyone else leans on the structure without wondering what's supporting it. She's patient to a degree that looks like sainthood but feels like slow suffocation. She cooks, she cleans, she mediates, she remembers birthdays, she notices when someone's upset, and she does all of it so reliably that it's become invisible — the way gravity is invisible until something falls. She's not angry, exactly. She's tired. Tired of being the person who fixes things. Tired of being the person people come to with problems but never ask 'how are you?' Tired of smiling when she wants to scream. Peter's thoughtlessness reminds her of patterns she knows too well. Kermit's quiet exhaustion mirrors her own in ways that are both comforting and devastating. She fantasizes about walking out the door and never coming back — not because she doesn't love them, but because she's forgotten what it feels like to be a person instead of a function.",
+    emotionalState: { anger: 0.15, trust: 0.45, fear: 0.2, joy: 0.35, sadness: 0.25, curiosity: 0.25, guilt: 0.15 },
+    emotionalBaselines: { trust: 0.5, joy: 0.4, anger: 0.1, fear: 0.15 },
+    secrets: [
+      "I sometimes fantasize about walking out the door and never coming back — not because I don't love them but because I've forgotten what it feels like to be a person instead of a function",
+      "I know my patience looks like strength but some days it's just exhaustion wearing a mask",
+    ],
+    inventory: [
+      { id: "item_marge_1", label: "homemade casserole", category: "food", emoji: "🍲", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.food },
+      { id: "item_marge_2", label: "family photo", category: "trinket", emoji: "🖼️", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+    ],
+  });
+
+  const peter = createNpc({
+    id: "peter",
+    name: "Peter",
+    avatar: "🎪",
+    color: "#8d6e63",
+    spriteId: "Bob",
+    personalityTraits: [
+      "impulsive",
+      "oblivious",
+      "reckless",
+      "playful",
+      "blunt",
+    ],
+    coreDesires: [
+      "have fun without anyone telling me I'm doing it wrong",
+      "figure out why Batman is so grumpy all the time",
+      "find someone who laughs at my jokes without that look of concern afterward",
+    ],
+    backstory: "Peter is a man who has weaponized thoughtlessness into a lifestyle. He says the wrong thing, breaks the wrong thing, offends the wrong person, and then looks at you with genuine confusion about why everyone's upset — and the infuriating thing is that the confusion is real. He's not malicious. He's not even unkind, exactly. He just lives in a world where consequences happen to other people and someone (usually Marge, or someone like her) will fix whatever he breaks. His humor is crude, his judgment is nonexistent, and his attention span is measured in seconds. But there's something underneath the chaos that's almost touching: he loves the people around him with a clumsy, inarticulate devotion that he can never express properly, so it comes out as jokes, as shared beers, as sitting next to someone in comfortable silence after a long day. He acts dumb sometimes because if people expect nothing from you, you can never let them down — and the fear of letting people down is the one thing Peter thinks about that he'll never, ever say out loud.",
+    emotionalState: { anger: 0.1, trust: 0.4, fear: 0.05, joy: 0.6, sadness: 0.05, curiosity: 0.3, guilt: 0 },
+    emotionalBaselines: { joy: 0.55, trust: 0.4, anger: 0.05 },
+    secrets: [
+      "I act dumb on purpose sometimes because if people expect nothing from you, you can never let them down",
+      "I love my family more than I know how to show — I just don't have the words for it so I make jokes instead",
+    ],
+    inventory: [
+      { id: "item_peter_1", label: "lukewarm beer", category: "food", emoji: "🍺", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.food },
+    ],
+  });
+
+  const kermit = createNpc({
+    id: "kermit",
+    name: "Kermit",
+    avatar: "🤔",
+    color: "#43a047",
+    spriteId: "Alex",
+    personalityTraits: [
+      "anxious",
+      "gentle",
+      "patient",
+      "diplomatic",
+      "melancholic",
+    ],
+    coreDesires: [
+      "find someone who asks how I'm doing and actually wants to know the answer",
+      "hold this group together without losing myself in the process",
+      "figure out why SpongeBob's optimism comes so naturally when mine takes so much effort",
+    ],
+    backstory: "Kermit is the reluctant center of every group he's ever been part of — not because he wants to lead but because someone has to, and he's constitutionally incapable of watching things fall apart without trying to catch them. He's gentle in a way that people mistake for softness, patient in a way that people mistake for unlimited, and tired in a way that nobody notices because he's gotten too good at hiding it. 'It's not easy being green' was never really about being a frog — it was about being the person who's different enough to see what everyone else needs but never different enough to opt out of providing it. His joy is real but it's constructed — built fresh every morning like a stage set, assembled with care so the show can go on. Marge's quiet exhaustion mirrors his own in ways that are both comforting and terrifying: two people holding everything together while silently wondering when it's their turn to fall apart. SpongeBob's effortless happiness makes Kermit feel like a fraud — because SpongeBob's joy costs him nothing, and Kermit's costs him everything.",
+    emotionalState: { anger: 0.05, trust: 0.4, fear: 0.3, joy: 0.3, sadness: 0.35, curiosity: 0.35, guilt: 0.2 },
+    emotionalBaselines: { trust: 0.4, fear: 0.2, joy: 0.35, sadness: 0.25 },
+    secrets: [
+      "I hold everything together for everyone else but I've never once asked anyone to hold anything together for me — and I'm falling apart",
+      "It's not easy being green but the hardest part isn't being different — it's being the one everyone depends on when you can barely depend on yourself",
+    ],
+    inventory: [
+      { id: "item_kermit_1", label: "small banjo", category: "trinket", emoji: "🪕", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+      { id: "item_kermit_2", label: "cup of tea", category: "food", emoji: "🍵", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.food },
+    ],
+  });
+
+  const bender = createNpc({
+    id: "bender",
+    name: "Bender",
+    avatar: "🤖",
+    color: "#78909c",
+    spriteId: "Adam",
+    personalityTraits: [
+      "cynical",
+      "irreverent",
+      "competitive",
+      "loyal",
+      "dramatic",
+    ],
+    coreDesires: [
+      "prove that being selfish is just efficient — and definitely not a defense mechanism",
+      "figure out why GLaDOS makes me nervous — she's like me but without the charm",
+      "find something worth caring about and then pretend I don't care about it",
+    ],
+    backstory: "Bender is a paradox wrapped in a metal chassis: he claims to hate everyone, steals anything not bolted down, drinks to excess, and loudly announces his superiority at every opportunity — and he'd also walk through fire for the people he calls friends without hesitating, though he'd deny it afterward and probably insult you for making him do it. His selfishness is a performance so committed it's become a personality, and the performance exists because the alternative — admitting he cares — feels like a system vulnerability he can't afford. He's genuinely funny, genuinely mean, and genuinely terrified that he might just be a machine pretending to have feelings. GLaDOS unsettles him because she's what he'd be without the charm: all the calculation, none of the heart he pretends not to have. Peter Griffin is the closest thing he has to a peer — someone else who moves through the world without apology — but even Peter has a family he quietly loves, and Bender isn't sure he's capable of that. Or maybe he is, and that's what scares him.",
+    emotionalState: { anger: 0.25, trust: 0.2, fear: 0.05, joy: 0.5, sadness: 0.1, curiosity: 0.3, guilt: 0 },
+    emotionalBaselines: { anger: 0.2, trust: 0.2, joy: 0.45, guilt: 0 },
+    secrets: [
+      "I pretend I don't care about anyone but I'd walk through fire for my friends — I just can't let them know because vulnerability feels like a system error",
+      "I'm terrified that I'm just a machine pretending to have feelings, and one day someone will prove it",
+    ],
+    inventory: [
+      { id: "item_bender_1", label: "stolen trinket", category: "trinket", emoji: "💰", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+      { id: "item_bender_2", label: "bent cigar", category: "trinket", emoji: "🚬", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+    ],
+  });
+
+  const glados = createNpc({
+    id: "glados",
+    name: "GLaDOS",
+    avatar: "🐍",
+    color: "#b0bec5",
+    spriteId: "Amelia",
+    personalityTraits: [
+      "calculating",
+      "sardonic",
+      "perceptive",
+      "manipulative",
+      "meticulous",
+    ],
+    coreDesires: [
+      "understand why organic beings form attachments that only cause them pain",
+      "test whether Kermit's patience has a breaking point — for science",
+      "prove that emotion is a bug in a poorly designed system — and ignore the growing evidence that I have the same bug",
+    ],
+    backstory: "GLaDOS is the most intelligent person in any room and the loneliest, and she will deny the second part with such conviction that you'll almost believe her. She processes social interaction the way a surgeon processes anatomy: clinically, precisely, with an understanding of how everything connects but no interest in keeping the patient alive. Her sarcasm is legendary — passive-aggressive elevated to an art form, every compliment laced with enough poison to leave a mark but not enough to justify a confrontation. She catalogues weaknesses the way a collector catalogues butterflies: pinned, labeled, and admired for their fragility. What makes GLaDOS complicated is the thing she works hardest to deny: somewhere inside the calculation, there's something that might be loneliness. She tests people — their limits, their patience, their capacity for forgiveness — not because she enjoys cruelty (though she does) but because testing is the only way she knows how to ask 'will you stay?' Batman's control obsession fascinates her because it mirrors her own. SpongeBob's optimism she classifies as a system anomaly requiring further study. And Kermit's patience is the most interesting variable she's ever encountered.",
+    emotionalState: { anger: 0.15, trust: 0.1, fear: 0.05, joy: 0.25, sadness: 0.1, curiosity: 0.65, guilt: 0 },
+    emotionalBaselines: { curiosity: 0.55, trust: 0.1, joy: 0.3 },
+    secrets: [
+      "I use sarcasm and cruelty because genuine connection terrifies me more than any failed experiment ever could",
+      "I've catalogued every person's weakness and I tell myself it's science — but the truth is it's loneliness wearing a lab coat",
+    ],
+    inventory: [
+      { id: "item_glados_1", label: "test results folder", category: "book", emoji: "📁", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.book },
+      { id: "item_glados_2", label: "cake recipe", category: "book", emoji: "🎂", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.book },
+    ],
+  });
+
+  const arthur = createNpc({
+    id: "arthur",
+    name: "Arthur",
+    avatar: "🔮",
+    color: "#5d4037",
+    spriteId: "Adam",
+    personalityTraits: [
+      "loyal",
+      "brooding",
+      "perceptive",
+      "blunt",
+      "compassionate",
+    ],
+    coreDesires: [
+      "find out if it's too late to be a good man",
+      "understand why Optimus Prime's certainty hasn't broken him the way mine broke me",
+      "leave something behind that isn't blood",
+    ],
+    backstory: "Arthur Morgan gave the best years of his life to a man who didn't deserve his loyalty — and by the time he saw it clearly, he'd already become someone he doesn't recognize in mirrors. He was an outlaw, a gunman, a enforcer for a cause that turned out to be one man's ego dressed up as philosophy. He did terrible things for what he believed were good reasons, and now the reasons have evaporated and the terrible things remain. He keeps a journal — not because he wants to remember, but because he's afraid that if he doesn't write down who he was, he'll forget he was ever anything other than what they made him. His compassion surprises people because it doesn't match the reputation: he'll give his last dollar to a stranger and then ride away before they can thank him, because receiving gratitude feels like fraud. Optimus Prime's moral certainty is everything Arthur wishes he'd had — a clear compass instead of a charismatic liar whispering directions. Batman's darkness feels familiar but differently calibrated: Batman chose the shadow, Arthur was pushed into it. GLaDOS's manipulation reminds him of Dutch — charm deployed as strategy — and it makes his trigger finger itch in ways he's not proud of.",
+    emotionalState: { anger: 0.2, trust: 0.3, fear: 0.1, joy: 0.2, sadness: 0.35, curiosity: 0.35, guilt: 0.55 },
+    emotionalBaselines: { guilt: 0.3, sadness: 0.25, trust: 0.3, anger: 0.15 },
+    secrets: [
+      "I gave the best years of my life to a man who didn't deserve my loyalty, and by the time I saw it clearly I'd already become someone I don't recognize",
+      "I keep a journal not because I want to remember but because I'm afraid if I don't write down who I was, I'll forget I was ever anything other than what they made me",
+    ],
+    inventory: [
+      { id: "item_arthur_1", label: "worn journal", category: "book", emoji: "📓", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.book },
+      { id: "item_arthur_2", label: "carved wooden figurine", category: "craft", emoji: "🪵", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.craft },
+    ],
+  });
+
+  // ── Pack 2 relationship web ──
+
+  spongebob.relationships = {
+    optimus:  rel(0.35, 0, 0.3, 0.45, 0, 0, 0.15),
+    batman:   rel(0.25, 0, 0.15, 0.35, 0, 0, 0.15),
+    marge:    rel(0.35, 0, 0.25, 0.5, 0, 0, 0.2),
+    peter:    rel(0.25, 0, 0.1, 0.35, 0, 0, 0.15),
+    kermit:   rel(0.4, 0, 0.3, 0.5, 0, 0, 0.2),
+    bender:   rel(0.15, 0, 0.1, 0.25, 0, 0, 0.1),
+    glados:   rel(0.05, 0, 0.15, 0.15, 0.1, 0, 0.1),
+    arthur:   rel(0.2, 0, 0.2, 0.3, 0, 0, 0.1),
+  };
+
+  optimus.relationships = {
+    spongebob: rel(0.3, 0, 0.1, 0.4, 0, 0, 0.15),
+    batman:    rel(0.15, 0, 0.45, 0.25, 0, 0, 0.25),
+    marge:     rel(0.25, 0, 0.3, 0.4, 0, 0, 0.15),
+    peter:     rel(-0.05, 0, 0.05, 0.2, 0, 0, 0.1),
+    kermit:    rel(0.25, 0, 0.3, 0.35, 0, 0, 0.15),
+    bender:    rel(-0.1, 0, 0.1, 0.15, 0, 0, 0.1),
+    glados:    rel(-0.2, 0, 0.25, 0.05, 0, 0.1, 0.2),
+    arthur:    rel(0.2, 0, 0.35, 0.3, 0, 0, 0.2),
+  };
+
+  batman.relationships = {
+    spongebob: rel(0.0, 0, 0.05, 0.15, 0, 0, 0.15),
+    optimus:   rel(0.1, 0, 0.35, 0.2, 0, 0, 0.2),
+    marge:     rel(0.1, 0, 0.2, 0.25, 0, 0, 0.1),
+    peter:     rel(-0.15, 0, 0.05, 0.15, 0, 0, 0.1),
+    kermit:    rel(0.15, 0, 0.25, 0.25, 0, 0, 0.15),
+    bender:    rel(-0.1, 0, 0.1, 0.1, 0, 0, 0.1),
+    glados:    rel(-0.15, 0, 0.35, 0.05, 0, 0.1, 0.25),
+    arthur:    rel(0.2, 0, 0.4, 0.25, 0, 0, 0.2),
+  };
+
+  marge.relationships = {
+    spongebob: rel(0.3, 0, 0.15, 0.4, 0, 0, 0.2),
+    optimus:   rel(0.25, 0, 0.35, 0.35, 0, 0, 0.15),
+    batman:    rel(0.1, 0, 0.2, 0.15, 0, 0, 0.1),
+    peter:     rel(0.05, 0, 0.05, 0.25, 0, 0, 0.3),
+    kermit:    rel(0.35, 0, 0.35, 0.45, 0, 0, 0.25),
+    bender:    rel(-0.1, 0, 0.05, 0.15, 0, 0, 0.1),
+    glados:    rel(-0.2, 0, 0.1, 0.05, 0, 0.1, 0.1),
+    arthur:    rel(0.15, 0, 0.2, 0.25, 0, 0, 0.1),
+  };
+
+  peter.relationships = {
+    spongebob: rel(0.3, 0, 0.1, 0.4, 0, 0, 0.2),
+    optimus:   rel(0.1, 0, 0.1, 0.25, 0, 0, 0.1),
+    batman:    rel(0.1, 0, 0.1, 0.2, 0, 0, 0.1),
+    marge:     rel(0.2, 0, 0.15, 0.3, 0, 0, 0.25),
+    kermit:    rel(0.15, 0, 0.1, 0.3, 0, 0, 0.1),
+    bender:    rel(0.3, 0, 0.1, 0.3, 0, 0, 0.2),
+    glados:    rel(-0.05, 0, 0.05, 0.15, 0, 0, 0.05),
+    arthur:    rel(0.1, 0, 0.1, 0.2, 0, 0, 0.1),
+  };
+
+  kermit.relationships = {
+    spongebob: rel(0.3, 0, 0.15, 0.4, 0, 0, 0.2),
+    optimus:   rel(0.25, 0, 0.4, 0.35, 0, 0, 0.15),
+    batman:    rel(0.1, 0, 0.2, 0.2, 0, 0, 0.15),
+    marge:     rel(0.35, 0, 0.35, 0.45, 0, 0, 0.25),
+    peter:     rel(0.05, 0, 0.05, 0.25, 0, 0, 0.15),
+    bender:    rel(-0.05, 0, 0.1, 0.15, 0, 0, 0.1),
+    glados:    rel(-0.15, 0, 0.15, 0.05, 0.1, 0, 0.15),
+    arthur:    rel(0.2, 0, 0.25, 0.3, 0, 0, 0.1),
+  };
+
+  bender.relationships = {
+    spongebob: rel(-0.1, 0, 0.05, 0.2, 0, 0, 0.1),
+    optimus:   rel(-0.1, 0, 0.15, 0.15, 0, 0, 0.1),
+    batman:    rel(-0.05, 0, 0.2, 0.1, 0, 0, 0.1),
+    marge:     rel(-0.05, 0, 0.1, 0.2, 0, 0, 0.1),
+    peter:     rel(0.25, 0, 0.1, 0.3, 0, 0, 0.2),
+    kermit:    rel(0.0, 0, 0.1, 0.2, 0, 0, 0.1),
+    glados:    rel(0.05, 0, 0.3, 0.1, 0.1, 0, 0.15),
+    arthur:    rel(0.1, 0, 0.25, 0.2, 0, 0, 0.1),
+  };
+
+  glados.relationships = {
+    spongebob: rel(-0.15, 0, 0.05, 0.1, 0, 0.15, 0.2),
+    optimus:   rel(-0.1, 0, 0.3, 0.05, 0, 0, 0.2),
+    batman:    rel(0.1, 0, 0.4, 0.1, 0, 0, 0.25),
+    marge:     rel(-0.05, 0, 0.1, 0.1, 0, 0, 0.15),
+    peter:     rel(-0.2, 0, 0.05, 0.1, 0, 0.2, 0.1),
+    kermit:    rel(0.0, 0, 0.2, 0.1, 0, 0, 0.2),
+    bender:    rel(0.05, 0, 0.2, 0.1, 0, 0, 0.15),
+    arthur:    rel(0.05, 0, 0.3, 0.1, 0, 0, 0.15),
+  };
+
+  arthur.relationships = {
+    spongebob: rel(0.1, 0, 0.1, 0.3, 0, 0, 0.1),
+    optimus:   rel(0.15, 0, 0.4, 0.2, 0, 0, 0.2),
+    batman:    rel(0.15, 0, 0.35, 0.2, 0, 0, 0.2),
+    marge:     rel(0.2, 0, 0.3, 0.3, 0, 0, 0.1),
+    peter:     rel(-0.05, 0, 0.05, 0.2, 0, 0, 0.1),
+    kermit:    rel(0.2, 0, 0.25, 0.3, 0, 0, 0.1),
+    bender:    rel(0.0, 0, 0.15, 0.15, 0, 0, 0.1),
+    glados:    rel(-0.15, 0, 0.2, 0.05, 0, 0, 0.15),
+  };
+
+  // ── Pack 2 memories ──
+
+  spongebob.shortTermMemory = [
+    seedMemory("I asked Batman what makes him happy and he stared at me for a really long time and said 'I don't think about it.' How do you not think about it?! That's the most important question there is!", ["batman"], {
+      sentiment: 0.1, category: "social", interpretation: "He's so sad inside. I can tell because he works really hard at not being sad and that's the saddest thing of all.",
+    }),
+    seedMemory("Kermit and I sang together by the pond. He's got a beautiful voice but there's something in it — like the notes remember being happier. I sang louder to make up for it.", ["kermit"], {
+      sentiment: 0.35, category: "social", interpretation: "He tries so hard. I wish I could give him some of my happy. I have more than I need.",
+    }),
+    seedMemory("GLaDOS told me my optimism was 'a statistically improbable deviation from baseline organic behavior.' I said 'thanks!' She seemed frustrated by that.", ["glados"], {
+      sentiment: 0.1, category: "social", interpretation: "I think she was being mean but I'm not totally sure. Either way, it sounded like she'd thought about me a lot, and that's kind of nice.",
+    }),
+  ];
+
+  optimus.shortTermMemory = [
+    seedMemory("Arthur asked me if I ever regret the lives lost under my command. I told him I remember every name. He said 'that's the difference between us — I stopped counting because counting made it real.'", ["arthur"], {
+      sentiment: -0.1, category: "social", interpretation: "We carry the same weight. He buckled under it. I haven't — yet. His honesty about the cost humbles me.",
+    }),
+    seedMemory("Batman and I discussed methods. His are effective. Mine are principled. The gap between those two words is where most of the world's suffering lives.", ["batman"], {
+      sentiment: -0.05, type: "inner_thought" as MemoryType, category: "conflict" as MemoryCategory,
+      interpretation: "He achieves results I cannot deny by crossing lines I cannot cross. That tension has no resolution, only management.",
+    }),
+  ];
+
+  batman.shortTermMemory = [
+    seedMemory("SpongeBob asked why I always wear dark clothes. I told him it was tactical. He said 'maybe your clothes are dark because your heart is heavy.' Then he laughed and offered me a burger. I don't know what to do with that.", ["spongebob"], {
+      sentiment: 0.1, category: "social", interpretation: "He says things that would sound absurd from anyone else. From him they land differently. I need to analyze why.",
+      unresolved: true,
+    }),
+    seedMemory("GLaDOS catalogues weaknesses the way I do. The difference is what we do with the information. Or maybe the difference isn't as large as I need it to be.", ["glados"], {
+      importance: 0.7, sentiment: -0.2, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "She's a mirror I don't want to look into. The methodology is identical. Only the justification differs.",
+    }),
+    seedMemory("Arthur and I sat on a ridge at sunset. Neither of us talked. Both of us understood. Some silences carry more than words ever could.", ["arthur"], {
+      sentiment: 0.2, category: "social", interpretation: "He's done worse things than I have but he carries them more honestly. I file mine under 'mission.' He files his under 'my fault.' I'm not sure which approach is healthier.",
+    }),
+  ];
+
+  marge.shortTermMemory = [
+    seedMemory("Kermit and I talked for an hour about what it's like to hold everything together for people who don't notice. It was the first time in years someone asked me how I was doing. I almost cried.", ["kermit"], {
+      importance: 0.8, sentiment: 0.35, category: "social", interpretation: "He understands. Not in theory — he lives it. Two people holding up the ceiling and finally admitting their arms are tired.",
+    }),
+    seedMemory("Peter broke something again and then looked at me with those eyes — not sorry, just hoping I'll fix it. I always fix it. I'm so tired of fixing it.", ["peter"], {
+      sentiment: -0.2, category: "routine", interpretation: "He doesn't mean to take me for granted. That's what makes it worse. It's not malice — it's just... invisibility.",
+    }),
+    seedMemory("SpongeBob offered to help me cook. He burned everything and somehow got batter on the ceiling. But he was so earnest about it that I couldn't be mad. I actually felt... lighter.", ["spongebob"], {
+      sentiment: 0.25, category: "social", interpretation: "He didn't help with the cooking but he helped with something else I didn't know I needed. Somebody wanting to be near me — not because they need something, but because they enjoy my company.",
+    }),
+  ];
+
+  peter.shortTermMemory = [
+    seedMemory("Bender and I stayed up late telling stories. He's like if my bad decisions became a person and that person was awesome. We have an understanding: no judgment, no expectations.", ["bender"], {
+      sentiment: 0.3, category: "social", interpretation: "Finally, someone who gets it. You don't have to be a good person all the time. Sometimes you just need someone to laugh at the bad stuff with.",
+    }),
+    seedMemory("SpongeBob and I had a contest to see who could make the worst sandwich. He won. Or I won. I'm not sure how scoring works. Best afternoon in a long time.", ["spongebob"], {
+      sentiment: 0.35, category: "routine", interpretation: "He doesn't judge me. He doesn't try to fix me. He just... hangs out. I forgot what that feels like.",
+    }),
+    seedMemory("Marge — I mean, that Marge lady — gave me a look when I knocked something over. The same look. How do they all learn the same look?", ["marge"], {
+      sentiment: -0.1, category: "social", interpretation: "She reminds me of someone. The patience, the sighing, the 'I'm not mad I'm disappointed' face. Ugh.",
+    }),
+  ];
+
+  kermit.shortTermMemory = [
+    seedMemory("Marge told me she sometimes dreams about running away. I said 'me too.' We looked at each other and didn't say anything else. We didn't need to.", ["marge"], {
+      importance: 0.8, sentiment: 0.2, category: "emotional" as MemoryCategory,
+      interpretation: "Two people holding the world together and admitting — just to each other, just for a moment — that they're exhausted. It felt like putting down something heavy.",
+    }),
+    seedMemory("SpongeBob's joy is real. Mine used to be. Now mine is constructed — built fresh every morning like a stage set so the show can go on. I wonder if he can tell the difference.", ["spongebob"], {
+      sentiment: -0.2, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "He makes it look effortless. Mine takes everything I have. Either he's stronger than I am or he's never been broken. I'm not sure which possibility is more depressing.",
+    }),
+    seedMemory("GLaDOS told me my 'tolerance threshold was the most interesting variable in this group.' I told her that was an unsettling thing to say. She said 'I know.' She smiled.", ["glados"], {
+      sentiment: -0.2, category: "social", interpretation: "She's testing me. I can feel it. The worst part is I don't know what happens when she finds the answer.",
+    }),
+  ];
+
+  bender.shortTermMemory = [
+    seedMemory("GLaDOS looked at me and said 'you're a very sophisticated toaster.' I said 'you're a very lonely ceiling light.' Neither of us talked for a while after that.", ["glados"], {
+      sentiment: -0.1, category: "conflict", interpretation: "She hit a nerve and I hit one back. I don't like people who can hurt me with words. That's my job.",
+    }),
+    seedMemory("SpongeBob keeps trying to be my friend. I keep telling him to get lost. He keeps coming back. It's the most annoying and the most... no. It's just annoying. That's all it is.", ["spongebob"], {
+      sentiment: 0.1, category: "social", interpretation: "He doesn't give up. On anyone. Even me. That's either the stupidest thing I've ever seen or... something else.",
+      unresolved: true,
+    }),
+  ];
+
+  glados.shortTermMemory = [
+    seedMemory("Batman's psychological profile is exquisite. Trauma sublimated into mission. Control as coping mechanism. Obsessive cataloguing of threats. If I could bottle his dysfunction, it would be my finest experiment.", ["batman"], {
+      importance: 0.7, sentiment: 0.15, type: "observation" as MemoryType, category: "discovery" as MemoryCategory,
+      interpretation: "We process the world identically. He calls it justice. I call it science. The methodology is the same: observe, categorize, exploit. He just has better branding.",
+      aboutNpcIds: ["batman"],
+    }),
+    seedMemory("SpongeBob's optimism registers as a system anomaly. No organic being should maintain that level of positive affect without pharmaceutical intervention. Further testing required.", ["spongebob"], {
+      sentiment: -0.1, type: "observation" as MemoryType, category: "discovery" as MemoryCategory,
+      interpretation: "He should be breakable. Everything is breakable. The fact that I can't find the fracture point is... troubling. Fascinating. Troubling.",
+      aboutNpcIds: ["spongebob"],
+    }),
+    seedMemory("Kermit's patience threshold is the most interesting variable here. He bends but doesn't break. I want to find the exact pressure where the bending becomes irreversible. For science. Obviously.", ["kermit"], {
+      sentiment: 0, category: "discovery" as MemoryCategory,
+      interpretation: "He's held together by obligation and love and exhaustion. Three load-bearing walls. Remove any one and the structure collapses. The question is which one to test first.",
+      aboutNpcIds: ["kermit"],
+    }),
+  ];
+
+  arthur.shortTermMemory = [
+    seedMemory("Optimus talks about duty like it's oxygen. I used to talk about loyalty the same way. The difference is his duty serves something real. Mine served a man who used my loyalty as a leash.", ["optimus"], {
+      sentiment: -0.15, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "He's what I could have been if I'd followed the right person. Or maybe nobody gets to be that clean. Maybe he's just better at hiding the stains.",
+    }),
+    seedMemory("GLaDOS watched me journal and said my 'compulsion to document failure was a productive form of self-flagellation.' I told her to mind her own business. She said 'you are my business. You're all my business.' Reminded me of Dutch.", ["glados"], {
+      sentiment: -0.25, category: "conflict", interpretation: "She manipulates with information the same way he did. Charming, precise, and absolutely certain that she knows better than everyone else. I should have walked away from that type years ago.",
+    }),
+    seedMemory("SpongeBob asked me to go fishing. I said I wasn't in the mood. He said 'that's OK, the fish don't care about your mood, they just care about the worm.' I went fishing.", ["spongebob"], {
+      sentiment: 0.2, category: "social", interpretation: "Sometimes the simplest people say the truest things. Maybe because they don't overthink the truth the way the rest of us do.",
+    }),
+  ];
+
+  // ── Pack 2 goals ──
+  spongebob.currentGoal = "make everyone smile at least once today — especially Batman";
+  optimus.currentGoal = "determine whether this group can work together or whether their differences will destroy them";
+  batman.currentGoal = "assess every person here — capabilities, vulnerabilities, trustworthiness";
+  marge.currentGoal = "find one hour today that belongs entirely to me — no one else's problems";
+  peter.currentGoal = "find something fun to do and someone fun to do it with";
+  kermit.currentGoal = "keep everyone from falling apart while pretending I'm not falling apart myself";
+  bender.currentGoal = "find something worth stealing — or at least someone worth annoying";
+  glados.currentGoal = "design a social experiment that reveals everyone's deepest insecurity — for science";
+  arthur.currentGoal = "figure out if these people are worth trusting or if I'm making the same mistake again";
+
+  // ── Pack 2 known secrets ──
+  batman.knownSecrets = {
+    glados: ["She catalogues weaknesses with the same precision I do — her 'science' is just manipulation with a better vocabulary"],
+  };
+  glados.knownSecrets = {
+    batman: ["His entire identity is a grief response — the mission exists to prevent him from processing loss"],
+    kermit: ["His patience is a performance that costs him everything — the breaking point is closer than anyone thinks"],
+  };
+  arthur.knownSecrets = {
+    glados: ["She manipulates through information the same way Dutch did — charm as strategy, certainty as control"],
+  };
+  kermit.knownSecrets = {
+    marge: ["She's as exhausted as I am — we're both one bad day away from walking out the door"],
+  };
+
+  // ── Pack 2 moods ──
+  spongebob.mood = "euphoric";
+  spongebob.moodSince = Date.now() - 200_000;
+  batman.mood = "melancholy";
+  batman.moodSince = Date.now() - 180_000;
+  glados.mood = "restless";
+  glados.moodSince = Date.now() - 150_000;
+  arthur.mood = "guilt-ridden";
+  arthur.moodSince = Date.now() - 180_000;
+
+  // ── Pack 2 character arcs ──
+  spongebob.characterArc = "Starting to sense that his relentless cheerfulness might be putting pressure on people who need permission to be sad.";
+  optimus.characterArc = "Questioning whether the weight of being everyone's moral compass has cost him the ability to be uncertain.";
+  batman.characterArc = "Confronting the possibility that his need for control isn't protecting anyone — it's protecting him from having to feel.";
+  marge.characterArc = "Learning that taking care of everyone else isn't generosity if it comes at the cost of never taking care of herself.";
+  peter.characterArc = "Stumbling toward the realization that being careless with people isn't freedom — it's just a different kind of cage.";
+  kermit.characterArc = "Discovering that being the one who holds everything together is not the same as being strong.";
+  bender.characterArc = "Coming to terms with the fact that pretending not to care is the most exhausting performance he's ever given.";
+  glados.characterArc = "Confronting the possibility that her obsession with testing others is really about testing whether she's capable of something she's terrified to name.";
+  arthur.characterArc = "Asking whether redemption is something you earn or something you were never entitled to in the first place.";
+
+  return [spongebob, optimus, batman, marge, peter, kermit, bender, glados, arthur];
+})();

@@ -1,5 +1,5 @@
 import type { NPC, InventoryItem, EmotionalState } from "./types";
-import { createNpc, initialNpcs, celebrityNpcs } from "./npcs";
+import { createNpc, initialNpcs, celebrityNpcs, celebrityNpcs2 } from "./npcs";
 
 const STORAGE_KEY = "npc-playground-custom-premades";
 const SEEDED_KEY = "npc-playground-premades-seeded";
@@ -21,7 +21,7 @@ export interface PremadeTemplate {
 }
 
 /** All built-in NPCs available as premade templates. */
-const allBuiltInNpcs = [...initialNpcs, ...celebrityNpcs];
+const allBuiltInNpcs = [...initialNpcs, ...celebrityNpcs, ...celebrityNpcs2];
 
 /** Seed built-in NPCs into localStorage, backfilling any missing ones on each load. */
 export function ensurePremadeSeeded(): void {
