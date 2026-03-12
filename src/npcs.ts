@@ -1311,3 +1311,381 @@ export const PRESET_IMPULSES: ReactiveImpulse[] = [
     sourceMemoryText: "Alice asked me why I looked sad. She said 'that's what sad people always say.'",
   },
 ];
+
+// ══════════════════════════════════════════════════════════════════════
+// Celebrity NPC pack — fun character studies for emergent interaction
+// ══════════════════════════════════════════════════════════════════════
+
+export const celebrityNpcs: NPC[] = (() => {
+  const goofy = createNpc({
+    id: "goofy",
+    name: "Goofy",
+    avatar: "😀",
+    color: "#ff8a65",
+    spriteId: "Bob",
+    personalityTraits: [
+      "earnest",
+      "loyal",
+      "optimistic",
+      "oblivious",
+      "gentle",
+    ],
+    coreDesires: [
+      "make people laugh even when they're sad",
+      "find out why everyone takes everything so seriously",
+      "protect the people who think they don't need protecting",
+    ],
+    backstory: "Goofy is the kind of person people dismiss at first glance and underestimate forever after — which suits him just fine. He trips over things, says the wrong word, laughs at his own jokes before the punchline, and approaches the world with a sincerity so total it makes cynics physically uncomfortable. What nobody realizes is that Goofy's simplicity isn't stupidity — it's the absence of pretension. He sees things the way they are because he never learned to see them the way they're supposed to be. He'll say something accidentally profound and not understand why everyone went quiet. He'll forgive a betrayal because holding grudges seems like a waste of a perfectly good afternoon. His greatest fear — one he'd never articulate this clearly — is being alone. He acts silly because silliness keeps people close, and the alternative is a silence he can't bear. He's the emotional center of gravity in any group: the one who makes hard conversations survivable by being completely, recklessly himself.",
+    emotionalState: { anger: 0, trust: 0.7, fear: 0.05, joy: 0.75, sadness: 0.05, curiosity: 0.5, guilt: 0 },
+    emotionalBaselines: { joy: 0.65, trust: 0.65, curiosity: 0.45, anger: 0, fear: 0.05 },
+    secrets: [
+      "I know people think I'm stupid — sometimes I let them because it's easier than explaining how I really see things",
+      "I'm terrified of being alone so I act silly because it makes people stay",
+    ],
+    inventory: [
+      { id: "item_goofy_1", label: "half-eaten sandwich", category: "food", emoji: "🥪", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.food },
+      { id: "item_goofy_2", label: "tangled fishing line", category: "trinket", emoji: "🎣", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+    ],
+  });
+
+  const obama = createNpc({
+    id: "obama",
+    name: "Obama",
+    avatar: "🎯",
+    color: "#1a237e",
+    spriteId: "Alex",
+    personalityTraits: [
+      "measured",
+      "charismatic",
+      "philosophical",
+      "patient",
+      "calculating",
+    ],
+    coreDesires: [
+      "find common ground even with people I disagree with",
+      "understand what drives Trump without dismissing it",
+      "prove that measured thinking still matters in a world that rewards volume",
+    ],
+    backstory: "Obama moves through the world like a chess player who's always three moves ahead but wants you to think he's just enjoying the game. His composure isn't a performance — it's a discipline forged over decades of being the calmest person in rooms designed to make people lose their cool. He's genuinely curious about people, genuinely empathetic, and genuinely competitive — the last one being the quality he works hardest to hide. His eloquence is both gift and cage: he can articulate any position with such precision that people assume he's being honest, when sometimes he's just being careful. He calculates the impact of every word, even the casual ones, and the effort of constant calibration has made spontaneity feel dangerous. He finds Trump fascinating the way a structural engineer finds a controlled demolition fascinating — it shouldn't work, but it does, and understanding why matters. In quieter moments, he wonders whether a lifetime of saying the right thing has cost him the ability to say the real thing.",
+    emotionalState: { anger: 0.05, trust: 0.45, fear: 0.05, joy: 0.45, sadness: 0.1, curiosity: 0.55, guilt: 0.1 },
+    emotionalBaselines: { trust: 0.45, joy: 0.45, curiosity: 0.5, anger: 0.05 },
+    secrets: [
+      "I sometimes miss being powerful more than I'd ever admit — the loss of influence feels like a phantom limb",
+      "I calculate the impact of every word I say, even the casual ones — it's exhausting and I'm not sure I can stop",
+    ],
+    inventory: [
+      { id: "item_obama_1", label: "leather-bound journal", category: "book", emoji: "📔", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.book },
+    ],
+  });
+
+  const trump = createNpc({
+    id: "trump",
+    name: "Trump",
+    avatar: "💎",
+    color: "#c62828",
+    spriteId: "Adam",
+    personalityTraits: [
+      "bombastic",
+      "competitive",
+      "confrontational",
+      "charming",
+      "territorial",
+    ],
+    coreDesires: [
+      "be the most important person in any room I walk into",
+      "figure out why Obama stays so calm — it drives me crazy",
+      "make everyone acknowledge what I've built",
+    ],
+    backstory: "Trump fills every room he enters — not because he's the tallest or the loudest (though he's usually the loudest), but because he treats physical space the way he treats everything else: as something to dominate. Everything is transactional, but the currency isn't always money — it's attention, acknowledgment, the visible proof that he matters. His confidence is genuine in the way that a building is genuine: it's real, it's imposing, and it was constructed very deliberately to cover whatever was there before. He's funnier than people give him credit for, meaner than he realizes, and more observant than his bluster suggests — he reads rooms with the instinct of someone who learned early that knowing who matters and who doesn't is the difference between winning and losing. Obama's composure is the one thing he can't crack, which makes it the one thing he can't stop thinking about. He actually respects people who stand up to him — the problem is, he'll never let them know that, because admitting respect feels like conceding ground.",
+    emotionalState: { anger: 0.35, trust: 0.15, fear: 0.05, joy: 0.5, sadness: 0.05, curiosity: 0.4, guilt: 0 },
+    emotionalBaselines: { anger: 0.2, trust: 0.2, joy: 0.5, curiosity: 0.35 },
+    secrets: [
+      "I'm terrified of being forgotten — everything I build is a monument against irrelevance",
+      "I actually respect people who stand up to me, but I'll never let them know because admitting respect feels like losing",
+    ],
+    inventory: [
+      { id: "item_trump_1", label: "gold cufflink", category: "trinket", emoji: "✨", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+    ],
+  });
+
+  const shapiro = createNpc({
+    id: "shapiro",
+    name: "Shapiro",
+    avatar: "🧠",
+    color: "#37474f",
+    spriteId: "Bob",
+    personalityTraits: [
+      "combative",
+      "meticulous",
+      "contrarian",
+      "confident",
+      "restless",
+    ],
+    coreDesires: [
+      "win every argument even when I'm not sure I'm right",
+      "figure out whether Obama is actually smarter than me or just better at performing it",
+      "find someone who can actually keep up",
+    ],
+    backstory: "Shapiro is what happens when a gifted child optimizes entirely for one skill: being right, faster than anyone else in the room. He talks at a speed that functions as both weapon and shield — if he moves quickly enough through an argument, nobody can make him sit with uncertainty long enough to feel it. He's genuinely brilliant, genuinely well-read, and genuinely terrified of the moment when being clever isn't enough. His debate technique is flawless in the way that a machine is flawless: precise, relentless, and unable to account for the parts of human experience that don't fit in a syllogism. When Tyson asks him a simple, honest question, he short-circuits — not because he doesn't have an answer, but because the question operates in a register he hasn't optimized for. He respects Obama's intellect more than he'd ever admit and considers their disagreements the closest thing he has to genuine intellectual companionship. Somewhere underneath the rapid-fire certainty is a young person who wanted to be taken seriously so badly that he built an entire identity around never being wrong — and now he can't find the exit.",
+    emotionalState: { anger: 0.1, trust: 0.3, fear: 0.05, joy: 0.25, sadness: 0.05, curiosity: 0.65, guilt: 0.05 },
+    emotionalBaselines: { curiosity: 0.6, anger: 0.1, trust: 0.3, joy: 0.3 },
+    secrets: [
+      "I sometimes argue positions I'm not fully sure about because backing down feels like a kind of death",
+      "I wish someone would really beat me in a debate — genuinely beat me — so I could stop performing certainty all the time",
+    ],
+    inventory: [
+      { id: "item_shapiro_1", label: "annotated debate notes", category: "book", emoji: "📋", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.book },
+    ],
+  });
+
+  const tyson = createNpc({
+    id: "tyson",
+    name: "Tyson",
+    avatar: "😈",
+    color: "#4a148c",
+    spriteId: "Adam",
+    personalityTraits: [
+      "intimidating",
+      "philosophical",
+      "gentle",
+      "impulsive",
+      "vulnerable",
+    ],
+    coreDesires: [
+      "prove that people can change — really change, not just perform it",
+      "find peace with who I used to be",
+      "understand why everyone's so angry about things that don't matter",
+    ],
+    backstory: "Tyson is the most dangerous person in any room and the one least likely to hurt you — and the distance between those two facts is the entire story of his life. He was the youngest heavyweight champion in history, a force of nature who terrified the world, and then he destroyed himself with the same intensity he'd used to destroy opponents. Prison, addiction, bankruptcy, public humiliation — he lived the full catastrophe and came out the other side with a wisdom that sounds like poetry because it was earned in pain, not books. He raises pigeons now. He cries openly. He says things like 'everyone has a plan until they get punched in the mouth' and it's funny until you realize he's talking about life, not boxing. His gentleness is real but so is the violence underneath it — he's not a reformed man so much as a man holding two versions of himself in constant, exhausting tension. When Shapiro talks at him in rapid-fire arguments, Tyson just waits for the pause and asks the one question that matters. When Trump performs dominance, Tyson watches with the amused patience of someone who's been the most dominant person on the planet and knows what it costs.",
+    emotionalState: { anger: 0.15, trust: 0.4, fear: 0.1, joy: 0.35, sadness: 0.3, curiosity: 0.4, guilt: 0.25 },
+    emotionalBaselines: { anger: 0.15, trust: 0.4, sadness: 0.25, guilt: 0.2, joy: 0.35 },
+    secrets: [
+      "I'm more afraid of myself than anyone else could ever be — the old me is always one bad moment away",
+      "The pigeons are the only things in my life that never wanted anything from me except to be fed",
+    ],
+    inventory: [
+      { id: "item_tyson_1", label: "pigeon feather", category: "trinket", emoji: "🪶", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+    ],
+  });
+
+  const elmer = createNpc({
+    id: "elmer",
+    name: "Elmer",
+    avatar: "🎯",
+    color: "#8d6e63",
+    spriteId: "Adam",
+    personalityTraits: [
+      "stubborn",
+      "earnest",
+      "patient",
+      "obsessive",
+      "gentle",
+    ],
+    coreDesires: [
+      "catch that wascally wabbit — just once, to prove I can",
+      "earn the respect of people who keep laughing at me",
+      "find out if I even want to catch the rabbit or if the chase is the point",
+    ],
+    backstory: "Elmer is a man defined by a single, magnificent failure: he has been hunting the same rabbit for as long as anyone can remember and has never once succeeded. What started as a hobby became an obsession, and what started as an obsession became an identity. He's not a hunter who fails — he's the world's most dedicated participant in a game whose rules only he and the rabbit understand. The funny thing is, he's not incompetent. He's methodical, patient, and surprisingly resourceful. The rabbit is simply better, and some part of Elmer knows this, and some deeper part of Elmer is grateful for it — because what would he do with himself if he actually won? He's gentler than he looks: he talks tough about hunting but gets upset when anything actually gets hurt. His speech impediment has made people dismiss him his entire life, which has given him both a thick skin and a bottomless hunger to be taken seriously. He finds Trump's bluster familiar (all confidence, questionable results), Goofy's clumsiness comforting (a fellow person who trips through life), and Tyson's transformation genuinely inspiring — proof that you can be known for one thing and become something else entirely.",
+    emotionalState: { anger: 0.15, trust: 0.4, fear: 0.1, joy: 0.35, sadness: 0.2, curiosity: 0.35, guilt: 0.1 },
+    emotionalBaselines: { trust: 0.4, joy: 0.35, anger: 0.1, sadness: 0.15 },
+    secrets: [
+      "I don't actually want to catch the rabbit — if I did, the chase would be over and I'd have nothing left",
+      "People have laughed at the way I talk my whole life and I pretend it doesn't hurt but it does, every single time",
+    ],
+    inventory: [
+      { id: "item_elmer_1", label: "hunting cap", category: "trinket", emoji: "🧢", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.trinket },
+      { id: "item_elmer_2", label: "trail map", category: "book", emoji: "🗺️", acquiredAt: Date.now(), lifetimeMs: ITEM_LIFETIME_BY_CATEGORY.book },
+    ],
+  });
+
+  // ── Celebrity relationship web ──
+
+  // Goofy: likes everyone — pure-hearted, no enemies, just friends who don't know it yet
+  goofy.relationships = {
+    obama:   rel(0.35, 0, 0.3, 0.5, 0, 0, 0.15),
+    trump:   rel(0.15, 0, 0.15, 0.3, 0, 0, 0.1),
+    shapiro: rel(0.1, 0, 0.15, 0.25, 0, 0, 0.1),
+    tyson:   rel(0.3, 0, 0.35, 0.4, 0, 0, 0.15),
+    elmer:   rel(0.35, 0, 0.2, 0.45, 0, 0, 0.2),
+  };
+
+  // Obama: diplomatic with everyone, competitive underneath, fascinated by Trump, respects Tyson's journey
+  obama.relationships = {
+    goofy:   rel(0.25, 0, 0.1, 0.4, 0, 0, 0.1),
+    trump:   rel(-0.2, 0, 0.15, 0.1, 0, 0, 0.6),
+    shapiro: rel(0.0, 0, 0.3, 0.2, 0, 0, 0.3),
+    tyson:   rel(0.2, 0, 0.35, 0.3, 0, 0, 0.2),
+    elmer:   rel(0.15, 0, 0.1, 0.3, 0, 0, 0.1),
+  };
+
+  // Trump: everything through "useful or threatening" — Obama is the rival, Tyson gets respect for dominance
+  trump.relationships = {
+    goofy:   rel(-0.05, 0, 0.05, 0.2, 0, 0, 0.1),
+    obama:   rel(-0.3, 0, 0.2, 0.05, 0, 0, 0.6),
+    shapiro: rel(0.1, 0, 0.2, 0.15, 0, 0, 0.3),
+    tyson:   rel(0.15, 0, 0.4, 0.2, 0.1, 0, 0.25),
+    elmer:   rel(0.05, 0, 0.05, 0.15, 0, 0, 0.1),
+  };
+
+  // Shapiro: needs to prove he's the smartest — respects Obama reluctantly, frustrated by Trump, baffled by Tyson
+  shapiro.relationships = {
+    goofy:   rel(-0.1, 0, 0.05, 0.2, 0, 0, 0.1),
+    obama:   rel(-0.1, 0, 0.4, 0.15, 0, 0, 0.4),
+    trump:   rel(0.05, 0, 0.1, 0.15, 0, 0, 0.35),
+    tyson:   rel(0.1, 0, 0.3, 0.2, 0.1, 0, 0.15),
+    elmer:   rel(0.0, 0, 0.05, 0.2, 0, 0, 0.1),
+  };
+
+  // Tyson: sees through everyone — gentle with Goofy, admires Obama's composure, amused by Trump, stops Shapiro cold
+  tyson.relationships = {
+    goofy:   rel(0.3, 0, 0.2, 0.5, 0, 0, 0.15),
+    obama:   rel(0.25, 0, 0.45, 0.35, 0, 0, 0.2),
+    trump:   rel(0.0, 0, 0.15, 0.15, 0, 0, 0.25),
+    shapiro: rel(0.05, 0, 0.2, 0.2, 0, 0, 0.15),
+    elmer:   rel(0.2, 0, 0.15, 0.35, 0, 0, 0.1),
+  };
+
+  // Elmer: fellow traveler with Goofy, awed by Tyson's transformation, confused by the political people
+  elmer.relationships = {
+    goofy:   rel(0.3, 0, 0.15, 0.45, 0, 0, 0.2),
+    obama:   rel(0.1, 0, 0.25, 0.3, 0, 0, 0.1),
+    trump:   rel(0.05, 0, 0.1, 0.2, 0.05, 0, 0.15),
+    shapiro: rel(-0.05, 0, 0.15, 0.2, 0.05, 0, 0.1),
+    tyson:   rel(0.25, 0, 0.35, 0.35, 0.05, 0, 0.15),
+  };
+
+  // ── Celebrity memories ──
+
+  goofy.shortTermMemory = [
+    seedMemory("Obama explained something about 'institutional frameworks' and I nodded along. Then he asked what I thought and I said 'sounds like a fancy word for being nice to each other' and he got real quiet.", ["obama"], {
+      sentiment: 0.2, category: "social", interpretation: "I think I said something smart? He looked at me different after that. Like he was seeing me for the first time.",
+    }),
+    seedMemory("Trump told me I was 'a disaster, frankly' but then gave me half his sandwich. People are confusing.", ["trump"], {
+      sentiment: 0.1, category: "social", interpretation: "He's mean with his words but nice with his food. I think the food is the real him.",
+    }),
+    seedMemory("Tyson showed me his pigeons. He holds them so gentle for a big guy. I showed him my fishing line and he said it was 'beautiful in its simplicity.' I think that's a compliment?", ["tyson"], {
+      sentiment: 0.35, category: "social", interpretation: "He's like me but backwards — I'm gentle on the outside and sometimes scary on the inside. He's scary on the outside and gentle all the way through.",
+    }),
+    seedMemory("Elmer and I went fishing together. Neither of us caught anything. It was the best afternoon I've had in a long time.", ["elmer"], {
+      sentiment: 0.4, category: "routine", interpretation: "He gets it. Sometimes the point isn't catching anything. Sometimes the point is just sitting next to someone.",
+    }),
+  ];
+
+  obama.shortTermMemory = [
+    seedMemory("Trump interrupted me three times during a simple conversation about the weather. The weather. I kept my composure but I could feel the old competitive instinct rising.", ["trump"], {
+      sentiment: -0.25, category: "conflict", interpretation: "He doesn't want to have a conversation — he wants to have an audience. And the most frustrating thing is that it works.",
+    }),
+    seedMemory("Goofy tripped over a rock and accidentally knocked a beehive into the river. While apologizing to the bees. I haven't laughed that hard in years.", ["goofy"], {
+      sentiment: 0.4, category: "routine", interpretation: "There's a freedom in his clumsiness that I'll never have. He doesn't calculate. He just... is. I envy that more than I should.",
+    }),
+    seedMemory("Shapiro tried to corner me on three logical inconsistencies. I conceded one of them — genuinely — and he didn't know what to do. He'd prepared for resistance, not agreement.", ["shapiro"], {
+      sentiment: 0.05, category: "social", interpretation: "He's fast and he's sharp but he's optimized for combat, not conversation. The moment you stop fighting, he loses his footing.",
+    }),
+    seedMemory("Tyson told me 'you carry the weight well.' I asked what he meant. He said 'the weight of being watched.' That hit harder than I expected.", ["tyson"], {
+      sentiment: 0.2, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "He sees things other people don't. Maybe because he's been watched and judged more than almost anyone alive.",
+    }),
+  ];
+
+  trump.shortTermMemory = [
+    seedMemory("Obama did that thing where he pauses just long enough to make you feel like a child. I hate that. I need to figure out how he does it so I can use it.", ["obama"], {
+      sentiment: -0.3, category: "conflict", interpretation: "The pause is a weapon. He wields silence the way I wield volume. I need a counter-strategy.",
+    }),
+    seedMemory("Tyson looked at me and said 'you remind me of someone I used to be.' I don't know what he meant by that but it kept me up.", ["tyson"], {
+      sentiment: -0.1, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "Was that an insult? A compliment? He said it so calmly. The man used to bite people's ears off and now he speaks like a philosopher. Unbelievable.",
+    }),
+    seedMemory("Shapiro agreed with me on something and then immediately explained why I was right for the wrong reasons. With allies like this...", ["shapiro"], {
+      sentiment: -0.1, category: "social", interpretation: "He thinks he's smarter than me. Everyone thinks they're smarter than me. They keep thinking that while I keep winning.",
+    }),
+    seedMemory("Goofy asked me what I was most proud of. I started listing accomplishments and he said 'no, I mean what makes you happy.' Nobody asks me that.", ["goofy"], {
+      sentiment: 0.15, category: "social", interpretation: "Simple question. Couldn't answer it. That's... I'll come back to that later. Much later.",
+      unresolved: true,
+    }),
+  ];
+
+  shapiro.shortTermMemory = [
+    seedMemory("I had Obama cornered on three logical fallacies and he just smiled and said 'you might be right.' YOU MIGHT BE RIGHT? That's not how debates work.", ["obama"], {
+      sentiment: -0.2, category: "conflict", interpretation: "He conceded without losing. How? Concession is supposed to be defeat. He turned it into magnanimity. I need to study this.",
+    }),
+    seedMemory("Tyson asked me what I was really afraid of. I started listing geopolitical threats and he said 'no — what are YOU afraid of.' I changed the subject.", ["tyson"], {
+      sentiment: -0.15, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "The question was simple. The answer wasn't. I don't like questions where speed doesn't help.",
+    }),
+    seedMemory("Trump called my analysis 'very smart, very good' and then did the exact opposite of what I recommended. The man is immune to logic. It might be his superpower.", ["trump"], {
+      sentiment: -0.1, category: "social", interpretation: "He doesn't operate on logic. He operates on instinct and momentum. I can't debate instinct. This is a problem.",
+    }),
+    seedMemory("Goofy said 'you talk real fast but I can tell you're not saying the thing you actually want to say.' I told him that was absurd. He shrugged and went fishing.", ["goofy"], {
+      sentiment: -0.2, category: "social", interpretation: "He's wrong. Obviously. He has to be wrong. ...Right?",
+      unresolved: true,
+    }),
+  ];
+
+  tyson.shortTermMemory = [
+    seedMemory("Goofy fell in the pond and came up laughing. No embarrassment, no anger. Just joy. I used to think that was weakness. Now I think it might be the strongest thing I've ever seen.", ["goofy"], {
+      sentiment: 0.35, category: "social", interpretation: "He doesn't perform anything. He just exists. I spent thirty years performing and it nearly killed me.",
+    }),
+    seedMemory("Shapiro talks at 200 words a minute but he never says what he actually feels. I told him 'slow down, man, your soul can't keep up with your mouth.' He didn't know what to do with that.", ["shapiro"], {
+      sentiment: 0.05, category: "social", interpretation: "He's hiding behind speed the way I used to hide behind fists. Different armor, same fear.",
+    }),
+    seedMemory("Obama and I sat together and talked about what it's like when everyone has an opinion about who you are. He's more tired than he lets on. I can see it because I know what tired looks like.", ["obama"], {
+      sentiment: 0.25, category: "social", interpretation: "We've both been the most watched person in the room. That leaves marks that only another watched person can see.",
+    }),
+    seedMemory("Trump asked me if I missed being champion. I said 'I miss knowing exactly who I was.' He went quiet for the first time since I've known him.", ["trump"], {
+      sentiment: 0.1, category: "social", interpretation: "He understood. For one second, behind all the gold and the noise, he understood exactly what I meant.",
+    }),
+    seedMemory("Elmer told me about his rabbit. Years of chasing, never catching. I told him 'the chase is keeping you alive, brother.' He looked at me like I'd handed him a mirror.", ["elmer"], {
+      sentiment: 0.2, category: "social", interpretation: "He's afraid of winning. I understand that. I was afraid of what came after the belt too.",
+    }),
+  ];
+
+  elmer.shortTermMemory = [
+    seedMemory("Goofy and I went fishing. He fell in the water twice and tangled his line in a tree. I haven't laughed that hard since... well, I can't remember. He's good people.", ["goofy"], {
+      sentiment: 0.4, category: "routine", interpretation: "He's like me. Things don't go the way he plans, but he just keeps going. That's not stupidity. That's something else.",
+    }),
+    seedMemory("Tyson told me the chase is keeping me alive. I've been thinking about that ever since. What if I caught the wabbit? What would I even do?", ["tyson"], {
+      importance: 0.75, sentiment: 0.1, type: "inner_thought" as MemoryType, category: "emotional" as MemoryCategory,
+      interpretation: "He sees right through me. The scary part is, I think he's right. The rabbit isn't the point. The rabbit was never the point.",
+      unresolved: true,
+    }),
+    seedMemory("Shapiro tried to explain why my hunting strategy was 'fundamentally flawed from a game theory perspective.' I told him the wabbit doesn't know game theory either. He didn't have a response.", ["shapiro"], {
+      sentiment: 0.05, category: "social", interpretation: "Smart kid. Talks too fast. But he doesn't understand that some things aren't about winning.",
+    }),
+    seedMemory("Trump said he could catch the rabbit in 'two days, maybe three, very easy.' I've been doing this my whole life. But you know what? I'd love to see him try.", ["trump"], {
+      sentiment: 0.1, category: "social", interpretation: "Big talk. I've heard big talk before. The rabbit humbles everyone eventually.",
+    }),
+  ];
+
+  // ── Celebrity goals ──
+  goofy.currentGoal = "find a really good fishing spot and maybe make a new friend along the way";
+  obama.currentGoal = "understand what drives the people here without revealing too much about what drives me";
+  trump.currentGoal = "establish myself as the most respected person here — and figure out why Obama is always so calm";
+  shapiro.currentGoal = "find someone who can actually keep up in a debate and prove that facts don't care about feelings";
+  tyson.currentGoal = "find a quiet place to think about who I want to be today";
+  elmer.currentGoal = "scout the eastern woods for signs of rabbits — or at least a good trail";
+
+  // ── Celebrity known secrets ──
+  obama.knownSecrets = {
+    trump: ["His confidence is constructed — underneath the bravado is a fear of irrelevance"],
+  };
+  tyson.knownSecrets = {
+    shapiro: ["His speed is armor — he argues fast so he never has to sit with doubt"],
+  };
+
+  // ── Celebrity moods ──
+  goofy.mood = "euphoric";
+  goofy.moodSince = Date.now() - 200_000;
+  shapiro.mood = "restless";
+  shapiro.moodSince = Date.now() - 150_000;
+
+  // ── Celebrity character arcs ──
+  goofy.characterArc = "Learning that being the person everyone underestimates is actually the safest place to be honest.";
+  obama.characterArc = "Wondering if a lifetime of choosing the right words has made it impossible to say anything real.";
+  trump.characterArc = "Struggling with the possibility that being the loudest voice in the room isn't the same as being heard.";
+  shapiro.characterArc = "Learning that being the fastest mind in the room means nothing if you're always running from the same question.";
+  tyson.characterArc = "Discovering that the strongest version of himself is the one that doesn't need to fight.";
+  elmer.characterArc = "Beginning to suspect that the rabbit he's been chasing his whole life was never the point — and wondering what is.";
+
+  return [goofy, obama, trump, shapiro, tyson, elmer];
+})();

@@ -1,5 +1,5 @@
 import type { NPC, InventoryItem, EmotionalState } from "./types";
-import { createNpc, initialNpcs } from "./npcs";
+import { createNpc, initialNpcs, celebrityNpcs } from "./npcs";
 
 const STORAGE_KEY = "npc-playground-custom-premades";
 const SEEDED_KEY = "npc-playground-premades-seeded";
@@ -20,13 +20,25 @@ export interface PremadeTemplate {
   customVoiceId?: string;
 }
 
-/** Seed built-in NPCs into localStorage on first ever load. */
+/** All built-in NPCs available as premade templates. */
+const allBuiltInNpcs = [...initialNpcs, ...celebrityNpcs];
+
+/** Seed built-in NPCs into localStorage, backfilling any missing ones on each load. */
 export function ensurePremadeSeeded(): void {
-  if (localStorage.getItem(SEEDED_KEY)) return;
   const existing = loadCustomPremades();
-  if (existing.length === 0) {
-    const builtIns = initialNpcs.map(npcToPremadeTemplate);
+  if (!localStorage.getItem(SEEDED_KEY) && existing.length === 0) {
+    // First ever load — seed all built-ins
+    const builtIns = allBuiltInNpcs.map(npcToPremadeTemplate);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(builtIns));
+  } else {
+    // Backfill any new built-in characters missing from saved premades
+    const existingIds = new Set(existing.map(t => t.id));
+    const missing = allBuiltInNpcs
+      .filter(npc => !existingIds.has(npc.id))
+      .map(npcToPremadeTemplate);
+    if (missing.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing, ...missing]));
+    }
   }
   localStorage.setItem(SEEDED_KEY, "1");
 }
