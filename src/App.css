@@ -2097,6 +2097,16 @@
   letter-spacing: 0.3px;
 }
 
+.floater-secret {
+  font-size: 18px;
+  text-transform: none;
+}
+
+.floater-promise {
+  font-size: 18px;
+  text-transform: none;
+}
+
 @keyframes floater-drift-x {
   0% { translate: 0 0; }
   8% { translate: calc(var(--dir, 1) * var(--drift, 1) * 4px) 0; }

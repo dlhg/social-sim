@@ -16,12 +16,19 @@ import { ConversationManager } from "./conversation-manager";
 import { WorldSimulation } from "./world-simulation";
 import { TilemapRenderer } from "./tilemap-renderer";
 import { DayCycle } from "./day-cycle";
-import type { NPC, BubbleData, FloaterData, ActionType, WaypointActivityId, DayPhase } from "./types";
+import type { NPC, BubbleData, FloaterData, ActionType, WaypointActivityId, DayPhase, EmotionalState } from "./types";
+import type { NpcIndicatorData } from "./components/WorldCanvas";
 import { ACTIVITIES } from "./activities";
 import { pickInteraction, executeInteraction } from "./interactions";
 import { TTSService, fetchVoices, uploadVoiceClip } from "./tts-service";
 import { syncVoicesToServer } from "./voice-storage";
 import { PRESET_PROMISES, PRESET_IMPULSES } from "./npcs";
+import { generateConfessionalQuestions, computeConfessionalInfluence, ConfessionalTracker } from "./confessional";
+import { buildConfessionalMessages } from "./prompt-builder";
+import { accumulateChat } from "./ollama";
+import { extractJson } from "./response-parser";
+import { ConfessionalPanel } from "./components/ConfessionalPanel";
+import { RelationshipGraph } from "./components/RelationshipGraph";
 import type { NpcSnapshot, FeedItem } from "./components/SidePanel";
 import "./App.css";
 
@@ -77,6 +84,12 @@ function App() {
   const [dmToolsOpen, setDmToolsOpen] = useState(false);
   const [npcViewerOpen, setNpcViewerOpen] = useState(false);
   const [directorOpen, setDirectorOpen] = useState(false);
+  const [graphOpen, setGraphOpen] = useState(false);
+  const [confessionalNpcId, setConfessionalNpcId] = useState<string | null>(null);
+  const [confessionalResponse, setConfessionalResponse] = useState<string | null>(null);
+  const [confessionalLoading, setConfessionalLoading] = useState(false);
+  const confessionalTrackerRef = useRef(new ConfessionalTracker());
+  const [pendingPair, setPendingPair] = useState<[string, string] | null>(null);
 
   // Panel state
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
@@ -126,6 +139,122 @@ function App() {
 
   const handleRemoveFromRoster = useCallback((npcId: string) => {
     setRoster((prev) => prev.filter((n) => n.id !== npcId));
+  }, []);
+
+  const getNpcIndicators = useCallback((npcId: string): NpcIndicatorData | undefined => {
+    const store = storeRef.current;
+    const npc = store.get(npcId);
+    if (!npc) return undefined;
+    const grudges = store.getActiveGrudges(npcId);
+    const promises = store.getPromisesFor(npcId);
+    const impulses = store.getReactiveImpulses(npcId);
+    return {
+      mood: npc.mood,
+      moodSince: npc.moodSince,
+      hasSecret: npc.secrets.length > 0,
+      hasGrudge: grudges.length > 0,
+      hasPendingPromise: promises.some(p => p.status === "active" && p.promiserId === npcId),
+      hasBrokenPromise: promises.some(p => p.status === "broken"),
+      isAvoiding: npc.behavioralOverride?.mode === "avoid",
+      hasImpulse: impulses.length > 0,
+      impulseUrgency: impulses.length > 0 ? Math.max(...impulses.map(i => i.urgency)) : 0,
+    };
+  }, []);
+
+  const handleConfessionalAsk = useCallback(async (question: string) => {
+    if (!confessionalNpcId) return;
+    const store = storeRef.current;
+    const npc = store.get(confessionalNpcId);
+    if (!npc) return;
+
+    const tracker = confessionalTrackerRef.current;
+    const mult = tracker.getMultiplier(confessionalNpcId);
+    if (mult <= 0) return;
+
+    setConfessionalLoading(true);
+    setConfessionalResponse(null);
+
+    try {
+      const allNpcs = store.getAll().map(n => ({ id: n.id, name: n.name }));
+      const messages = buildConfessionalMessages(
+        npc, question, allNpcs, mult,
+        languageRef.current, worldPromptRef.current || undefined,
+      );
+      const raw = await accumulateChat(messages);
+      const jsonStr = extractJson(raw);
+      if (!jsonStr) {
+        setConfessionalResponse("...");
+        return;
+      }
+      const parsed = JSON.parse(jsonStr);
+      const response = typeof parsed.response === "string" ? parsed.response : "...";
+      setConfessionalResponse(response);
+
+      // Apply influence
+      const mentionedNpcName = parsed.mentioned_npc;
+      let mentionedNpcId: string | null = null;
+      if (mentionedNpcName) {
+        const found = allNpcs.find(n => n.name.toLowerCase() === mentionedNpcName.toLowerCase());
+        if (found) mentionedNpcId = found.id;
+      }
+      const sentiment = parsed.sentiment_toward_mentioned ?? null;
+      const influence = computeConfessionalInfluence(
+        npc, mentionedNpcId, sentiment, store, mult,
+      );
+      for (const ed of influence.emotionDeltas) {
+        const full: EmotionalState = {
+          anger: ed.delta.anger ?? 0, trust: ed.delta.trust ?? 0,
+          fear: ed.delta.fear ?? 0, joy: ed.delta.joy ?? 0,
+          sadness: ed.delta.sadness ?? 0, curiosity: ed.delta.curiosity ?? 0,
+          guilt: ed.delta.guilt ?? 0,
+        };
+        store.applyEmotionDelta(ed.npcId, full);
+      }
+      for (const rd of influence.relationshipDeltas) {
+        store.applyRelationshipDelta(rd.npcId, rd.targetId, rd.delta, 0, rd.extras);
+      }
+      // Emit floaters
+      for (const fl of influence.floaters) {
+        const floater: FloaterData = {
+          id: `fl-conf-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+          npcId: fl.npcId,
+          text: fl.text,
+          color: fl.color,
+          category: fl.category,
+          spawnedAt: Date.now(),
+          directionX: Math.random() < 0.5 ? 1 : -1,
+          delay: 0,
+          offsetY: 0,
+          driftScale: 1,
+        };
+        setFloaters(prev => [...prev, floater]);
+        const fTimer = window.setTimeout(() => {
+          setFloaters(prev => prev.filter(f => f.id !== floater.id));
+        }, 4700);
+        bubbleTimersRef.current.set(`floater:${floater.id}`, fTimer);
+      }
+
+      tracker.recordUse(confessionalNpcId);
+
+      // TTS the response
+      const ttsEmotions = store.get(confessionalNpcId)?.emotionalState;
+      ttsRef.current.speak(confessionalNpcId, response, ttsEmotions, languageRef.current);
+    } catch (err) {
+      console.warn("[confessional] Failed:", err);
+      setConfessionalResponse("...");
+    } finally {
+      setConfessionalLoading(false);
+    }
+  }, [confessionalNpcId]);
+
+  const handleNpcClickForConfessional = useCallback((npcId: string) => {
+    setSelectedNpcId(npcId);
+    // Only open confessional if sim is running and NPC isn't busy
+    if (managerRef.current && !managerRef.current.isNpcBusy(npcId)) {
+      setConfessionalNpcId(npcId);
+      setConfessionalResponse(null);
+      setConfessionalLoading(false);
+    }
   }, []);
 
   const handleStartSimulation = useCallback(() => {
@@ -232,6 +361,8 @@ function App() {
     setStreamingText({});
     setCurrentSpeaker(null);
     setActiveConversationPair(null);
+    setPendingPair(null);
+    setConfessionalNpcId(null);
     setNpcHistory({});
     setBubbles([]);
     setFloaters([]);
@@ -552,6 +683,7 @@ function App() {
           !((bl.npcId === a || bl.npcId === b) && bl.type === "action")
         ));
         setActiveConversationPair(session.participantIds);
+        setPendingPair(null); // Clear director preview line
       },
       onConversationEnd: (session) => {
         const [a, b] = session.participantIds;
@@ -600,6 +732,9 @@ function App() {
         }, 4700 + floater.delay);
         bubbleTimersRef.current.set(`floater:${floater.id}`, fTimer);
       },
+      onGenerationStart: (npcAId, npcBId) => {
+        setPendingPair([npcAId, npcBId]);
+      },
       onEavesdropReaction: (eavesdropperId, text) => {
         const now = Date.now();
         setBubbles(prev => [
@@ -628,6 +763,7 @@ function App() {
       onPhaseChange: (state) => {
         setDayLabel(dayCycle.getLabel());
         setDayPhase(state.phase);
+        confessionalTrackerRef.current.resetAll();
         setFeed(prev => [...prev, {
           type: "activity",
           event: {
@@ -712,6 +848,8 @@ function App() {
     setStatus("idle");
     setCurrentSpeaker(null);
     setActiveConversationPair(null);
+    setPendingPair(null);
+    setConfessionalNpcId(null);
     setBubbles([]);
     setFloaters([]);
     for (const t of bubbleTimersRef.current.values()) clearTimeout(t);
@@ -921,12 +1059,14 @@ function App() {
               }
             }
             getNpc={(id) => storeRef.current.get(id)}
+            getNpcIndicators={getNpcIndicators}
             currentSpeaker={currentSpeaker}
             activeConversationPair={activeConversationPair}
+            pendingPair={pendingPair}
             bubbles={bubbles}
             floaters={floaters}
             dayPhase={dayPhase}
-            onNpcClick={setSelectedNpcId}
+            onNpcClick={handleNpcClickForConfessional}
             tilemap={tilemapRef.current}
             cameraMode={cameraMode}
           />
@@ -966,6 +1106,12 @@ function App() {
           className="btn btn-create"
         >
           + NPC
+        </button>
+        <button
+          onClick={() => setGraphOpen(prev => !prev)}
+          className={`btn ${graphOpen ? "btn-tts-on" : "btn-npcs"}`}
+        >
+          Graph
         </button>
         <button
           onClick={() => {
@@ -1032,6 +1178,36 @@ function App() {
           onPlayTurnAudio={(convIdx, turnIdx) =>
             managerRef.current?.playPreparedTurnAudio(convIdx, turnIdx)
           }
+        />
+      )}
+      {confessionalNpcId && storeRef.current.get(confessionalNpcId) && (
+        <ConfessionalPanel
+          npc={storeRef.current.get(confessionalNpcId)!}
+          questions={generateConfessionalQuestions(
+            storeRef.current.get(confessionalNpcId)!,
+            storeRef.current.getAll(),
+            storeRef.current,
+          )}
+          onAsk={handleConfessionalAsk}
+          onClose={() => setConfessionalNpcId(null)}
+          response={confessionalResponse}
+          isLoading={confessionalLoading}
+          diminishingMultiplier={confessionalTrackerRef.current.getMultiplier(confessionalNpcId)}
+        />
+      )}
+      {graphOpen && (
+        <RelationshipGraph
+          npcs={npcs}
+          store={storeRef.current}
+          onNpcClick={(npcId) => {
+            setSelectedNpcId(npcId);
+            if (managerRef.current && !managerRef.current.isNpcBusy(npcId)) {
+              setConfessionalNpcId(npcId);
+              setConfessionalResponse(null);
+              setConfessionalLoading(false);
+            }
+          }}
+          onClose={() => setGraphOpen(false)}
         />
       )}
     </div>

@@ -1010,3 +1010,109 @@ ${ctx.language ? `Write the scene_direction in ${ctx.language}.` : ""}`;
     { role: "user", content: "Direct the scene." },
   ];
 }
+
+// ── Confessional prompt (player asks NPC a direct question) ──
+
+export function buildConfessionalMessages(
+  npc: NPC,
+  question: string,
+  allNpcs: Array<{ id: string; name: string }>,
+  diminishingMultiplier: number,
+  language = "English",
+  worldPrompt?: string,
+): ChatMessage[] {
+  const emotionSummary = describeEmotions(npc.emotionalState);
+  const identity = npc.backstory
+    ? npc.backstory
+    : `${npc.personalityTraits.join(", ")}; wants ${npc.coreDesires.join(", ")}`;
+
+  const arcBlock = npc.characterArc
+    ? `\nCharacter arc: ${npc.characterArc}`
+    : "";
+
+  const moodBlock = npc.mood && npc.moodSince && (Date.now() - npc.moodSince > 60_000)
+    ? `\nPersistent mood: ${npc.mood}`
+    : "";
+
+  const recentMemories = [...npc.shortTermMemory]
+    .sort((a, b) => b.recency * b.importance - a.recency * a.importance)
+    .slice(0, 8)
+    .map(m => `- ${m.text}`)
+    .join("\n");
+
+  const secretBlock = npc.secrets.length > 0
+    ? `\nYour secrets (things you haven't told everyone): ${npc.secrets.join("; ")}`
+    : "";
+
+  const knownSecretsBlock = Object.entries(npc.knownSecrets)
+    .filter(([, secrets]) => secrets.length > 0)
+    .map(([npcId, secrets]) => {
+      const name = allNpcs.find(n => n.id === npcId)?.name ?? npcId;
+      return `- About ${name}: ${secrets.join("; ")}`;
+    })
+    .join("\n");
+
+  const otherNames = allNpcs
+    .filter(n => n.id !== npc.id)
+    .map(n => n.name)
+    .join(", ");
+
+  // Personality-driven honesty guidance
+  const traits = npc.personalityTraits.map(t => t.toLowerCase());
+  const trust = npc.emotionalState.trust;
+  let honestyGuidance: string;
+  if (trust > 0.6 && !traits.some(t => ["manipulative", "calculating", "two-faced"].includes(t))) {
+    honestyGuidance = "You feel safe being honest. Speak openly and directly.";
+  } else if (trust < 0.3 || traits.some(t => ["manipulative", "calculating", "suspicious"].includes(t))) {
+    honestyGuidance = "You're guarded. Be evasive, strategic, maybe deflect or redirect. Don't reveal what you don't want known.";
+  } else {
+    honestyGuidance = "Be yourself — share what feels natural but hold back on sensitive matters.";
+  }
+
+  // High anger override
+  if (npc.emotionalState.anger > 0.6) {
+    honestyGuidance += " You're angry — you may vent about whoever is bothering you regardless of the question.";
+  }
+  // High guilt override
+  if (npc.emotionalState.guilt > 0.5) {
+    honestyGuidance += " Guilt is weighing on you — you might confess something unprompted.";
+  }
+
+  // Diminishing returns → increasing curtness
+  let curtness = "";
+  if (diminishingMultiplier <= 0.25) {
+    curtness = "\nYou're annoyed by all these questions. Be curt, distracted, give a short dismissive answer.";
+  } else if (diminishingMultiplier <= 0.5) {
+    curtness = "\nYou're getting a bit tired of being questioned. Be shorter and less forthcoming than usual.";
+  }
+
+  const system = `You are ${npc.name}, speaking candidly to someone who has pulled you aside.
+${worldPrompt ? `\nWORLD SETTING:\n${worldPrompt}\n` : ""}
+Who you are: ${identity}${arcBlock}${moodBlock}
+Emotional state: ${emotionSummary}
+Current goal: ${npc.currentGoal ?? "none"}${secretBlock}
+${knownSecretsBlock ? `\nSecrets you know about others:\n${knownSecretsBlock}` : ""}
+
+Recent memories:
+${recentMemories || "(none)"}
+
+People you know: ${otherNames || "(none)"}
+
+${honestyGuidance}${curtness}
+
+Someone has asked you: "${question}"
+
+Respond IN CHARACTER. You are NOT an AI — you are ${npc.name}. If the question is confusing, irrelevant, or inappropriate, respond as your character would (with confusion, irritation, amusement, or deflection).
+
+Respond with ONLY a JSON object:
+{
+  "response": "your spoken response, 2-3 sentences, in your own voice — direct and personal",
+  "mentioned_npc": "the name of another person you're thinking about in your answer, or null",
+  "sentiment_toward_mentioned": "positive" or "negative" or "neutral" or null
+}
+
+Output ONLY the JSON object. No markdown, no code fences.
+You MUST write ALL text in ${language}.`;
+
+  return [{ role: "system", content: system }];
+}

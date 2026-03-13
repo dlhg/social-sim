@@ -34,7 +34,20 @@ export interface ConversationManagerCallbacks {
   onSpeakerChange: (npcId: string | null) => void;
   onFloater?: (floater: FloaterData) => void;
   onEavesdropReaction?: (eavesdropperId: string, text: string) => void;
+  /** Fires when the Director starts generating a conversation for a pair (anticipation cue) */
+  onGenerationStart?: (npcAId: string, npcBId: string) => void;
 }
+
+// Emotions implied by an action — suppress these floaters when the action floater fires
+const ACTION_CONGRUENT_EMOTIONS: Record<ActionType, string[]> = {
+  mock: ["anger", "joy"],        // mocker's smugness + spite
+  embrace: ["joy", "trust"],
+  threaten: ["anger", "fear"],
+  storm_off: ["anger", "sadness"],
+  give_gift: ["joy"],
+  conspire: ["anger"],
+  spread_rumor: ["anger"],
+};
 
 // Per-conversation caps on cumulative relationship change
 const RELATIONSHIP_CAPS: Record<ConversationType, number> = {
@@ -419,6 +432,15 @@ export class ConversationManager {
 
   isActive(): boolean {
     return this.activeSession !== null;
+  }
+
+  /** Check if an NPC is currently in a conversation or being directed toward one (seek override) */
+  isNpcBusy(npcId: string): boolean {
+    if (this.activeSession?.participantIds.includes(npcId)) return true;
+    const npc = this.store.get(npcId);
+    if (npc?.behavioralOverride?.mode === "seek" &&
+        npc.behavioralOverride.reason?.includes("Director")) return true;
+    return false;
   }
 
   forceConversation(npcAId: string, npcBId: string): void {
@@ -1024,6 +1046,7 @@ export class ConversationManager {
     this.llmStartedAt = Date.now();
 
     this.log(`[director] Pre-generating conversation for ${this.npcName(npcAId)} + ${this.npcName(npcBId)}`);
+    this.callbacks.onGenerationStart?.(npcAId, npcBId);
 
     // Set seek overrides so they walk toward each other (match max age so they keep seeking)
     this.store.setBehavioralOverride(npcAId, {
@@ -2058,6 +2081,8 @@ export class ConversationManager {
         );
 
         this.log(`${speaker.name} revealed a secret to ${listener.name}!`);
+
+        this.emitFloater(speaker.id, "🔓 secret revealed", "#ffab40", "secret", { delay: 0 });
       }
     }
 
@@ -2109,6 +2134,8 @@ export class ConversationManager {
       this.log(
         `${speaker.name} made a promise to ${listener.name}: "${response.promise}"`
       );
+
+      this.emitFloater(speaker.id, `🤝 promised ${listener.name}`, "#81d4fa", "promise", { delay: 0 });
     }
 
     // Gossip: only create a memory for the LISTENER (the speaker already knows what they said)
@@ -2163,15 +2190,20 @@ export class ConversationManager {
                 sourceMemoryText: `Learned from ${speaker.name} that ${this.npcName(betrayal.betrayerId)} acted against me`,
               });
               this.log(`[betrayal-discovered] ${listener.name} learned from gossip that ${this.npcName(betrayal.betrayerId)} betrayed them!`);
+
+              this.emitFloater(listener.id, "⚡ discovered betrayal", "#ff6e40", "relationship", { delay: 0 });
             }
           }
         }
       }
     }
 
-    // Actions
+    // Actions — track action type for congruent emotion suppression
     if (response.action) {
+      this.turnActionType = response.action.action;
       this.processAction(speaker, listener, response.action);
+    } else {
+      this.turnActionType = null;
     }
 
     // Forgiveness
@@ -2330,6 +2362,7 @@ export class ConversationManager {
       npcId: speaker.id,
     });
 
+    this.emitFloater(speaker.id, `gave gift to ${listener.name}`, "#81c784", "relationship", { delay: 500 });
     this.notifyWitnesses(speaker, listener, "give_gift", giftDesc);
   }
 
@@ -2362,6 +2395,7 @@ export class ConversationManager {
       npcId: speaker.id,
     });
 
+    this.emitFloater(speaker.id, `mocked ${listener.name}`, "#ff8a65", "relationship", { delay: 500 });
     this.notifyWitnesses(speaker, listener, "mock", mockDetail);
   }
 
@@ -2399,6 +2433,7 @@ export class ConversationManager {
       npcId: speaker.id,
     });
 
+    this.emitFloater(speaker.id, "stormed off", "#b0bec5", "emotion", { delay: 500 });
     this.notifyWitnesses(speaker, listener, "storm_off", "");
   }
 
@@ -2431,6 +2466,7 @@ export class ConversationManager {
       npcId: speaker.id,
     });
 
+    this.emitFloater(speaker.id, `embraced ${listener.name}`, "#f48fb1", "relationship", { delay: 500 });
     this.notifyWitnesses(speaker, listener, "embrace", desc);
   }
 
@@ -2474,6 +2510,7 @@ export class ConversationManager {
       npcId: speaker.id,
     });
 
+    this.emitFloater(speaker.id, `threatened ${listener.name}`, "#ef5350", "relationship", { delay: 500 });
     this.notifyWitnesses(speaker, listener, "threaten", threat);
   }
 
@@ -2510,6 +2547,7 @@ export class ConversationManager {
       npcId: speaker.id,
     });
 
+    this.emitFloater(speaker.id, `conspired against ${targetName}`, "#7e57c2", "secret", { delay: 500 });
     // Conspire is private — not witnessed, but caught by existing eavesdrop system
   }
 
@@ -2543,6 +2581,7 @@ export class ConversationManager {
       npcId: speaker.id,
     });
 
+    this.emitFloater(speaker.id, `spread rumor about ${targetName}`, "#ab47bc", "secret", { delay: 500 });
     // Rumors are private — not witnessed, caught by existing eavesdrop system
   }
 
@@ -2709,6 +2748,11 @@ export class ConversationManager {
     const d = response.emotion_delta;
     const shifts: string[] = [];
 
+    // Determine which emotions to suppress based on action congruence
+    const suppressedEmotions = this.turnActionType
+      ? new Set(ACTION_CONGRUENT_EMOTIONS[this.turnActionType] ?? [])
+      : new Set<string>();
+
     const emotions: Array<{ key: string; val: number }> = [
       { key: "joy", val: d.joy },
       { key: "trust", val: d.trust },
@@ -2720,19 +2764,20 @@ export class ConversationManager {
     ];
 
     const active = emotions.filter(e => Math.abs(e.val) >= 0.01);
+    // Keep all for the log, but only emit non-suppressed floaters
+    const floatable = active.filter(e => !suppressedEmotions.has(e.key));
     const awayDir = this.awayDirection(speaker.id, listener.id);
 
     // Fan floaters out: alternate directions, spread vertically, vary drift
-    for (let i = 0; i < active.length; i++) {
-      const { key, val } = active[i];
+    for (let i = 0; i < floatable.length; i++) {
+      const { key, val } = floatable[i];
       const label = val > 0 ? `+${key}` : `-${key}`;
-      shifts.push(label);
       const colors = ConversationManager.EMOTION_COLORS[key];
 
       // First floater goes away from partner, subsequent alternate
       const dir: 1 | -1 = i % 2 === 0 ? awayDir : (-awayDir as 1 | -1);
       // Spread vertically: even indices go up, odd go down from center
-      const ySpread = (i - (active.length - 1) / 2) * 14;
+      const ySpread = (i - (floatable.length - 1) / 2) * 14;
       // Vary drift distance so paths diverge further
       const drift = 0.8 + Math.random() * 0.5;
 
@@ -2741,8 +2786,13 @@ export class ConversationManager {
         label,
         val > 0 ? colors.pos : colors.neg,
         "emotion",
-        { delay: i * 100, directionX: dir, offsetY: ySpread, driftScale: drift },
+        { delay: 2500 + i * 100, directionX: dir, offsetY: ySpread, driftScale: drift },
       );
+    }
+
+    // Log all shifts regardless of suppression
+    for (const { key, val } of active) {
+      shifts.push(val > 0 ? `+${key}` : `-${key}`);
     }
 
     if (shifts.length > 0) {
@@ -2754,34 +2804,77 @@ export class ConversationManager {
     }
   }
 
+  private static readonly REL_DIM_COLORS: Record<string, { pos: string; neg: string }> = {
+    regard:    { pos: "#66bb6a", neg: "#ef5350" },
+    affection: { pos: "#f48fb1", neg: "#78909c" },
+    trust:     { pos: "#4fc3f7", neg: "#ff7043" },
+    respect:   { pos: "#ffb74d", neg: "#90a4ae" },
+    fear:      { pos: "#ce93d8", neg: "#81d4fa" },
+    disgust:   { pos: "#a1887f", neg: "#80cbc4" },
+  };
+
   private logRelationshipShift(
     speaker: NPC,
     listener: NPC,
     response: LLMResponse
   ): void {
-    if (Math.abs(response.relationship_delta) < 0.005) return;
+    // Gather all dimension deltas
+    const dims: { key: string; delta: number }[] = [
+      { key: "regard", delta: response.relationship_delta },
+      { key: "affection", delta: response.affection_delta },
+      { key: "respect", delta: response.respect_delta ?? 0 },
+      { key: "trust", delta: response.trust_delta ?? 0 },
+      { key: "fear", delta: response.fear_delta ?? 0 },
+      { key: "disgust", delta: response.disgust_delta ?? 0 },
+    ];
 
-    const arrow = response.relationship_delta > 0 ? "warmed" : "cooled";
+    // Filter to significant deltas and sort by magnitude
+    const significant = dims
+      .filter(d => Math.abs(d.delta) >= 0.03)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 2); // top 2
+
+    if (significant.length === 0 && Math.abs(response.relationship_delta) >= 0.005) {
+      // Fall back to regard-only if no dimension crosses the 0.03 threshold
+      significant.push({ key: "regard", delta: response.relationship_delta });
+    }
+
+    if (significant.length === 0) return;
+
+    // Log summary
     const updatedSpeaker = this.store.get(speaker.id);
-    const relState = updatedSpeaker?.relationships[listener.id];
-    const relValue = relState?.regard ?? 0;
+    const relValue = updatedSpeaker?.relationships[listener.id]?.regard ?? 0;
     const label = this.relationshipLabel(relValue);
-
+    const arrow = response.relationship_delta > 0 ? "warmed" : "cooled";
     this.log(
       `${speaker.name} ${arrow} toward ${listener.name} (${relValue >= 0 ? "+" : ""}${relValue.toFixed(2)}, ${label})`
     );
 
-    const isPositive = response.relationship_delta > 0;
-    const symbol = isPositive ? "\u2665" : "\u2661"; // filled / hollow heart
-    const floaterText = `${symbol} ${isPositive ? "+" : ""}${response.relationship_delta.toFixed(2)} ${listener.name}`;
     const awayDir = this.awayDirection(speaker.id, listener.id);
-    this.emitFloater(
-      speaker.id,
-      floaterText,
-      isPositive ? "#f48fb1" : "#78909c",
-      "relationship",
-      { delay: 2000, directionX: awayDir, offsetY: -8, driftScale: 1.1 },
-    );
+
+    for (let i = 0; i < significant.length; i++) {
+      const { key, delta } = significant[i];
+      const isPositive = delta > 0;
+      const colors = ConversationManager.REL_DIM_COLORS[key];
+      const color = isPositive ? colors.pos : colors.neg;
+
+      let text: string;
+      if (key === "regard") {
+        const symbol = isPositive ? "\u2665" : "\u2661";
+        text = `${symbol} ${key} ${isPositive ? "↑" : "↓"} ${listener.name}`;
+      } else {
+        text = `${key} ${isPositive ? "↑" : "↓"} ${listener.name}`;
+      }
+
+      const dir: 1 | -1 = i % 2 === 0 ? awayDir : (-awayDir as 1 | -1);
+      this.emitFloater(
+        speaker.id,
+        text,
+        color,
+        "relationship",
+        { delay: 1500 + i * 200, directionX: dir, offsetY: -8 + i * 14, driftScale: 1.1 },
+      );
+    }
   }
 
   private describeMood(npc: NPC): string {
@@ -3602,6 +3695,7 @@ Respond with ONLY the summary text, no JSON, no markdown.`,
       }
 
       this.callbacks.onEavesdropReaction?.(eavesdropperId, reaction);
+      this.emitFloater(eavesdropperId, `👂 overheard ${speaker.name}`, "#b0bec5", "emotion", { delay: 0 });
     }
   }
 
@@ -3736,6 +3830,8 @@ Respond with ONLY the summary text, no JSON, no markdown.`,
   }
 
   private floaterCounter = 0;
+  private turnFloaterCounts = new Map<string, number>();
+  private turnActionType: ActionType | null = null;
 
   /**
    * Determine the "away from partner" direction.

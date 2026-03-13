@@ -4,11 +4,25 @@ import type { WorldSnapshot, NpcSpatialState } from "../types";
 import { SpriteSystem } from "../sprite-system";
 import { TilemapRenderer } from "../tilemap-renderer";
 
+export interface NpcIndicatorData {
+  mood: string | undefined;
+  moodSince: number | undefined;
+  hasSecret: boolean;
+  hasGrudge: boolean;
+  hasPendingPromise: boolean;
+  hasBrokenPromise: boolean;
+  isAvoiding: boolean;
+  hasImpulse: boolean;
+  impulseUrgency: number;
+}
+
 interface WorldCanvasProps {
   getSnapshot: () => WorldSnapshot;
   getNpc: (id: string) => NPC | undefined;
+  getNpcIndicators?: (id: string) => NpcIndicatorData | undefined;
   currentSpeaker: string | null;
   activeConversationPair: [string, string] | null;
+  pendingPair: [string, string] | null;
   bubbles: BubbleData[];
   floaters: FloaterData[];
   dayPhase: DayPhase;
@@ -86,11 +100,24 @@ const FREE_CAM_ZOOM_STEP = 0.15;
 const FREE_CAM_ZOOM_MIN = 0.5;
 const FREE_CAM_ZOOM_MAX = 5.0;
 
+// Mood → dot color mapping
+const MOOD_COLORS: Record<string, string> = {
+  volatile: "#ff5252",
+  paranoid: "#7c4dff",
+  bitter: "#455a64",
+  melancholy: "#42a5f5",
+  "guilt-ridden": "#8d6e63",
+  restless: "#ffd740",
+  euphoric: "#ffd54f",
+};
+
 export function WorldCanvas({
   getSnapshot,
   getNpc,
+  getNpcIndicators,
   currentSpeaker,
   activeConversationPair,
+  pendingPair,
   bubbles,
   floaters,
   dayPhase,
@@ -116,8 +143,10 @@ export function WorldCanvas({
   // Store props in refs so the rAF loop always reads fresh values
   const getSnapshotRef = useRef(getSnapshot);
   const getNpcRef = useRef(getNpc);
+  const getNpcIndicatorsRef = useRef(getNpcIndicators);
   const speakerRef = useRef(currentSpeaker);
   const pairRef = useRef(activeConversationPair);
+  const pendingPairRef = useRef(pendingPair);
   const bubblesRef = useRef(bubbles);
   const floatersRef = useRef(floaters);
   const dayPhaseRef = useRef(dayPhase);
@@ -125,8 +154,10 @@ export function WorldCanvas({
 
   getSnapshotRef.current = getSnapshot;
   getNpcRef.current = getNpc;
+  getNpcIndicatorsRef.current = getNpcIndicators;
   speakerRef.current = currentSpeaker;
   pairRef.current = activeConversationPair;
+  pendingPairRef.current = pendingPair;
   bubblesRef.current = bubbles;
   floatersRef.current = floaters;
   dayPhaseRef.current = dayPhase;
@@ -369,6 +400,28 @@ export function WorldCanvas({
         }
       }
 
+      // Director "next pair" preview line (faint dotted line between pending pair)
+      const pending = pendingPairRef.current;
+      if (pending && !pair) {
+        const pA = snap.npcs.find((n) => n.npcId === pending[0]);
+        const pB = snap.npcs.find((n) => n.npcId === pending[1]);
+        if (pA && pB) {
+          const pax = offsetX + (lerpX(pA, now, snap.tickIntervalMs) + 0.5) * tileSize;
+          const pay = offsetY + (lerpY(pA, now, snap.tickIntervalMs) + 0.5) * tileSize;
+          const pbx = offsetX + (lerpX(pB, now, snap.tickIntervalMs) + 0.5) * tileSize;
+          const pby = offsetY + (lerpY(pB, now, snap.tickIntervalMs) + 0.5) * tileSize;
+          const pulse = 0.04 + 0.04 * Math.sin(now / 800);
+          ctx.strokeStyle = `rgba(180, 200, 255, ${pulse})`;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 8]);
+          ctx.beginPath();
+          ctx.moveTo(pax, pay);
+          ctx.lineTo(pbx, pby);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+
       // NPCs (sorted by Y for pseudo-depth)
       const sortedNpcs = [...snap.npcs].sort(
         (a, b) =>
@@ -467,6 +520,80 @@ export function WorldCanvas({
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
         ctx.fillText(npc.name, px, feetY + 4);
+
+        // ── Persistent indicators ────────────────────
+        const indicators = getNpcIndicatorsRef.current?.(spatial.npcId);
+        if (indicators) {
+          const nameBottomY = feetY + 4 + Math.max(10, tileSize * 0.28) + 2;
+
+          // Mood dot (near name tag, right side)
+          if (indicators.mood && indicators.moodSince) {
+            const moodAge = now - indicators.moodSince;
+            if (moodAge > 60_000) { // 1-minute persistence threshold
+              const moodColor = MOOD_COLORS[indicators.mood] ?? "#888";
+              const dotR = Math.max(3, tileSize * 0.08);
+              const dotX = px + ctx.measureText(npc.name).width / 2 + dotR + 3;
+              const dotY = feetY + 4 + Math.max(10, tileSize * 0.28) * 0.5;
+              ctx.beginPath();
+              ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+              ctx.fillStyle = moodColor;
+              ctx.fill();
+            }
+          }
+
+          // State flag badges (colored geometric shapes below name)
+          const badges: { color: string; shape: "diamond" | "circle" | "square" }[] = [];
+          if (indicators.hasGrudge) badges.push({ color: "#ef5350", shape: "diamond" });
+          if (indicators.hasBrokenPromise) badges.push({ color: "#ef5350", shape: "circle" });
+          if (indicators.hasSecret) badges.push({ color: "#ffab40", shape: "square" });
+          if (indicators.hasPendingPromise) badges.push({ color: "#81d4fa", shape: "circle" });
+          if (indicators.isAvoiding) badges.push({ color: "#78909c", shape: "circle" });
+
+          const maxBadges = Math.min(badges.length, 3);
+          const badgeSize = Math.max(3, tileSize * 0.07);
+          const badgeSpacing = badgeSize * 2.5;
+          const badgeStartX = px - ((maxBadges - 1) * badgeSpacing) / 2;
+          for (let bi = 0; bi < maxBadges; bi++) {
+            const badge = badges[bi];
+            const bx = badgeStartX + bi * badgeSpacing;
+            const by = nameBottomY + 2;
+            ctx.fillStyle = badge.color;
+            if (badge.shape === "diamond") {
+              ctx.beginPath();
+              ctx.moveTo(bx, by - badgeSize);
+              ctx.lineTo(bx + badgeSize, by);
+              ctx.lineTo(bx, by + badgeSize);
+              ctx.lineTo(bx - badgeSize, by);
+              ctx.closePath();
+              ctx.fill();
+            } else if (badge.shape === "square") {
+              ctx.fillRect(bx - badgeSize, by - badgeSize, badgeSize * 2, badgeSize * 2);
+            } else {
+              ctx.beginPath();
+              ctx.arc(bx, by, badgeSize, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+
+          // Reactive impulse indicator (pulsing thought bubble above head)
+          if (indicators.hasImpulse) {
+            const pulseSpeed = 300 + (1 - indicators.impulseUrgency) * 700; // faster = more urgent
+            const pulseAlpha = 0.4 + 0.4 * Math.sin(now / pulseSpeed);
+            const impulseX = px + tileSize * 0.5;
+            const impulseY = feetY - sprH - 4;
+            const impulseR = Math.max(4, tileSize * 0.1);
+            ctx.globalAlpha = pulseAlpha * npcAlpha;
+            ctx.beginPath();
+            ctx.arc(impulseX, impulseY, impulseR, 0, Math.PI * 2);
+            ctx.fillStyle = "#e0e0e0";
+            ctx.fill();
+            // Small dot below
+            ctx.beginPath();
+            ctx.arc(impulseX - impulseR * 0.4, impulseY + impulseR * 1.3, impulseR * 0.35, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = npcAlpha;
+          }
+        }
 
         // Position bubble overlay element (if one exists for this NPC)
         const bubbleEl = bubbleRefsMap.current.get(spatial.npcId);
