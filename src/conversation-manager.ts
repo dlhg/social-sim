@@ -657,7 +657,7 @@ export class ConversationManager {
       const sd = parseSceneDirection(sdRaw);
       convType = sd.conversationType;
       sceneDirection = sd.sceneDirection || undefined;
-      this.log(`[batch] Scene direction: ${convType}${sceneDirection ? ` — "${sceneDirection.slice(0, 80)}..."` : ""}`);
+      this.log(`[batch] Scene direction: ${convType}`, sceneDirection || undefined);
     } catch (e) {
       convType = this.classifyConversationType(npcA, npcB);
       this.log(`[batch] Scene direction failed, using heuristic: ${convType} (${e})`);
@@ -1146,7 +1146,7 @@ export class ConversationManager {
         this.log(`[director] Reactive impulse consumed: ${impulse.reason}`);
       }
 
-      this.log(`[director] Scene direction: ${convType}${sceneDirection ? ` — "${sceneDirection.slice(0, 80)}..."` : ""}${narrativePatterns.length ? ` (${narrativePatterns.length} patterns detected)` : ""}`);
+      this.log(`[director] Scene direction: ${convType}${narrativePatterns.length ? ` (${narrativePatterns.length} patterns detected)` : ""}`, sceneDirection || undefined);
     } catch (e) {
       // Fallback to hardcoded classification if scene direction fails
       convType = this.classifyConversationType(npcA, npcB);
@@ -3875,8 +3875,8 @@ Respond with ONLY the summary text, no JSON, no markdown.`,
     });
   }
 
-  private log(text: string): void {
-    this.callbacks.onActivity({ timestamp: new Date(), text });
+  private log(text: string, detail?: string): void {
+    this.callbacks.onActivity({ timestamp: new Date(), text, detail });
   }
 
   private sleep(ms: number): Promise<void> {

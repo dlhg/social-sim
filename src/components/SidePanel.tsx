@@ -214,7 +214,16 @@ export function FeedPanel({
               <span className="activity-time">
                 {formatTime(item.event.timestamp)}
               </span>{" "}
-              <span className="activity-text">{item.event.text}</span>
+              {item.event.detail ? (
+                <details className="feed-detail-accordion">
+                  <summary className="feed-detail-summary">
+                    {item.event.text}
+                  </summary>
+                  <div className="feed-detail-body">{item.event.detail}</div>
+                </details>
+              ) : (
+                <span className="activity-text">{item.event.text}</span>
+              )}
             </div>
           );
         })}

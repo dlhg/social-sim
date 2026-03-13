@@ -386,7 +386,8 @@
   opacity: 1;
 }
 
-.feed-item-visible.feed-item-prompt-open {
+.feed-item-visible.feed-item-prompt-open,
+.feed-item-visible:has(details[open]) {
   max-height: none;
   overflow: visible;
 }
@@ -652,6 +653,40 @@
   color: #5cb87a;
   font-weight: 600;
   font-style: italic;
+}
+
+/* ── Feed detail accordion (expandable events) ── */
+
+.feed-detail-accordion {
+  display: inline;
+}
+
+.feed-detail-summary {
+  display: inline;
+  cursor: pointer;
+  list-style: none;
+}
+
+.feed-detail-summary::-webkit-details-marker {
+  display: none;
+}
+
+.feed-detail-summary::before {
+  content: "▸ ";
+  color: var(--text-faint);
+}
+
+details[open] > .feed-detail-summary::before {
+  content: "▾ ";
+}
+
+.feed-detail-body {
+  margin: 4px 0 2px 16px;
+  padding: 4px 8px;
+  border-left: 2px solid var(--border-subtle);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* ── Scrollbar ──────────────────────────────── */

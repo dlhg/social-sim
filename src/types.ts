@@ -271,6 +271,7 @@ export interface ActivityEvent {
   text: string;
   activityType?: ActivityType;
   npcId?: string; // for styling (e.g., thought color)
+  detail?: string; // expandable full text (e.g., full scene direction)
 }
 
 // ── Floaters (floating status text) ──────────────
