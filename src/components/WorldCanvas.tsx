@@ -5,8 +5,6 @@ import { SpriteSystem } from "../sprite-system";
 import { TilemapRenderer } from "../tilemap-renderer";
 
 export interface NpcIndicatorData {
-  mood: string | undefined;
-  moodSince: number | undefined;
   hasSecret: boolean;
   hasGrudge: boolean;
   hasPendingPromise: boolean;
@@ -100,16 +98,6 @@ const FREE_CAM_ZOOM_STEP = 0.15;
 const FREE_CAM_ZOOM_MIN = 0.5;
 const FREE_CAM_ZOOM_MAX = 5.0;
 
-// Mood → dot color mapping
-const MOOD_COLORS: Record<string, string> = {
-  volatile: "#ff5252",
-  paranoid: "#7c4dff",
-  bitter: "#455a64",
-  melancholy: "#42a5f5",
-  "guilt-ridden": "#8d6e63",
-  restless: "#ffd740",
-  euphoric: "#ffd54f",
-};
 
 export function WorldCanvas({
   getSnapshot,
@@ -525,21 +513,6 @@ export function WorldCanvas({
         const indicators = getNpcIndicatorsRef.current?.(spatial.npcId);
         if (indicators) {
           const nameBottomY = feetY + 4 + Math.max(10, tileSize * 0.28) + 2;
-
-          // Mood dot (near name tag, right side)
-          if (indicators.mood && indicators.moodSince) {
-            const moodAge = now - indicators.moodSince;
-            if (moodAge > 60_000) { // 1-minute persistence threshold
-              const moodColor = MOOD_COLORS[indicators.mood] ?? "#888";
-              const dotR = Math.max(3, tileSize * 0.08);
-              const dotX = px + ctx.measureText(npc.name).width / 2 + dotR + 3;
-              const dotY = feetY + 4 + Math.max(10, tileSize * 0.28) * 0.5;
-              ctx.beginPath();
-              ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
-              ctx.fillStyle = moodColor;
-              ctx.fill();
-            }
-          }
 
           // State flag badges (colored geometric shapes below name)
           const badges: { color: string; shape: "diamond" | "circle" | "square" }[] = [];

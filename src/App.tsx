@@ -149,8 +149,6 @@ function App() {
     const promises = store.getPromisesFor(npcId);
     const impulses = store.getReactiveImpulses(npcId);
     return {
-      mood: npc.mood,
-      moodSince: npc.moodSince,
       hasSecret: npc.secrets.length > 0,
       hasGrudge: grudges.length > 0,
       hasPendingPromise: promises.some(p => p.status === "active" && p.promiserId === npcId),
