@@ -1176,6 +1176,7 @@ function App() {
           onPlayTurnAudio={(convIdx, turnIdx) =>
             managerRef.current?.playPreparedTurnAudio(convIdx, turnIdx)
           }
+          onResetCallGuard={() => managerRef.current?.resetCallGuard()}
         />
       )}
       {confessionalNpcId && storeRef.current.get(confessionalNpcId) && (

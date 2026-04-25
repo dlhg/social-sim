@@ -3693,6 +3693,20 @@ details[open] > .feed-detail-summary::before {
   color: #e05050;
 }
 
+.dd-reset-guard-btn {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid rgba(224, 80, 80, 0.4);
+  border-radius: 3px;
+  background: rgba(224, 80, 80, 0.2);
+  color: #e05050;
+  font-size: 11px;
+  cursor: pointer;
+}
+.dd-reset-guard-btn:hover {
+  background: rgba(224, 80, 80, 0.35);
+}
+
 .dd-quota-row {
   display: flex;
   flex-direction: column;

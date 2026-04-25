@@ -18,8 +18,8 @@ import type { WorldSimulation } from "./world-simulation";
 import type { DayCycle } from "./day-cycle";
 import type { TTSService } from "./tts-service";
 import { buildConversationMessages, buildBatchConversationMessages, buildReflectionMessages, buildSceneDirectionMessages, buildSoliloquyMessages } from "./prompt-builder";
-import { accumulateChat, getGroqRateLimits } from "./ollama";
-import type { GroqRateLimits } from "./ollama";
+import { accumulateChat, getGroqRateLimits, getLlmCallStats, resetLlmCallGuard, LlmCallLimitError } from "./ollama";
+import type { GroqRateLimits, LlmCallStats } from "./ollama";
 import { loadLlmConfig, GROQ_MODELS } from "./llm-config";
 import { parseLLMResponse, parseBatchLLMResponse, parseSceneDirection, extractJson } from "./response-parser";
 
@@ -152,6 +152,8 @@ export interface DirectorStatus {
   activeModel: string;
   /** Whether the model was auto-downgraded from the user's preferred model */
   modelDowngraded: boolean;
+  /** LLM call guard stats (session count, burst count, tripped state) */
+  llmCallStats: LlmCallStats;
 }
 
 export class ConversationManager {
@@ -382,6 +384,7 @@ export class ConversationManager {
       groqRateLimits: getGroqRateLimits(),
       activeModel: this.activeGroqModel ?? loadLlmConfig().groqModel,
       modelDowngraded: this.modelDowngraded,
+      llmCallStats: getLlmCallStats(),
     };
   }
 
@@ -411,6 +414,13 @@ export class ConversationManager {
   resume(): void {
     this.paused = false;
     this.log("Simulation resumed");
+  }
+
+  /** Reset the LLM call guard and resume the director after a limit trip */
+  resetCallGuard(): void {
+    resetLlmCallGuard();
+    this.paused = false;
+    this.log("LLM call guard reset — director resumed");
   }
 
   stop(): void {
@@ -1192,6 +1202,13 @@ export class ConversationManager {
       turns = parseBatchLLMResponse(raw, [npcAId, npcBId]);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
+        this.clearLlmSlot();
+        return;
+      }
+      // LLM call guard tripped — pause the director entirely, don't retry
+      if (e instanceof LlmCallLimitError) {
+        this.log(`[director] LLM call guard tripped (${e.reason}): ${e.message}`);
+        this.paused = true;
         this.clearLlmSlot();
         return;
       }

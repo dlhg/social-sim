@@ -31,6 +31,87 @@ export function getGroqRateLimits(): GroqRateLimits | null {
   return latestGroqRateLimits;
 }
 
+// ── LLM call guard (burst + session cap) ────────
+
+export class LlmCallLimitError extends Error {
+  constructor(public readonly reason: "burst" | "session_cap", message: string) {
+    super(message);
+    this.name = "LlmCallLimitError";
+  }
+}
+
+const LLM_SESSION_CAP = 500;
+const LLM_BURST_WINDOW_MS = 60_000;
+const LLM_BURST_MAX = 20;
+
+let llmSessionCalls = 0;
+let llmGuardTripped: "burst" | "session_cap" | null = null;
+const llmCallTimestamps: number[] = [];
+
+function llmCallGuard(): void {
+  if (llmGuardTripped) {
+    throw new LlmCallLimitError(
+      llmGuardTripped,
+      `LLM call guard tripped (${llmGuardTripped}). Call resetLlmCallGuard() to resume.`
+    );
+  }
+
+  const now = Date.now();
+
+  // Burst detection: too many calls in a short window
+  // Prune old timestamps
+  while (llmCallTimestamps.length > 0 && now - llmCallTimestamps[0] > LLM_BURST_WINDOW_MS) {
+    llmCallTimestamps.shift();
+  }
+  if (llmCallTimestamps.length >= LLM_BURST_MAX) {
+    llmGuardTripped = "burst";
+    throw new LlmCallLimitError(
+      "burst",
+      `LLM burst limit: ${LLM_BURST_MAX} calls in ${LLM_BURST_WINDOW_MS / 1000}s window`
+    );
+  }
+
+  // Session cap
+  if (llmSessionCalls >= LLM_SESSION_CAP) {
+    llmGuardTripped = "session_cap";
+    throw new LlmCallLimitError(
+      "session_cap",
+      `LLM session cap reached: ${LLM_SESSION_CAP} calls`
+    );
+  }
+
+  llmCallTimestamps.push(now);
+  llmSessionCalls++;
+}
+
+export interface LlmCallStats {
+  sessionCalls: number;
+  sessionCap: number;
+  burstCount: number;
+  burstMax: number;
+  guardTripped: "burst" | "session_cap" | null;
+}
+
+export function getLlmCallStats(): LlmCallStats {
+  const now = Date.now();
+  // Count only timestamps within the current window
+  const burstCount = llmCallTimestamps.filter(t => now - t <= LLM_BURST_WINDOW_MS).length;
+  return {
+    sessionCalls: llmSessionCalls,
+    sessionCap: LLM_SESSION_CAP,
+    burstCount,
+    burstMax: LLM_BURST_MAX,
+    guardTripped: llmGuardTripped,
+  };
+}
+
+export function resetLlmCallGuard(): void {
+  llmGuardTripped = null;
+  // Don't reset sessionCalls — the cap is lifetime for the tab.
+  // But do clear the burst window so the director can resume.
+  llmCallTimestamps.length = 0;
+}
+
 export interface AccumulateChatOptions {
   onProgress?: (accumulated: string) => void;
   signal?: AbortSignal;
@@ -58,6 +139,8 @@ export async function accumulateChat(
     numPredict = onProgressOrOpts.numPredict;
     modelOverride = onProgressOrOpts.modelOverride;
   }
+
+  llmCallGuard();
 
   const config = loadLlmConfig();
 

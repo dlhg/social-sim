@@ -6,6 +6,7 @@ interface DirectorDashboardProps {
   getStatus: () => DirectorStatus;
   onClose: () => void;
   onPlayTurnAudio?: (convIndex: number, turnIndex: number) => void;
+  onResetCallGuard?: () => void;
 }
 
 function formatDuration(ms: number): string {
@@ -128,7 +129,7 @@ function PreparedCard({ info, convIndex, onPlayTurn }: {
   );
 }
 
-export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: DirectorDashboardProps) {
+export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio, onResetCallGuard }: DirectorDashboardProps) {
   const [status, setStatus] = useState<DirectorStatus>(getStatus);
 
   useEffect(() => {
@@ -165,6 +166,19 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
           {status.backoffRemainingSecs > 0 && (
             <div className="dd-backoff-banner">
               Rate limited — retrying in {status.backoffRemainingSecs}s
+            </div>
+          )}
+          {status.llmCallStats.guardTripped && (
+            <div className="dd-backoff-banner">
+              {status.llmCallStats.guardTripped === "burst"
+                ? `Burst limit — ${status.llmCallStats.burstMax} calls in 60s`
+                : `Session cap — ${status.llmCallStats.sessionCap} calls reached`}
+              {" "}(director paused)
+              {onResetCallGuard && (
+                <button className="dd-reset-guard-btn" onClick={onResetCallGuard}>
+                  Resume
+                </button>
+              )}
             </div>
           )}
           <div className="dd-pipeline">
@@ -285,6 +299,10 @@ export function DirectorDashboard({ getStatus, onClose, onPlayTurnAudio }: Direc
 
         {/* Stats row */}
         <div className="dd-stats-row">
+          <div className="dd-stat">
+            <span className="dd-stat-value">{status.llmCallStats.sessionCalls}</span>
+            <span className="dd-stat-label">LLM Calls</span>
+          </div>
           <div className="dd-stat">
             <span className="dd-stat-value">{status.conversationsPlayed}</span>
             <span className="dd-stat-label">Played</span>
