@@ -1,4 +1,4 @@
-# Social Sandbox
+# Social Sim
 
 An NPC social simulation where LLM-driven characters live in a small tilemap world, form relationships, keep secrets, make and break promises, and speak their conversations out loud via real-time TTS.
 
